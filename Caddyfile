@@ -1,0 +1,10 @@
+# Front e API no mesmo domínio: /api/* vai para a API (sem o prefixo), o resto para o front.
+{$API_DOMAIN} {
+	encode gzip
+	handle_path /api/* {
+		reverse_proxy api:3001
+	}
+	handle {
+		reverse_proxy front:3000
+	}
+}

@@ -1,0 +1,58 @@
+# Produção na VPS: Postgres + API + front + Caddy (HTTPS automático com Let's Encrypt nas portas 80/443).
+# O front é o repositório nutriai-front clonado ao lado deste (../nutriai-front).
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nutriai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.production}
+      POSTGRES_DB: nutriai
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U nutriai -d nutriai']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgres://nutriai:${POSTGRES_PASSWORD}@postgres:5432/nutriai
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  front:
+    build:
+      context: ../nutriai-front
+      args:
+        NEXT_PUBLIC_API_URL: https://${API_DOMAIN}/api
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?defina API_DOMAIN no .env.production}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - front
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
