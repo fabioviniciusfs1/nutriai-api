@@ -1,6 +1,12 @@
 # Produção na VPS: Postgres + API + front + Caddy (HTTPS automático com Let's Encrypt nas portas 80/443).
-# O front é o repositório nutriai-front clonado ao lado deste (../nutriai-front).
-#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+# Tudo vai para o Docker Hub (imagens e este arquivo). Na máquina de desenvolvimento (front em ../nutriai-front),
+# com POSTGRES_PASSWORD e JWT_SECRET definidos (qualquer valor serve para o build) e o API_DOMAIN REAL
+# (vira o NEXT_PUBLIC_API_URL embutido no JavaScript do front; trocar o domínio exige novo build):
+#   docker compose -f docker-compose.prod.yml build api front caddy
+#   docker compose -f docker-compose.prod.yml publish -y fabioviniciusfsiqueira/nutriai-stack:latest
+# Na VPS, numa pasta com o .env (variáveis abaixo):
+#   docker compose -p nutriai -f oci://docker.io/fabioviniciusfsiqueira/nutriai-stack:latest pull
+#   docker compose -p nutriai -f oci://docker.io/fabioviniciusfsiqueira/nutriai-stack:latest up -d
 services:
   postgres:
     image: postgres:17-alpine
@@ -18,17 +24,32 @@ services:
       retries: 10
 
   api:
+    image: fabioviniciusfsiqueira/nutriai-api:${TAG:-latest}
     build: .
     restart: unless-stopped
-    env_file: .env.production
+    # Valores do shell (VAR=... docker compose up) ou do --env-file.
     environment:
       PORT: 3001
       DATABASE_URL: postgres://nutriai:${POSTGRES_PASSWORD}@postgres:5432/nutriai
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      FRONTEND_URLS: https://${API_DOMAIN}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_CALLBACK_URL: https://${API_DOMAIN}/api/auth/google/callback
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+      HEALTH_SYNC_CRON: ${HEALTH_SYNC_CRON:-0 3 * * *}
+      HEALTH_SYNC_TIMEZONE: ${HEALTH_SYNC_TIMEZONE:-America/Sao_Paulo}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_WORKSPACE_ID: ${ANTHROPIC_WORKSPACE_ID:-}
+      OBSERVE_APP_KEY: ${OBSERVE_APP_KEY:-}
+      OBSERVE_APP_SECRET: ${OBSERVE_APP_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy
 
   front:
+    image: fabioviniciusfsiqueira/nutriai-front:${TAG:-latest}
     build:
       context: ../nutriai-front
       args:
@@ -36,7 +57,10 @@ services:
     restart: unless-stopped
 
   caddy:
-    image: caddy:2-alpine
+    image: fabioviniciusfsiqueira/nutriai-proxy:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
     restart: unless-stopped
     ports:
       - '80:80'
@@ -45,7 +69,6 @@ services:
     environment:
       API_DOMAIN: ${API_DOMAIN:?defina API_DOMAIN no .env.production}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
