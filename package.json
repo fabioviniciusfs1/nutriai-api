@@ -23,7 +23,8 @@
     "db:migrate": "nest build && node dist/database/cli.js migrate",
     "db:revert": "nest build && node dist/database/cli.js revert",
     "db:seed": "nest build && node dist/database/cli.js seed",
-    "db:import-taco": "nest build && node dist/database/cli.js import-taco"
+    "db:import-taco": "nest build && node dist/database/cli.js import-taco",
+    "release": "bash scripts/release.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
