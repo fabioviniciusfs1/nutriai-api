@@ -157,7 +157,9 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
     "activityLevel": "moderado",
     "goal": "perder",
     "mealsPerDay": 4,
-    "weighInDay": 1
+    "weighInDay": 1,
+    "diet": "vegetariana",
+    "preferences": "Almoço de marmita; treino às 18h."
   },
   "targets": { "calories": 1660, "bmr": 1395, "tdee": 2163, "waterLiters": 2.4, "clampedToMinimum": false },
   "weighInDue": true,
@@ -168,6 +170,12 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
 - `profile` e `targets` são `null` até o primeiro `PUT /me/profile` (o front leva o usuário para `/perfil`).
 - `profile.sex`: `feminino | masculino`; `activityLevel`: `sedentario | leve | moderado | intenso | extremo`;
   `goal`: `perder | manter | ganhar`; `mealsPerDay`: 3–6; `weighInDay`: 0 = domingo … 6 = sábado.
+- `profile.diet`: `onivora | pescetariana | vegetariana | vegana` ("Escolha o tipo de alimentação."). O backend
+  tira do plano individual, das sugestões e dos substitutos o que a dieta exclui (pescetariana: carnes;
+  vegetariana: carnes e peixes; vegana: tudo de origem animal, inclusive ovos, laticínios e mel), pela origem
+  animal de cada alimento do catálogo (categoria da TACO e nome, nos pratos prontos).
+- `profile.preferences`: texto livre, opcional (vazio = nenhuma), até 500 caracteres depois de aparado
+  ("As preferências devem ter no máximo 500 caracteres."). Vai para o assistente.
 - `weighInDue`: hoje (no fuso do usuário) é `profile.weighInDay` **e** não há pesagem registrada hoje.
 - `google`: conta Google conectada (`null` se não houver). `canDisconnect` é `false` quando a conta foi criada
   pelo Google (é o único jeito de entrar).
@@ -175,6 +183,10 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
 ### `PUT /me/profile` → `Me`
 
 Corpo: o `profile` inteiro. Recalcula `targets`.
+
+Na **primeira vez** (perfil era `null`) e com o assistente configurado, começa a montagem do **plano
+individual** em segundo plano (ver "Plano individual" em `GET /plan/today`); a resposta não espera por ela.
+Salvar o perfil de novo não monta outro plano.
 
 ### `POST /profile/estimate` → `Targets`
 
@@ -211,6 +223,7 @@ O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por h
 ```json
 {
   "canCreateMeal": true,
+  "personalization": "ready",
   "meals": [
     {
       "id": 1,
@@ -228,13 +241,28 @@ O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por h
 
 - `totals` = soma dos alimentos já arredondados, como aparecem.
 - `extraId` ≠ `null`: alimento acrescentado pelo usuário (tem botão de remover).
+- `personalization`: montagem do plano individual — `pending` (montando; `meals` traz o plano padrão, mas o front
+  mostra só um card "Montando seu plano personalizado…" e pergunta de novo a cada poucos segundos), `ready` (aplicado), `failed` (não deu certo; fica o plano padrão) ou `null`
+  (nunca pedido: usuário antigo ou sem assistente).
 - `canCreateMeal`: há sugestões de refeição disponíveis (com o assistente, sempre; senão o botão "Nova refeição" fica desativado).
 
 **Todas as rotas de alteração do plano abaixo respondem `200` com o `TodayPlan` atualizado.**
 
+**Plano individual**: no primeiro perfil, o assistente monta as refeições do plano base para o usuário (mesmos
+ids, horários e quantidade pelo `mealsPerDay`), com o perfil, as metas do dia e de cada refeição, o tipo de
+alimentação, as preferências e os restritos. Só alimentos do catálogo entram; os restritos e os de fora da
+dieta são descartados. Quando fica pronto, as mudanças feitas no plano nesse meio-tempo são zeradas (as
+restrições e trocas gerais ficam). Refeição base sem versão do assistente (ex.: o usuário aumentou as
+refeições por dia depois) continua a padrão.
+
+### `POST /plan/personalize` → `TodayPlan`
+
+Tenta de novo montar o plano individual, **só** com `personalization: "failed"` (senão `409` "Só dá para
+tentar de novo quando a montagem do plano falhou."). Responde na hora, já com `pending`.
+
 **Plano inicial**, antes das mudanças do usuário:
 
-- Tem `profile.mealsPerDay` refeições: café, almoço e jantar sempre, mais um lanche da tarde (a partir de 4),
+- Tem `profile.mealsPerDay` refeições (as do plano individual, quando houver): café, almoço e jantar sempre, mais um lanche da tarde (a partir de 4),
   um da manhã (5) e uma ceia (6). Depois o usuário cria ou remove refeições à vontade.
 - As porções de todas as refeições são escaladas na mesma proporção para o total do dia ficar o mais perto
   possível de `targets.calories`. Sem perfil, ficam as porções de referência. Se a meta mudar, o plano todo
@@ -364,6 +392,7 @@ com as **mesmas calorias** do alimento como aparece na refeição, sem o própri
 - Sem o assistente (ou se ele falhar ou não sugerir nada válido): os do **mesmo grupo** mais parecidos —
   primeiro os da mesma família (mesmo começo do nome, ex. "Arroz, …"), sem preferir os crus, e pela proporção
   de proteína, gordura e carboidrato.
+- Alimentos fora do tipo de alimentação do perfil nunca entram (nem são aceitos no `POST /swaps`).
 - Lista vazia: não há substitutos (o alimento sai sem substituto).
 
 `POST /plan/meals/{id}/swaps` com:

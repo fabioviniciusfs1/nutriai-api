@@ -1,5 +1,6 @@
 import { Column, Entity, PrimaryColumn, Unique } from 'typeorm';
 import type { FoodGroup } from '../../contract.js';
+import type { AnimalTag } from '../../plan/engine/diet.js';
 import type { MealPeriod, PlanFood } from '../../plan/engine/types.js';
 
 type Per100g = { carbs: number; protein: number; fat: number; kcal: number };
@@ -17,6 +18,10 @@ export class FoodEntity {
 
   @Column('jsonb')
   per100g: Per100g;
+
+  /** Origens animais (carne, pescado, ovo, leite, mel), para o tipo de alimentação. */
+  @Column('text', { array: true, default: [] })
+  animal: AnimalTag[];
 
   /** Outros nutrientes por 100 g (id do nutriente → valor), quando conhecidos. */
   @Column('jsonb', { name: 'micros_per100g', default: {} })

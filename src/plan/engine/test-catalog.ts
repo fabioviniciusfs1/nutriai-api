@@ -1,6 +1,7 @@
 // Catálogo fixo dos testes do engine: os dados de exemplo do front antigo (`backend-contract/reference/mock-data.ts`).
 // Mantém as regras do plano testadas sem depender da TACO.
 import type { FoodGroup } from '../../contract.js';
+import type { AnimalTag } from './diet.js';
 import type { Catalog, MealPeriod, PlanFood } from './types.js';
 
 /** Plano base: as refeições com que todo usuário começa. */
@@ -159,6 +160,7 @@ export const testFoods: {
   name: string;
   group: FoodGroup;
   per100g: { carbs: number; protein: number; fat: number; kcal: number };
+  animal?: AnimalTag[];
 }[] = [
   {
     name: 'Pão integral',
@@ -215,41 +217,49 @@ export const testFoods: {
     name: 'Ovo poché',
     group: 'proteinas',
     per100g: { carbs: 1, protein: 13, fat: 10, kcal: 143 },
+    animal: ['ovo'],
   },
   {
     name: 'Ovos',
     group: 'proteinas',
     per100g: { carbs: 1, protein: 13, fat: 10, kcal: 143 },
+    animal: ['ovo'],
   },
   {
     name: 'Camarão grelhado',
     group: 'proteinas',
     per100g: { carbs: 0, protein: 17, fat: 2, kcal: 92 },
+    animal: ['pescado'],
   },
   {
     name: 'Salmão grelhado',
     group: 'proteinas',
     per100g: { carbs: 0, protein: 20, fat: 9, kcal: 170 },
+    animal: ['pescado'],
   },
   {
     name: 'Peito de frango grelhado',
     group: 'proteinas',
     per100g: { carbs: 0, protein: 30, fat: 3, kcal: 159 },
+    animal: ['carne'],
   },
   {
     name: 'Tilápia assada',
     group: 'proteinas',
     per100g: { carbs: 0, protein: 20, fat: 3, kcal: 107 },
+    animal: ['pescado'],
   },
   {
     name: 'Atum em água',
     group: 'proteinas',
     per100g: { carbs: 0, protein: 26, fat: 1, kcal: 116 },
+    animal: ['pescado'],
   },
   {
     name: 'Patinho moído',
     group: 'proteinas',
     per100g: { carbs: 0, protein: 36, fat: 7, kcal: 219 },
+    animal: ['carne'],
   },
   {
     name: 'Tofu',
@@ -261,26 +271,31 @@ export const testFoods: {
     name: 'Iogurte grego natural',
     group: 'laticinios',
     per100g: { carbs: 4, protein: 9, fat: 4, kcal: 88 },
+    animal: ['leite'],
   },
   {
     name: 'Queijo branco',
     group: 'laticinios',
     per100g: { carbs: 3, protein: 17, fat: 14, kcal: 216 },
+    animal: ['leite'],
   },
   {
     name: 'Ricota',
     group: 'laticinios',
     per100g: { carbs: 4, protein: 11, fat: 8, kcal: 140 },
+    animal: ['leite'],
   },
   {
     name: 'Queijo cottage',
     group: 'laticinios',
     per100g: { carbs: 3, protein: 11, fat: 4, kcal: 98 },
+    animal: ['leite'],
   },
   {
     name: 'Kefir',
     group: 'laticinios',
     per100g: { carbs: 5, protein: 3, fat: 3, kcal: 60 },
+    animal: ['leite'],
   },
 
   {

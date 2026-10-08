@@ -1,10 +1,15 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ANTHROPIC_CLIENT, CLAUDE_MODEL } from '../../ai/anthropic.provider.js';
+import {
+  ANTHROPIC_CLIENT,
+  CLAUDE_MODEL,
+  CLAUDE_PLAN_MODEL,
+} from '../../ai/anthropic.provider.js';
 import { CatalogService } from '../../catalog/catalog.service.js';
-import type { FoodFeedback } from '../../contract.js';
+import type { Diet, FoodFeedback } from '../../contract.js';
+import { allowedByDiet } from '../engine/diet.js';
 import { FoodCatalog } from '../engine/foods.js';
-import type { MealSuggestion } from '../engine/types.js';
+import type { MealSuggestion, PersonalMeals } from '../engine/types.js';
 import {
   catalogPrompt,
   COMPOSER_INSTRUCTIONS,
@@ -13,6 +18,13 @@ import {
   parseComposition,
   type CompositionRequest,
 } from './composition.js';
+import {
+  parsePersonalPlan,
+  PERSONAL_PLAN_INSTRUCTIONS,
+  PERSONAL_PLAN_SCHEMA,
+  personalPlanPrompt,
+  type PersonalPlanRequest,
+} from './personal-plan.js';
 import {
   parseSubstitutes,
   SUBSTITUTE_INSTRUCTIONS,
@@ -27,6 +39,9 @@ const COMPOSE_TIMEOUT_MS = 20_000;
 /** Tempo máximo de espera pelos substitutos (o diálogo de troca fica aguardando). */
 const SUBSTITUTES_TIMEOUT_MS = 15_000;
 
+/** Tempo máximo de espera pelo plano individual (roda em segundo plano). */
+const PERSONAL_PLAN_TIMEOUT_MS = 120_000;
+
 /** Quanto tempo a sugestão da prévia fica guardada para o "criar" usar a mesma. */
 const DRAFT_TTL_MS = 15 * 60 * 1000;
 
@@ -35,6 +50,14 @@ const DRAFT_TTL_MS = 15 * 60 * 1000;
  * cliente, ou se a chamada falhar, devolve `null` e o plano usa a lista fixa de sugestões / os substitutos
  * do mesmo grupo.
  */
+/** Só os alimentos do catálogo que cabem no tipo de alimentação. */
+function dietFilter(catalog: FoodCatalog, diet: Diet) {
+  return (name: string) => {
+    const entry = catalog.entry(name);
+    return entry !== undefined && allowedByDiet(entry, diet);
+  };
+}
+
 @Injectable()
 export class MealComposerService {
   private readonly logger = new Logger(MealComposerService.name);
@@ -107,11 +130,13 @@ export class MealComposerService {
       timeout: COMPOSE_TIMEOUT_MS,
     });
     if (text === null) return null;
+    const catalog = new FoodCatalog((await this.catalog.catalog()).foods);
     const suggestion = parseComposition(
       text,
-      new FoodCatalog((await this.catalog.catalog()).foods),
+      catalog,
       feedback,
       request.time,
+      dietFilter(catalog, request.diet),
     );
     if (!suggestion)
       this.logger.warn(
@@ -138,17 +163,52 @@ export class MealComposerService {
       timeout: SUBSTITUTES_TIMEOUT_MS,
     });
     if (text === null) return null;
+    const catalog = new FoodCatalog((await this.catalog.catalog()).foods);
     const names = parseSubstitutes(
       text,
-      new FoodCatalog((await this.catalog.catalog()).foods),
+      catalog,
       feedback,
       request.food.name,
+      dietFilter(catalog, request.diet),
     );
     if (names.length === 0) {
       this.logger.warn('Sugestão de substitutos sem alimentos do catálogo.');
       return null;
     }
     return names;
+  }
+
+  /**
+   * Refeições do plano individual do usuário, montadas pelo Claude e conferidas no catálogo. `null` sem
+   * cliente, se a chamada falhar ou se alguma refeição pedida vier sem alimentos válidos.
+   */
+  async composePersonalPlan(
+    request: PersonalPlanRequest,
+    feedback: Record<string, FoodFeedback>,
+  ): Promise<PersonalMeals | null> {
+    const text = await this.ask({
+      task: 'Plano individual',
+      instructions: PERSONAL_PLAN_INSTRUCTIONS,
+      prompt: personalPlanPrompt(request),
+      schema: PERSONAL_PLAN_SCHEMA,
+      // O Sonnet pensa antes de responder, e o raciocínio também conta no limite.
+      maxTokens: 16000,
+      // Roda em segundo plano: dá para esperar mais.
+      timeout: PERSONAL_PLAN_TIMEOUT_MS,
+      plan: true,
+    });
+    if (text === null) return null;
+    const catalog = new FoodCatalog((await this.catalog.catalog()).foods);
+    const meals = parsePersonalPlan(
+      text,
+      catalog,
+      feedback,
+      dietFilter(catalog, request.diet),
+      request.meals.map((meal) => meal.id),
+    );
+    if (!meals)
+      this.logger.warn('Plano individual sem todas as refeições válidas.');
+    return meals;
   }
 
   /**
@@ -162,30 +222,56 @@ export class MealComposerService {
     schema: Record<string, unknown>;
     maxTokens: number;
     timeout: number;
+    /**
+     * Montagem do plano individual: usa o `CLAUDE_PLAN_MODEL` (esforço médio, para não demorar demais) e,
+     * se ele recusar, a API refaz com outro modelo (`fallbacks: 'default'`, beta).
+     */
+    plan?: boolean;
   }): Promise<string | null> {
     if (!this.anthropic) return null;
     const foods = (await this.catalog.catalog()).foods;
     try {
-      const response = await this.anthropic.messages.create(
+      const system: Anthropic.TextBlockParam[] = [
+        { type: 'text', text: options.instructions },
+        // O catálogo não muda entre chamadas: fica em cache.
         {
-          model: CLAUDE_MODEL,
-          max_tokens: options.maxTokens,
-          system: [
-            { type: 'text', text: options.instructions },
-            // O catálogo não muda entre chamadas: fica em cache.
-            {
-              type: 'text',
-              text: `Catálogo:\n${catalogPrompt(foods)}`,
-              cache_control: { type: 'ephemeral' },
-            },
-          ],
-          messages: [{ role: 'user', content: options.prompt }],
-          output_config: {
-            format: { type: 'json_schema', schema: options.schema },
-          },
+          type: 'text',
+          text: `Catálogo:\n${catalogPrompt(foods)}`,
+          cache_control: { type: 'ephemeral' },
         },
-        { timeout: options.timeout, maxRetries: 1 },
-      );
+      ];
+      const messages: Anthropic.MessageParam[] = [
+        { role: 'user', content: options.prompt },
+      ];
+      const request = { timeout: options.timeout, maxRetries: 1 };
+      const response = options.plan
+        ? await this.anthropic.beta.messages.create(
+            {
+              model: CLAUDE_PLAN_MODEL,
+              max_tokens: options.maxTokens,
+              system,
+              messages,
+              output_config: {
+                effort: 'medium',
+                format: { type: 'json_schema', schema: options.schema },
+              },
+              betas: ['server-side-fallback-2026-07-01'],
+              fallbacks: 'default',
+            },
+            request,
+          )
+        : await this.anthropic.messages.create(
+            {
+              model: CLAUDE_MODEL,
+              max_tokens: options.maxTokens,
+              system,
+              messages,
+              output_config: {
+                format: { type: 'json_schema', schema: options.schema },
+              },
+            },
+            request,
+          );
       if (
         response.stop_reason === 'refusal' ||
         response.stop_reason === 'max_tokens'

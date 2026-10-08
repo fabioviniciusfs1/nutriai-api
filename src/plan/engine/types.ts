@@ -1,4 +1,11 @@
-import type { FoodFeedback, FoodGroup, Totals } from '../../contract.js';
+import type {
+  Diet,
+  FoodFeedback,
+  FoodGroup,
+  Personalization,
+  Totals,
+} from '../../contract.js';
+import type { AnimalTag } from './diet.js';
 
 export type { Totals };
 
@@ -15,6 +22,8 @@ export type CatalogFood = {
   /** `null` = sem grupo (sem substitutos). */
   group: FoodGroup | null;
   per100g: Totals;
+  /** Origens animais (para o tipo de alimentação); sem o campo: nenhuma. */
+  animal?: AnimalTag[];
 };
 
 export type MealSuggestion = {
@@ -95,7 +104,15 @@ export type PlanState = {
   foodSubstitutes: Record<string, string>;
   mealFoodSwaps: Record<number, Record<string, string>>;
   nextExtraId: number;
+  /** Refeições do plano base montadas pelo assistente para o usuário; sem o campo, as do plano base. */
+  personalMeals?: PersonalMeals | null;
 };
+
+/** Versão individual das refeições do plano base (id → título e alimentos, nas porções do assistente). */
+export type PersonalMeals = Record<
+  number,
+  { title: string; foods: PlanFood[] }
+>;
 
 /** O que o plano usa do perfil do usuário. */
 export type PlannerOptions = {
@@ -103,6 +120,10 @@ export type PlannerOptions = {
   calorieGoal: number | null;
   /** Refeições do plano inicial (3 a 6). */
   mealsPerDay: number;
+  /** Tipo de alimentação do perfil: sugestões e substitutos fora dela ficam de fora (padrão: onívora). */
+  diet?: Diet;
+  /** Estado da montagem do plano individual, devolvido em `todayPlan()` (padrão: `null`). */
+  personalization?: Personalization;
   /** O assistente pode compor refeições novas (então sempre dá para criar uma). */
   composerAvailable?: boolean;
 };

@@ -34,6 +34,7 @@ describe('tacoToCatalog', () => {
       name: 'Alimento 1',
       group: 'carboidratos',
       per100g: { kcal: 124, protein: 2.6, fat: 1, carbs: 25.8 },
+      animal: [],
       microsPer100g: { fibras: 2.7, riboflavina: 0, 'vitamina-a': 10 },
       source: 'taco',
       sourceId: 1,

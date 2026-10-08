@@ -4,6 +4,7 @@ import type {
   Targets,
   TodayPlan,
 } from '../contract.js';
+import { DIET_NAMES } from '../plan/engine/diet.js';
 
 /** Instruções fixas do assistente (não mudam entre requisições: ficam em cache). */
 export const SYSTEM_PROMPT = `Você é o assistente nutricional do NutriAI, um app brasileiro de plano alimentar.
@@ -44,6 +45,10 @@ export function userContext(input: {
     lines.push(
       `Perfil: sexo ${SEX[profile.sex]}, ${profile.age} anos, ${profile.weightKg} kg, ${profile.heightCm} cm, ` +
         `atividade ${profile.activityLevel}, objetivo ${GOAL[profile.goal]}, ${profile.mealsPerDay} refeições por dia.`,
+      `Tipo de alimentação: ${DIET_NAMES[profile.diet]}.`,
+      profile.preferences
+        ? `Preferências do usuário: ${profile.preferences}`
+        : 'Preferências do usuário: nenhuma informada.',
       `Metas: ${targets.calories} kcal por dia (gasto estimado ${targets.tdee} kcal), água ${targets.waterLiters} L.`,
     );
   } else {

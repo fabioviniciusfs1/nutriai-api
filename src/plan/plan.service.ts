@@ -10,6 +10,7 @@ import type { UserClock } from '../common/timezone.js';
 import type {
   CreateMealPreview,
   FoodFeedback,
+  Personalization,
   PlanFood,
   TodayPlan,
 } from '../contract.js';
@@ -43,7 +44,43 @@ function toPlanState(entity: PlanStateEntity, today: string): PlanState {
     foodSubstitutes: entity.foodSubstitutes,
     mealFoodSwaps: entity.mealFoodSwaps,
     nextExtraId: entity.nextExtraId,
+    personalMeals: entity.personalMeals,
   };
+}
+
+/**
+ * Uma montagem `pending` mais velha que isso é tratada como falha (ex.: a API reiniciou no meio). Maior que o
+ * tempo máximo da chamada ao Claude (2 min, com uma nova tentativa).
+ */
+const PERSONALIZATION_TIMEOUT_MS = 5 * 60 * 1000;
+
+/** Estado da montagem do plano individual, com `pending` antiga virando `failed`. */
+export function personalizationStatus(
+  entity: Pick<PlanStateEntity, 'personalization' | 'personalizationAt'>,
+  now = Date.now(),
+): Personalization {
+  if (
+    entity.personalization === 'pending' &&
+    (!entity.personalizationAt ||
+      now - entity.personalizationAt.getTime() > PERSONALIZATION_TIMEOUT_MS)
+  )
+    return 'failed';
+  return entity.personalization;
+}
+
+/** Linha do plano do usuário (criada vazia se não existir), travada até o fim da transação. */
+export async function lockPlanState(manager: EntityManager, userId: string) {
+  await manager
+    .createQueryBuilder()
+    .insert()
+    .into(PlanStateEntity)
+    .values({ userId })
+    .orIgnore()
+    .execute();
+  return manager.findOneOrFail(PlanStateEntity, {
+    where: { userId },
+    lock: { mode: 'pessimistic_write' },
+  });
 }
 
 /** Traduz um erro de regra do plano para o status HTTP. */
@@ -64,7 +101,10 @@ export class PlanService {
     private readonly composer: MealComposerService,
   ) {}
 
-  /** Meta calórica e refeições por dia do perfil (sem perfil: porções originais, 3 refeições). */
+  /**
+   * Meta calórica, refeições por dia e tipo de alimentação do perfil (sem perfil: porções originais,
+   * 3 refeições).
+   */
   private async plannerOptions(userId: string): Promise<PlannerOptions> {
     const { profile } = await this.users.get(userId);
     const composerAvailable = this.composer.available;
@@ -72,6 +112,7 @@ export class PlanService {
     return {
       calorieGoal: calculateTargets(profile).calories,
       mealsPerDay: profile.mealsPerDay,
+      diet: profile.diet,
       composerAvailable,
     };
   }
@@ -105,6 +146,8 @@ export class PlanService {
           title: meal.title,
           foods: meal.foods.map((food) => food.name),
         })),
+        diet: profile?.diet ?? 'onivora',
+        preferences: profile?.preferences ?? '',
       };
       return { request, feedback: planner.state.foodFeedback };
     });
@@ -120,6 +163,7 @@ export class PlanService {
     mealId: number,
     foodName: string,
   ): Promise<PlanFood[]> {
+    const { profile } = await this.users.get(userId);
     const { request, feedback } = await this.read(userId, clock, (planner) => {
       const meal = planner.meal(mealId);
       const food = meal.foods.find((item) => item.name === foodName);
@@ -132,6 +176,8 @@ export class PlanService {
           .map((item) => item.name)
           .filter((name) => name !== foodName),
         restricted: Object.keys(planner.state.foodFeedback),
+        diet: profile?.diet ?? 'onivora',
+        preferences: profile?.preferences ?? '',
       };
       return { request, feedback: planner.state.foodFeedback };
     });
@@ -192,18 +238,8 @@ export class PlanService {
   }
 
   /** Estado do plano com lock da linha (cria a linha na primeira vez). */
-  private async lockState(manager: EntityManager, userId: string) {
-    await manager
-      .createQueryBuilder()
-      .insert()
-      .into(PlanStateEntity)
-      .values({ userId })
-      .orIgnore()
-      .execute();
-    return manager.findOneOrFail(PlanStateEntity, {
-      where: { userId },
-      lock: { mode: 'pessimistic_write' },
-    });
+  private lockState(manager: EntityManager, userId: string) {
+    return lockPlanState(manager, userId);
   }
 
   /**
@@ -219,13 +255,17 @@ export class PlanService {
       flagged?: { name: string; feedback: FoodFeedback };
     },
   ): Promise<T> {
-    const [catalog, options] = await Promise.all([
+    const [catalog, profileOptions] = await Promise.all([
       this.catalog.catalog(),
       this.plannerOptions(userId),
     ]);
     try {
       return await this.dataSource.transaction(async (manager) => {
         const entity = await this.lockState(manager, userId);
+        const options: PlannerOptions = {
+          ...profileOptions,
+          personalization: personalizationStatus(entity),
+        };
         const planner = new Planner(
           catalog,
           toPlanState(entity, today),

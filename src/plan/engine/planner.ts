@@ -29,6 +29,7 @@ import type {
   PlanState,
 } from './types.js';
 import { DEFAULT_PLANNER_OPTIONS } from './types.js';
+import { allowedByDiet } from './diet.js';
 
 /** Refeição do plano montado, com o que é preciso para recalcular a porção dela. */
 export type BuiltMeal = PlanMeal & {
@@ -111,7 +112,10 @@ export class Planner {
   /** Só com as mudanças permanentes: base para criar refeições e acrescentar alimentos. */
   private readonly permanentPlan: BuiltMeal[];
   private readonly todayScales: Record<number, number>;
-  /** Refeições do plano base que entram no plano inicial, pelas refeições por dia do perfil. */
+  /**
+   * Refeições do plano base que entram no plano inicial, pelas refeições por dia do perfil (com a versão
+   * individual do assistente, quando houver).
+   */
   private readonly baseMeals: Catalog['baseMeals'];
   /**
    * Multiplica todas as porções para o plano inicial (sem mudanças do usuário) ficar perto da meta
@@ -125,9 +129,13 @@ export class Planner {
     private readonly options: PlannerOptions = DEFAULT_PLANNER_OPTIONS,
   ) {
     this.foods = new FoodCatalog(catalog.foods);
-    this.baseMeals = catalog.baseMeals.filter(
-      (meal) => (meal.minMealsPerDay ?? 3) <= options.mealsPerDay,
-    );
+    // As refeições que o assistente montou para o usuário trocam título e alimentos da refeição base.
+    const personal = state.personalMeals ?? {};
+    this.baseMeals = catalog.baseMeals
+      .filter((meal) => (meal.minMealsPerDay ?? 3) <= options.mealsPerDay)
+      .map((meal) =>
+        personal[meal.id] ? { ...meal, ...personal[meal.id] } : meal,
+      );
     this.goalFactor = goalFactor(
       this.baseMeals.map((meal) => meal.foods),
       options.calorieGoal,
@@ -198,6 +206,7 @@ export class Planner {
         totals,
         foods,
       })),
+      personalization: this.options.personalization ?? null,
       // Com o assistente sempre há o que sugerir; sem ele, só enquanto houver sugestões da lista fixa.
       canCreateMeal:
         this.options.composerAvailable === true ||
@@ -229,6 +238,12 @@ export class Planner {
   // ---------------------------------------------------------------------------------------------
   // Sugestões de refeição
 
+  /** O alimento cabe no tipo de alimentação do perfil (alimento fora do catálogo: cabe). */
+  private allowed = (name: string) => {
+    const entry = this.foods.entry(name);
+    return !entry || allowedByDiet(entry, this.options.diet ?? 'onivora');
+  };
+
   /** O assistente evita sugerir refeições com alimentos restritos (enquanto não forem liberados). */
   private byRestriction = (a: MealSuggestion, b: MealSuggestion) =>
     Number(usesRestrictedFood(a.foods, this.state.foodFeedback)) -
@@ -239,11 +254,17 @@ export class Planner {
     const { planChanges, dayPlan } = this.state;
     const usedTitles = new Set([
       ...this.catalog.baseMeals.map((meal) => meal.title),
+      ...this.baseMeals.map((meal) => meal.title),
       ...Object.values(dayPlan.replacements).map((meal) => meal.title),
       ...planChanges.added.map((meal) => meal.suggestion),
     ]);
+    // Sugestões com alimento fora do tipo de alimentação do perfil nem entram.
     return this.catalog.suggestions
-      .filter((meal) => !usedTitles.has(meal.title))
+      .filter(
+        (meal) =>
+          !usedTitles.has(meal.title) &&
+          meal.foods.every((food) => this.allowed(food.name)),
+      )
       .sort(this.byRestriction);
   }
 
@@ -730,8 +751,10 @@ export class Planner {
         food.kcal,
         feedback,
         MAX_SUBSTITUTES,
+        this.allowed,
       );
     return [...new Set(names)]
+      .filter(this.allowed)
       .flatMap(
         (name) =>
           this.foods.substitute(name, foodName, food.kcal, feedback) ?? [],
@@ -753,12 +776,14 @@ export class Planner {
     const food = this.mealFood(mealId, foodName);
     // Qualquer alimento do catálogo serve (o assistente sugere de qualquer grupo), menos o próprio e os restritos.
     if (substitute !== null) {
-      const valid = this.foods.substitute(
-        substitute,
-        foodName,
-        food.kcal,
-        this.state.foodFeedback,
-      );
+      const valid =
+        this.allowed(substitute) &&
+        this.foods.substitute(
+          substitute,
+          foodName,
+          food.kcal,
+          this.state.foodFeedback,
+        );
       if (!valid)
         throw new PlanRuleError(
           'invalid',

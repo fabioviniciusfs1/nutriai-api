@@ -68,6 +68,15 @@ npx vitest run -t "redistribuir"                  # por nome do teste
   esse fator; ele é recalculado a cada requisição pelo perfil (`PlanService.plannerOptions`).
   Com meta, criar refeição leva o dia de volta para a meta (a nova fica com `meta ÷ (n + 1)`, as outras se
   ajustam e podem aumentar); as demais ações nunca aumentam o total.
+- Plano individual (`src/plan/personalizer.service.ts`): no primeiro `PUT /me/profile`, o Claude monta as refeições
+  do plano base para o usuário em segundo plano (`composer/personal-plan.ts`, com o `CLAUDE_PLAN_MODEL`, Sonnet, e
+  `fallbacks: 'default'` no endpoint beta); ficam em `plan_states.personal_meals`
+  (id da refeição base → título e alimentos) e o `Planner` usa no lugar das padrão. Estado em
+  `plan_states.personalization` (`pending` com mais de 2 min vira `failed`); `POST /plan/personalize` tenta de novo.
+  Nos e2e, espere com `PlanPersonalizerService.whenIdle()` depois do primeiro perfil (ele usa o mock do Claude).
+- Tipo de alimentação (`profile.diet`): `src/plan/engine/diet.ts` marca a origem animal de cada alimento
+  (`foods.animal`, pela categoria da TACO e por palavras do nome) e `allowedByDiet` filtra o plano individual,
+  as sugestões fixas, as refeições compostas e os substitutos.
 - `src/health/`: importa a atividade da Google Health API para `activity_days`: ao conectar o Google, nas
   rotas de nutrição/histórico quando a última vez foi há mais de 1 h, e todo dia de madrugada
   (`HealthSyncScheduler`: `HEALTH_SYNC_CRON`, padrão `0 3 * * *`, fuso `HEALTH_SYNC_TIMEZONE`; `off`

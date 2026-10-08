@@ -4,10 +4,12 @@ import request from 'supertest';
 import { DataSource } from 'typeorm';
 import type { Me, PlanMeal, TodayPlan } from '../src/contract.js';
 import { addDays, userClock } from '../src/common/timezone.js';
+import { PlanPersonalizerService } from '../src/plan/personalizer.service.js';
 import { createTestApp, FRONTEND } from './setup-app.js';
 
 const create = vi.fn();
-const anthropic = { messages: { create } };
+// O plano individual usa o endpoint beta (fallback do servidor); os dois caem no mesmo mock.
+const anthropic = { messages: { create }, beta: { messages: { create } } };
 
 let app: INestApplication;
 
@@ -28,7 +30,12 @@ const PROFILE = {
   goal: 'perder',
   mealsPerDay: 4,
   weighInDay: 1,
+  diet: 'onivora',
+  preferences: '',
 };
+
+/** Espera a montagem do plano individual (que roda em segundo plano depois do primeiro perfil). */
+const personalizationIdle = () => app.get(PlanPersonalizerService).whenIdle();
 
 let counter = 0;
 
@@ -118,6 +125,7 @@ describe('perfil e pesos', () => {
     });
 
     const saved = await http('put', '/me/profile').send(PROFILE).expect(200);
+    await personalizationIdle();
     expect((saved.body as Me).targets).toEqual({
       calories: 1660,
       bmr: 1395,
@@ -343,6 +351,8 @@ describe('refeição composta pelo assistente', () => {
     await http('put', '/me/profile')
       .send({ ...PROFILE, mealsPerDay: 3 })
       .expect(200);
+    await personalizationIdle();
+    create.mockReset();
 
     create.mockResolvedValueOnce({
       stop_reason: 'end_turn',
@@ -471,10 +481,164 @@ describe('refeição composta pelo assistente', () => {
   });
 });
 
+describe('plano individual do assistente', () => {
+  const VEGETARIAN = {
+    ...PROFILE,
+    diet: 'vegetariana',
+    preferences: '  Almoço de marmita; treino às 18h.  ',
+  };
+  const TOFU = 'Soja, queijo (tofu)';
+  const FRANGO = 'Frango, peito, sem pele, grelhado';
+  const reply = (text: unknown) => ({
+    stop_reason: 'end_turn',
+    content: [{ type: 'text', text: JSON.stringify(text) }],
+  });
+  const PLAN = {
+    meals: [
+      {
+        id: 1,
+        title: 'Pão com Ovo e Mamão',
+        foods: [
+          { name: 'Pão, trigo, forma, integral', grams: 50 },
+          { name: 'Ovo, de galinha, inteiro, cozido/10minutos', grams: 100 },
+          { name: 'Mamão, Papaia, cru', grams: 150 },
+        ],
+      },
+      {
+        id: 2,
+        title: 'Marmita de Tofu com Arroz e Feijão',
+        foods: [
+          { name: TOFU, grams: 150 },
+          { name: FRANGO, grams: 100 },
+          { name: 'Arroz, integral, cozido', grams: 150 },
+          { name: 'Feijão, carioca, cozido', grams: 100 },
+        ],
+      },
+      {
+        id: 4,
+        title: 'Iogurte com Banana e Aveia',
+        foods: [
+          { name: 'Iogurte, natural', grams: 170 },
+          { name: 'Banana, prata, crua', grams: 100 },
+          { name: 'Aveia, flocos, crua', grams: 30 },
+        ],
+      },
+      {
+        id: 3,
+        title: 'Omelete com Batata-Doce e Brócolis',
+        foods: [
+          { name: 'Ovo, de galinha, inteiro, cozido/10minutos', grams: 100 },
+          { name: 'Batata, doce, cozida', grams: 150 },
+          { name: 'Brócolis, cozido', grams: 100 },
+        ],
+      },
+    ],
+  };
+
+  it('monta o plano no primeiro perfil, em segundo plano, e não monta de novo', async () => {
+    create.mockReset();
+    let answer: (value: unknown) => void = () => {};
+    create.mockImplementationOnce(
+      () => new Promise((resolve) => (answer = resolve)),
+    );
+    const { http } = await newUser();
+    const saved = await http('put', '/me/profile').send(VEGETARIAN).expect(200);
+    expect((saved.body as Me).profile).toMatchObject({
+      diet: 'vegetariana',
+      preferences: 'Almoço de marmita; treino às 18h.',
+    });
+
+    const pending = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+    expect(pending.personalization).toBe('pending');
+    expect(create).toHaveBeenCalledTimes(1);
+    const prompt = create.mock.calls[0][0].messages[0].content as string;
+    expect(prompt).toContain('Tipo de alimentação: vegetariana');
+    expect(prompt).toContain('Almoço de marmita; treino às 18h.');
+    expect(prompt).toContain('- id 1: café da manhã');
+
+    answer(reply(PLAN));
+    await personalizationIdle();
+    const ready = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+    expect(ready.personalization).toBe('ready');
+    expect(ready.meals.map((meal) => meal.title)).toEqual([
+      'Pão com Ovo e Mamão',
+      'Marmita de Tofu com Arroz e Feijão',
+      'Iogurte com Banana e Aveia',
+      'Omelete com Batata-Doce e Brócolis',
+    ]);
+    const lunch = ready.meals.find((meal) => meal.id === 2)!;
+    // Frango fica de fora (vegetariana).
+    expect(lunch.foods.map((food) => food.name)).not.toContain(FRANGO);
+    expect(Math.abs(kcal(ready) - 1660)).toBeLessThanOrEqual(17);
+
+    // Os próximos perfis não montam de novo.
+    await http('put', '/me/profile')
+      .send({ ...VEGETARIAN, weightKg: 70 })
+      .expect(200);
+    await personalizationIdle();
+    expect(create).toHaveBeenCalledTimes(1);
+    create.mockReset();
+  });
+
+  it('se falhar, fica o plano padrão e dá para tentar de novo', async () => {
+    create.mockReset();
+    create.mockRejectedValueOnce(new Error('indisponível'));
+    const { http } = await newUser();
+    await http('put', '/me/profile').send(VEGETARIAN).expect(200);
+    await personalizationIdle();
+    const failed = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+    expect(failed.personalization).toBe('failed');
+    expect(failed.meals).toHaveLength(4);
+
+    create.mockResolvedValueOnce(reply(PLAN));
+    const retried = await http('post', '/plan/personalize').expect(200);
+    // O mock responde na hora: a montagem pode já ter terminado.
+    expect(['pending', 'ready']).toContain(
+      (retried.body as TodayPlan).personalization,
+    );
+    await personalizationIdle();
+    const ready = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+    expect(ready.personalization).toBe('ready');
+    await http('post', '/plan/personalize').expect(409, {
+      error: 'Só dá para tentar de novo quando a montagem do plano falhou.',
+    });
+
+    // Substitutos também respeitam a dieta.
+    create.mockResolvedValueOnce(
+      reply({ names: [FRANGO, 'Ovo, de galinha, inteiro, frito'] }),
+    );
+    const substitutes = await http(
+      'get',
+      `/plan/meals/2/substitutes?food=${encodeURIComponent(TOFU)}`,
+    ).expect(200);
+    expect(substitutes.body.map((food: { name: string }) => food.name)).toEqual(
+      ['Ovo, de galinha, inteiro, frito'],
+    );
+    create.mockReset();
+  });
+
+  it('valida o tipo de alimentação e as preferências', async () => {
+    const { http } = await newUser();
+    await http('put', '/me/profile')
+      .send({ ...PROFILE, diet: 'carnivora' })
+      .expect(400, { error: 'Escolha o tipo de alimentação.' });
+    await http('put', '/me/profile')
+      .send({ ...PROFILE, preferences: 'x'.repeat(501) })
+      .expect(400, {
+        error: 'As preferências devem ter no máximo 500 caracteres.',
+      });
+  });
+});
+
 describe('nutrientes e histórico', () => {
   it('responde nutrientes de hoje e as estatísticas', async () => {
     const { http } = await newUser();
     await http('put', '/me/profile').send(PROFILE).expect(200);
+    await personalizationIdle();
 
     // Perfil com meta de 1660 kcal e 4 refeições: o plano inicial é escalado para perto da meta.
     const plan = (await http('get', '/plan/today').expect(200))

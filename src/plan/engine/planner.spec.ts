@@ -7,6 +7,7 @@ import {
 import { FoodCatalog, similarity } from './foods.js';
 import { goalFactor, mealPeriod, Planner, PlanRuleError } from './planner.js';
 import {
+  DEFAULT_PLANNER_OPTIONS,
   EMPTY_DAY_PLAN,
   EMPTY_PLAN_CHANGES,
   type PlannerOptions,
@@ -363,6 +364,88 @@ describe('Planner', () => {
       );
       if (restrictedIndex >= 0) expect(freeIndex).toBeLessThan(restrictedIndex);
     });
+  });
+});
+
+describe('plano individual do assistente', () => {
+  const personal = (state: PlanState, calorieGoal: number | null = null) =>
+    new Planner(catalog, state, { calorieGoal, mealsPerDay: 4 });
+  const foodsCatalog = new FoodCatalog(catalog.foods);
+  const tapioca = {
+    title: 'Tofu com Pão Integral',
+    foods: [
+      foodsCatalog.portion('Tofu', 150)!,
+      foodsCatalog.portion('Pão integral', 50)!,
+    ],
+  };
+
+  it('troca título e alimentos da refeição base; as outras seguem o plano base', () => {
+    const p = personal({ ...EMPTY_STATE, personalMeals: { 1: tapioca } });
+    const [first, second] = p.plan;
+    expect(first).toMatchObject({ id: 1, title: tapioca.title, time: '07:30' });
+    expect(first.foods.map((food) => food.name)).toEqual([
+      'Tofu',
+      'Pão integral',
+    ]);
+    expect(second.title).toBe(planner().plan[1].title);
+  });
+
+  it('as porções do assistente também são escaladas para a meta', () => {
+    const p = personal({ ...EMPTY_STATE, personalMeals: { 1: tapioca } }, 2000);
+    expect(Math.abs(p.dayKcal() - 2000)).toBeLessThanOrEqual(20);
+  });
+
+  it('devolve o estado da montagem', () => {
+    expect(planner().todayPlan().personalization).toBeNull();
+    expect(
+      new Planner(catalog, EMPTY_STATE, {
+        ...DEFAULT_PLANNER_OPTIONS,
+        personalization: 'pending',
+      }).todayPlan().personalization,
+    ).toBe('pending');
+  });
+});
+
+describe('tipo de alimentação', () => {
+  const vegetarian = (state: PlanState = EMPTY_STATE) =>
+    new Planner(catalog, state, {
+      ...DEFAULT_PLANNER_OPTIONS,
+      diet: 'vegetariana',
+    });
+
+  it('sugestões fixas com carne ou peixe ficam de fora', () => {
+    const titles = vegetarian()
+      .availableAlternatives()
+      .map((meal) => meal.title);
+    expect(titles).not.toContain('Frango Grelhado com Arroz Integral e Salada');
+    expect(titles).not.toContain('Tilápia Assada com Batata-Doce e Brócolis');
+    expect(titles).toContain('Omelete de Espinafre com Pão Integral');
+  });
+
+  it('substitutos e trocas respeitam a dieta', () => {
+    const fallback = vegetarian()
+      .substitutes(3, 'Salmão grelhado')
+      .map((food) => food.name);
+    expect(fallback.length).toBeGreaterThan(0);
+    for (const name of [
+      'Peito de frango grelhado',
+      'Tilápia assada',
+      'Atum em água',
+    ])
+      expect(fallback).not.toContain(name);
+    expect(
+      vegetarian()
+        .substitutes(3, 'Salmão grelhado', ['Tilápia assada', 'Tofu'])
+        .map((food) => food.name),
+    ).toEqual(['Tofu']);
+    expect(() =>
+      vegetarian().swapFood(
+        3,
+        'Salmão grelhado',
+        'nao-gosto',
+        'Tilápia assada',
+      ),
+    ).toThrow(PlanRuleError);
   });
 });
 

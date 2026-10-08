@@ -86,7 +86,11 @@ describe('prompts', () => {
       macros: { protein: 30, fat: 10, carbs: 50 },
       restricted: ['Guacamole'],
       otherMeals: [{ title: 'Almoço', foods: ['Arroz integral'] }],
+      diet: 'vegetariana',
+      preferences: 'Treino às 18h.',
     });
+    expect(prompt).toContain('Tipo de alimentação: vegetariana');
+    expect(prompt).toContain('(siga quando possível): Treino às 18h.');
     expect(prompt).toContain('"Pré-treino", às 16:00 (tarde)');
     expect(prompt).toContain('cerca de 400 kcal');
     expect(prompt).toContain(

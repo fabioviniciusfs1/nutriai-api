@@ -1,5 +1,14 @@
-import { IsIn, IsInt, IsNumber, Max, Min } from 'class-validator';
-import type { ActivityLevel, Goal, Profile, Sex } from '../contract.js';
+import { Transform } from 'class-transformer';
+import {
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
+import type { ActivityLevel, Diet, Goal, Profile, Sex } from '../contract.js';
 
 /** Perfil completo (corpo de `PUT /me/profile` e `POST /profile/estimate`). */
 export class ProfileDto implements Profile {
@@ -37,6 +46,20 @@ export class ProfileDto implements Profile {
 
   @IsIn([0, 1, 2, 3, 4, 5, 6], { message: 'Escolha o dia da pesagem.' })
   weighInDay: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+  @IsIn(['onivora', 'pescetariana', 'vegetariana', 'vegana'], {
+    message: 'Escolha o tipo de alimentação.',
+  })
+  diet: Diet;
+
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  @IsString({ message: 'Escreva as preferências como texto.' })
+  @MaxLength(500, {
+    message: 'As preferências devem ter no máximo 500 caracteres.',
+  })
+  preferences: string;
 }
 
 /** Só os campos do perfil (o DTO validado pode trazer protótipo de classe). */
@@ -50,6 +73,8 @@ export function toProfile(dto: ProfileDto): Profile {
     goal,
     mealsPerDay,
     weighInDay,
+    diet,
+    preferences,
   } = dto;
   return {
     sex,
@@ -60,5 +85,7 @@ export function toProfile(dto: ProfileDto): Profile {
     goal,
     mealsPerDay,
     weighInDay,
+    diet,
+    preferences,
   };
 }

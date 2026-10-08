@@ -1,5 +1,6 @@
 // Alimento da TACO → alimento do catálogo do app (o que o plano, as trocas e a busca usam).
 import type { FoodGroup } from '../../../contract.js';
+import { animalTags } from '../../../plan/engine/diet.js';
 import type { CatalogSourceFood } from '../catalog-food.js';
 import type { TacoColumn, TacoFood } from './parse.js';
 
@@ -69,6 +70,7 @@ export function tacoToCatalog(food: TacoFood): CatalogSourceFood | null {
       fat: food.lipideos_g ?? 0,
       carbs: food.carboidrato_g ?? 0,
     },
+    animal: animalTags(food.categoria, food.nome),
     microsPer100g,
     source: TACO_SOURCE,
     sourceId: food.id,

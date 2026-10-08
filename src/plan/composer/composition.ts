@@ -1,5 +1,6 @@
 // Partes puras da composição de refeições pelo assistente: prompt, schema da resposta e validação.
-import type { FoodFeedback } from '../../contract.js';
+import type { Diet, FoodFeedback } from '../../contract.js';
+import { DIET_NAMES } from '../engine/diet.js';
 import { FoodCatalog, normalize, sumTotals } from '../engine/foods.js';
 import { mealPeriod } from '../engine/planner.js';
 import type { CatalogFood, MealSuggestion, PlanFood } from '../engine/types.js';
@@ -66,13 +67,26 @@ export type CompositionRequest = {
   restricted: string[];
   /** Refeições que já estão no plano de hoje (título e alimentos). */
   otherMeals: { title: string; foods: string[] }[];
+  diet: Diet;
+  /** Preferências do perfil em texto livre (pode ser vazio). */
+  preferences: string;
 };
 
-const PERIOD_NAMES = {
+export const PERIOD_NAMES = {
   manha: 'manhã',
   tarde: 'tarde',
   noite: 'noite',
 } as const;
+
+/** Tipo de alimentação e preferências do usuário, como linhas do prompt. */
+export function preferenceLines(diet: Diet, preferences: string): string[] {
+  return [
+    `Tipo de alimentação: ${DIET_NAMES[diet]}.`,
+    preferences.trim()
+      ? `Preferências do usuário (siga quando possível): ${preferences.trim()}`
+      : 'Preferências do usuário: nenhuma informada.',
+  ];
+}
 
 /** Pedido do usuário para o assistente (muda a cada chamada). */
 export function compositionPrompt(request: CompositionRequest): string {
@@ -86,6 +100,7 @@ export function compositionPrompt(request: CompositionRequest): string {
       `Macronutrientes que faltam no dia para esta refeição: ${protein} g de proteína, ${fat} g de gordura, ${carbs} g de carboidrato.`,
     );
   }
+  lines.push(...preferenceLines(request.diet, request.preferences));
   lines.push(
     request.restricted.length > 0
       ? `Alimentos restritos (não use): ${request.restricted.join('; ')}.`
@@ -100,29 +115,21 @@ export function compositionPrompt(request: CompositionRequest): string {
 }
 
 /**
- * Lê a resposta do assistente e devolve a refeição na porção que ele escolheu (nutrientes calculados pelo
- * catálogo). Alimentos fora do catálogo ou restritos são descartados; `null` se não sobrar nenhum.
+ * Alimentos que o assistente escolheu, na porção dele (nutrientes calculados pelo catálogo). Nomes fora do
+ * catálogo, restritos ou que não passam em `allowed` (tipo de alimentação) são descartados; repetidos somam.
  */
-export function parseComposition(
-  text: string,
+export function parseFoods(
+  items: unknown,
   catalog: FoodCatalog,
   feedback: Record<string, FoodFeedback>,
-  time: string,
-): MealSuggestion | null {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return null;
-  }
-  const { title, foods } = (raw ?? {}) as { title?: unknown; foods?: unknown };
-  if (!Array.isArray(foods)) return null;
-
+  allowed: (name: string) => boolean = () => true,
+): PlanFood[] {
+  if (!Array.isArray(items)) return [];
   const byNormalizedName = new Map(
     catalog.foods.map((food) => [normalize(food.name), food.name]),
   );
   const chosen = new Map<string, PlanFood>();
-  for (const item of foods.slice(0, MAX_FOODS) as {
+  for (const item of items.slice(0, MAX_FOODS) as {
     name?: unknown;
     grams?: unknown;
   }[]) {
@@ -131,7 +138,7 @@ export function parseComposition(
     const name = catalog.entry(item.name)
       ? item.name
       : byNormalizedName.get(normalize(item.name));
-    if (!name || feedback[name]) continue;
+    if (!name || feedback[name] || !allowed(name)) continue;
     const grams = Math.min(MAX_GRAMS, Math.max(1, Math.round(item.grams)));
     // Alimento repetido: soma as gramas.
     const previous = chosen.get(name)?.grams ?? 0;
@@ -142,12 +149,39 @@ export function parseComposition(
     if (portion) chosen.set(name, portion);
   }
   const result = [...chosen.values()];
-  if (result.length === 0 || sumTotals(result).kcal === 0) return null;
+  return sumTotals(result).kcal === 0 ? [] : result;
+}
+
+/** Título curto do assistente, ou `fallback` se vier vazio. */
+export function parseTitle(title: unknown, fallback: string) {
+  return typeof title === 'string' && title.trim()
+    ? title.trim().slice(0, 80)
+    : fallback;
+}
+
+/**
+ * Lê a resposta do assistente e devolve a refeição na porção que ele escolheu (nutrientes calculados pelo
+ * catálogo). Alimentos fora do catálogo, restritos ou fora do tipo de alimentação são descartados; `null`
+ * se não sobrar nenhum.
+ */
+export function parseComposition(
+  text: string,
+  catalog: FoodCatalog,
+  feedback: Record<string, FoodFeedback>,
+  time: string,
+  allowed: (name: string) => boolean = () => true,
+): MealSuggestion | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const { title, foods } = (raw ?? {}) as { title?: unknown; foods?: unknown };
+  const result = parseFoods(foods, catalog, feedback, allowed);
+  if (result.length === 0) return null;
   return {
-    title:
-      typeof title === 'string' && title.trim()
-        ? title.trim().slice(0, 80)
-        : 'Refeição sugerida',
+    title: parseTitle(title, 'Refeição sugerida'),
     periods: [mealPeriod(time)],
     foods: result,
   };

@@ -129,6 +129,7 @@ export class FoodCatalog {
     kcal: number,
     feedback: Record<string, FoodFeedback>,
     limit: number,
+    allowed: (name: string) => boolean = () => true,
   ): PlanFood[] {
     const original = this.entry(foodName);
     if (!original?.group) return [];
@@ -146,7 +147,8 @@ export class FoodCatalog {
           food.group === original.group &&
           food.name !== foodName &&
           !feedback[food.name] &&
-          food.per100g.kcal > 0,
+          food.per100g.kcal > 0 &&
+          allowed(food.name),
       )
       .map((food) => ({ food, rank: rank(food) }))
       .sort(

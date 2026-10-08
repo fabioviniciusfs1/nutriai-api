@@ -10,6 +10,8 @@ const ana: Profile = {
   goal: 'perder',
   mealsPerDay: 4,
   weighInDay: 1,
+  diet: 'onivora',
+  preferences: '',
 };
 
 describe('calculateTargets', () => {

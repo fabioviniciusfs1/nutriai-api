@@ -8,6 +8,8 @@ export type Sex = 'feminino' | 'masculino';
 export type ActivityLevel =
   'sedentario' | 'leve' | 'moderado' | 'intenso' | 'extremo';
 export type Goal = 'perder' | 'manter' | 'ganhar';
+/** Tipo de alimentação: o que a pessoa não come (o backend tira esses alimentos do que o assistente sugere). */
+export type Diet = 'onivora' | 'pescetariana' | 'vegetariana' | 'vegana';
 
 /** Motivo de trocar um alimento: "Não gosto", "Não quero", "Não tenho". */
 export type FoodFeedback = 'nao-gosto' | 'nao-quero' | 'nao-tenho';
@@ -37,6 +39,9 @@ export type Profile = {
   mealsPerDay: 3 | 4 | 5 | 6;
   /** Dia da semana do lembrete de pesagem: 0 = domingo … 6 = sábado. */
   weighInDay: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  diet: Diet;
+  /** Gostos, rotina, intolerâncias… em texto livre (até 500 caracteres; pode ser vazio). Vai para o assistente. */
+  preferences: string;
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -105,9 +110,17 @@ export type PlanMeal = {
   foods: (PlanFood & { extraId: string | null })[];
 };
 
+export type Personalization = 'pending' | 'ready' | 'failed' | null;
+
 /** Plano de hoje já com todas as mudanças do usuário, ordenado por horário. */
 export type TodayPlan = {
   meals: PlanMeal[];
+  /**
+   * Plano individual montado pelo assistente na primeira vez que o perfil é salvo: `pending` enquanto monta
+   * (o plano padrão aparece por baixo), `failed` se não deu certo (`POST /plan/personalize` tenta de novo),
+   * `ready` quando aplicado e `null` se nunca foi pedido.
+   */
+  personalization: Personalization;
   /** Se o assistente tem sugestões para uma refeição nova. */
   canCreateMeal: boolean;
 };

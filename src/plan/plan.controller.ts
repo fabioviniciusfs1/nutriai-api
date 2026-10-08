@@ -29,6 +29,7 @@ import {
   SwapDto,
 } from './plan.dto.js';
 import { PlanService } from './plan.service.js';
+import { PlanPersonalizerService } from './personalizer.service.js';
 
 /** Id de refeição na URL; inválido = refeição inexistente. */
 const MealId = () =>
@@ -43,13 +44,27 @@ function requiredQuery(value: string | undefined, message: string) {
 
 @Controller('plan')
 export class PlanController {
-  constructor(private readonly plan: PlanService) {}
+  constructor(
+    private readonly plan: PlanService,
+    private readonly personalizer: PlanPersonalizerService,
+  ) {}
 
   @Get('today')
   today(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
   ): Promise<TodayPlan> {
+    return this.plan.read(userId, clock, (planner) => planner.todayPlan());
+  }
+
+  /** Tenta de novo montar o plano individual, depois de uma falha (a montagem segue em segundo plano). */
+  @Post('personalize')
+  @HttpCode(200)
+  async personalize(
+    @CurrentUser() userId: string,
+    @Clock() clock: UserClock,
+  ): Promise<TodayPlan> {
+    await this.personalizer.retry(userId);
     return this.plan.read(userId, clock, (planner) => planner.todayPlan());
   }
 

@@ -101,6 +101,8 @@ describe('substitutePrompt', () => {
       time: '12:30',
       mealFoods: ['Arroz integral'],
       restricted: ['Abacate'],
+      diet: 'onivora',
+      preferences: '',
     });
     expect(prompt).toContain('"Guacamole" (30 g)');
     expect(prompt).toContain('"Bowl de Frango", às 12:30 (tarde)');
