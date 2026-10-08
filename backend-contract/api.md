@@ -355,9 +355,16 @@ todas as refeições (porções aumentam pelo mesmo fator, sem passar do total q
 
 ### Trocar alimento ("Substituir alimento")
 
-`GET /plan/meals/{id}/substitutes?food=Guacamole` → `PlanFood[]`: alimentos do **mesmo grupo** do catálogo,
-sem o próprio e sem os restritos pelo usuário, cada um numa porção com as **mesmas calorias** do alimento
-como aparece na refeição.
+`GET /plan/meals/{id}/substitutes?food=Guacamole` → `PlanFood[]`: **até 8** substitutos, cada um numa porção
+com as **mesmas calorias** do alimento como aparece na refeição, sem o próprio e sem os restritos pelo usuário.
+
+- Com o assistente: ele sugere os nomes (de qualquer grupo), pensando na refeição e no horário, e o backend
+  devolve só os que existem no catálogo, na ordem dele. Se o alimento não é cru, os crus são descartados.
+  A resposta pode levar alguns segundos.
+- Sem o assistente (ou se ele falhar ou não sugerir nada válido): os do **mesmo grupo** mais parecidos —
+  primeiro os da mesma família (mesmo começo do nome, ex. "Arroz, …"), sem preferir os crus, e pela proporção
+  de proteína, gordura e carboidrato.
+- Lista vazia: não há substitutos (o alimento sai sem substituto).
 
 `POST /plan/meals/{id}/swaps` com:
 
@@ -366,6 +373,8 @@ como aparece na refeição.
 ```
 
 - `substitute: null` = o alimento sai sem substituto.
+- `substitute`: qualquer alimento do catálogo com calorias, que não seja o próprio nem esteja restrito
+  (senão `400` "Esse substituto não está disponível para este alimento.").
 - `nao-gosto` / `nao-tenho`: troca **permanente em todas as refeições**, e o alimento fica restrito com essa
   marcação.
 - `nao-quero`: troca **permanente só nesta refeição** (as outras continuam com ele), e o alimento fica

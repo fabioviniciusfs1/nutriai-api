@@ -155,9 +155,7 @@ export class PlanController {
     @Query('food') food: string | undefined,
   ): Promise<PlanFood[]> {
     const foodName = requiredQuery(food, 'Informe o alimento.');
-    return this.plan.read(userId, clock, (planner) =>
-      planner.substitutes(id, foodName),
-    );
+    return this.plan.substitutes(userId, clock, id, foodName);
   }
 
   @Post('meals/:id/swaps')

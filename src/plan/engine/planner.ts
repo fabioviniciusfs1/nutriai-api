@@ -100,6 +100,8 @@ export function goalFactor(meals: PlanFood[][], goal: number | null): number {
 }
 
 export const MEAL_NOT_FOUND = 'Refeição não encontrada.';
+/** Quantos substitutos oferecer ao trocar um alimento. */
+export const MAX_SUBSTITUTES = 8;
 export const FOOD_NOT_FOUND = 'Alimento não encontrado.';
 
 export class Planner {
@@ -714,14 +716,27 @@ export class Planner {
     return food;
   }
 
-  /** Alimentos do mesmo grupo, sem o próprio e sem os restritos, com as mesmas calorias. */
-  substitutes(mealId: number, foodName: string): PlanFood[] {
+  /**
+   * Substitutos do alimento, com as mesmas calorias que ele tem na refeição, sem o próprio e sem os restritos.
+   * `names` (sugeridos pelo assistente, na ordem dele): só os que existem no catálogo. Sem `names`: os do
+   * mesmo grupo mais parecidos em macronutrientes. No máximo `MAX_SUBSTITUTES`.
+   */
+  substitutes(mealId: number, foodName: string, names?: string[]): PlanFood[] {
     const food = this.mealFood(mealId, foodName);
-    return this.foods.substituteOptions(
-      foodName,
-      food.kcal,
-      this.state.foodFeedback,
-    );
+    const feedback = this.state.foodFeedback;
+    if (!names)
+      return this.foods.substituteOptions(
+        foodName,
+        food.kcal,
+        feedback,
+        MAX_SUBSTITUTES,
+      );
+    return [...new Set(names)]
+      .flatMap(
+        (name) =>
+          this.foods.substitute(name, foodName, food.kcal, feedback) ?? [],
+      )
+      .slice(0, MAX_SUBSTITUTES);
   }
 
   /**
@@ -736,10 +751,14 @@ export class Planner {
     substitute: string | null,
   ): PlanState {
     const food = this.mealFood(mealId, foodName);
+    // Qualquer alimento do catálogo serve (o assistente sugere de qualquer grupo), menos o próprio e os restritos.
     if (substitute !== null) {
-      const valid = this.foods
-        .substituteOptions(foodName, food.kcal, this.state.foodFeedback)
-        .some((option) => option.name === substitute);
+      const valid = this.foods.substitute(
+        substitute,
+        foodName,
+        food.kcal,
+        this.state.foodFeedback,
+      );
       if (!valid)
         throw new PlanRuleError(
           'invalid',

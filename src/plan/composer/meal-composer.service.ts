@@ -13,16 +13,27 @@ import {
   parseComposition,
   type CompositionRequest,
 } from './composition.js';
+import {
+  parseSubstitutes,
+  SUBSTITUTE_INSTRUCTIONS,
+  SUBSTITUTES_SCHEMA,
+  substitutePrompt,
+  type SubstituteRequest,
+} from './substitution.js';
 
 /** Tempo máximo de espera pela composição (a prévia fica aguardando). */
 const COMPOSE_TIMEOUT_MS = 20_000;
+
+/** Tempo máximo de espera pelos substitutos (o diálogo de troca fica aguardando). */
+const SUBSTITUTES_TIMEOUT_MS = 15_000;
 
 /** Quanto tempo a sugestão da prévia fica guardada para o "criar" usar a mesma. */
 const DRAFT_TTL_MS = 15 * 60 * 1000;
 
 /**
- * Compõe refeições novas com o Claude a partir do catálogo (TACO). Sem cliente, ou se a chamada falhar,
- * devolve `null` e o plano usa a lista fixa de sugestões.
+ * Compõe refeições novas e sugere substitutos de alimentos com o Claude a partir do catálogo (TACO). Sem
+ * cliente, ou se a chamada falhar, devolve `null` e o plano usa a lista fixa de sugestões / os substitutos
+ * do mesmo grupo.
  */
 @Injectable()
 export class MealComposerService {
@@ -85,16 +96,82 @@ export class MealComposerService {
     request: CompositionRequest,
     feedback: Record<string, FoodFeedback>,
   ): Promise<MealSuggestion | null> {
-    if (!this.anthropic) return null;
     this.pruneDrafts();
+    const text = await this.ask({
+      task: 'Composição de refeição',
+      instructions: COMPOSER_INSTRUCTIONS,
+      prompt: compositionPrompt(request),
+      schema: COMPOSITION_SCHEMA,
+      maxTokens: 2000,
+      // A prévia espera esta chamada: sem resposta rápida, usa a lista fixa.
+      timeout: COMPOSE_TIMEOUT_MS,
+    });
+    if (text === null) return null;
+    const suggestion = parseComposition(
+      text,
+      new FoodCatalog((await this.catalog.catalog()).foods),
+      feedback,
+      request.time,
+    );
+    if (!suggestion)
+      this.logger.warn(
+        'Composição de refeição sem alimentos válidos do catálogo.',
+      );
+    return suggestion;
+  }
+
+  /**
+   * Nomes de substitutos para o alimento, sugeridos pelo Claude e conferidos no catálogo (até 8, na ordem
+   * dele). `null` sem cliente, se a chamada falhar ou se nenhum nome existir no catálogo.
+   */
+  async suggestSubstitutes(
+    request: SubstituteRequest,
+    feedback: Record<string, FoodFeedback>,
+  ): Promise<string[] | null> {
+    const text = await this.ask({
+      task: 'Sugestão de substitutos',
+      instructions: SUBSTITUTE_INSTRUCTIONS,
+      prompt: substitutePrompt(request),
+      schema: SUBSTITUTES_SCHEMA,
+      maxTokens: 1000,
+      // O diálogo de troca espera esta chamada: sem resposta rápida, usa os do mesmo grupo.
+      timeout: SUBSTITUTES_TIMEOUT_MS,
+    });
+    if (text === null) return null;
+    const names = parseSubstitutes(
+      text,
+      new FoodCatalog((await this.catalog.catalog()).foods),
+      feedback,
+      request.food.name,
+    );
+    if (names.length === 0) {
+      this.logger.warn('Sugestão de substitutos sem alimentos do catálogo.');
+      return null;
+    }
+    return names;
+  }
+
+  /**
+   * Pergunta ao Claude com o catálogo no system (em cache) e resposta em JSON pelo `schema`. Devolve o
+   * texto da resposta, ou `null` sem cliente, com erro ou resposta incompleta (o erro fica no log).
+   */
+  private async ask(options: {
+    task: string;
+    instructions: string;
+    prompt: string;
+    schema: Record<string, unknown>;
+    maxTokens: number;
+    timeout: number;
+  }): Promise<string | null> {
+    if (!this.anthropic) return null;
     const foods = (await this.catalog.catalog()).foods;
     try {
       const response = await this.anthropic.messages.create(
         {
           model: CLAUDE_MODEL,
-          max_tokens: 2000,
+          max_tokens: options.maxTokens,
           system: [
-            { type: 'text', text: COMPOSER_INSTRUCTIONS },
+            { type: 'text', text: options.instructions },
             // O catálogo não muda entre chamadas: fica em cache.
             {
               type: 'text',
@@ -102,45 +179,33 @@ export class MealComposerService {
               cache_control: { type: 'ephemeral' },
             },
           ],
-          messages: [{ role: 'user', content: compositionPrompt(request) }],
+          messages: [{ role: 'user', content: options.prompt }],
           output_config: {
-            format: { type: 'json_schema', schema: COMPOSITION_SCHEMA },
+            format: { type: 'json_schema', schema: options.schema },
           },
         },
-        // A prévia espera esta chamada: sem resposta rápida, usa a lista fixa.
-        { timeout: COMPOSE_TIMEOUT_MS, maxRetries: 1 },
+        { timeout: options.timeout, maxRetries: 1 },
       );
       if (
         response.stop_reason === 'refusal' ||
         response.stop_reason === 'max_tokens'
       ) {
         this.logger.warn(
-          `Composição de refeição sem resposta completa (stop_reason ${response.stop_reason}).`,
+          `${options.task} sem resposta completa (stop_reason ${response.stop_reason}).`,
         );
         return null;
       }
-      const text = response.content
+      return response.content
         .flatMap((block) => (block.type === 'text' ? [block.text] : []))
         .join('');
-      const suggestion = parseComposition(
-        text,
-        new FoodCatalog(foods),
-        feedback,
-        request.time,
-      );
-      if (!suggestion)
-        this.logger.warn(
-          'Composição de refeição sem alimentos válidos do catálogo.',
-        );
-      return suggestion;
     } catch (error) {
       if (error instanceof Anthropic.APIError) {
         this.logger.warn(
-          `API da Anthropic na composição de refeição: ${error.status} ${error.message}`,
+          `API da Anthropic (${options.task.toLowerCase()}): ${error.status} ${error.message}`,
         );
       } else {
         this.logger.warn(
-          `Composição de refeição: ${error instanceof Error ? error.message : String(error)}`,
+          `${options.task}: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
       return null;

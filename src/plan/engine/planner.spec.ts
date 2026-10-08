@@ -296,10 +296,51 @@ describe('Planner', () => {
       expect(options.every((food) => Math.abs(food.kcal - 65) <= 3)).toBe(true);
     });
 
-    it('recusa substituto de outro grupo', () => {
-      expect(() =>
+    it('sem nomes do assistente, até 8 do mesmo grupo, os de macros mais parecidos primeiro', () => {
+      const options = planner().substitutes(2, 'Guacamole');
+      expect(options.map((food) => food.name)).toEqual([
+        'Abacate',
+        'Azeite de oliva',
+        'Mix de castanhas',
+        'Pasta de amendoim integral',
+        'Semente de chia',
+      ]);
+    });
+
+    it('com os nomes do assistente: na ordem dele, de qualquer grupo, só os válidos', () => {
+      const state = planner().swapFood(1, 'Azeite de oliva', 'nao-quero', null);
+      const options = planner(state).substitutes(2, 'Guacamole', [
+        'Banana-prata',
+        'Não existe',
+        'Guacamole',
+        'Azeite de oliva',
+        'Abacate',
+        'Banana-prata',
+      ]);
+      expect(options.map((food) => food.name)).toEqual([
+        'Banana-prata',
+        'Abacate',
+      ]);
+      expect(options.every((food) => Math.abs(food.kcal - 65) <= 3)).toBe(true);
+    });
+
+    it('troca por alimento de outro grupo; recusa restrito, o próprio e inexistente', () => {
+      const swapped = planner(
         planner().swapFood(2, 'Guacamole', 'nao-gosto', 'Banana-prata'),
-      ).toThrow(PlanRuleError);
+      );
+      expect(swapped.meal(2).foods.map((food) => food.name)).toContain(
+        'Banana-prata',
+      );
+      const restricted = planner().swapFood(
+        1,
+        'Azeite de oliva',
+        'nao-quero',
+        null,
+      );
+      for (const substitute of ['Azeite de oliva', 'Guacamole', 'Não existe'])
+        expect(() =>
+          planner(restricted).swapFood(2, 'Guacamole', 'nao-gosto', substitute),
+        ).toThrow(PlanRuleError);
     });
 
     it('liberar tira a restrição mas mantém a troca', () => {

@@ -39,6 +39,36 @@ export function scaleFoods<T extends PlanFood>(
   }));
 }
 
+/** Fração das calorias que vem de proteína, gordura e carboidrato. */
+function macroShares({ per100g }: CatalogFood) {
+  const kcal = per100g.kcal || 1;
+  return [
+    (per100g.protein * 4) / kcal,
+    (per100g.fat * 9) / kcal,
+    (per100g.carbs * 4) / kcal,
+  ];
+}
+
+/** Distância entre as proporções de macronutrientes de `original` e de outro alimento. */
+function macroDistance(original: CatalogFood) {
+  const base = macroShares(original);
+  return (food: CatalogFood) =>
+    macroShares(food).reduce(
+      (sum, share, index) => sum + Math.abs(share - base[index]),
+      0,
+    );
+}
+
+/** Começo do nome na TACO, que indica a família do alimento ("Arroz, tipo 1, cozido" → "arroz"). */
+function foodFamily(name: string) {
+  return normalize(name.split(',')[0]);
+}
+
+/** Alimento cru pelo nome ("…, cru", "…, crua"). */
+export function isRaw(name: string) {
+  return /\bcrus?\b|\bcruas?\b/.test(normalize(name));
+}
+
 export class FoodCatalog {
   private readonly byName: Map<string, CatalogFood>;
 
@@ -75,23 +105,58 @@ export class FoodCatalog {
     );
   }
 
-  /** Substitutos do mesmo grupo, sem o próprio alimento e sem os restritos, com as mesmas calorias. */
+  /**
+   * `name` como substituto de `original`, com as mesmas calorias de `kcal`. `null` se não estiver no
+   * catálogo, não tiver calorias, for o próprio alimento ou estiver restrito.
+   */
+  substitute(
+    name: string,
+    original: string,
+    kcal: number,
+    feedback: Record<string, FoodFeedback>,
+  ): PlanFood | null {
+    if (name === original || feedback[name]) return null;
+    return this.convert(name, kcal);
+  }
+
+  /**
+   * Substitutos do mesmo grupo, sem o próprio alimento e sem os restritos, com as mesmas calorias (usado
+   * sem o assistente): os `limit` mais parecidos — primeiro os da mesma família (mesmo começo do nome, ex.
+   * "Arroz, …"), depois evitando os crus se o original não for cru, e pela proporção de macronutrientes.
+   */
   substituteOptions(
     foodName: string,
     kcal: number,
     feedback: Record<string, FoodFeedback>,
+    limit: number,
   ): PlanFood[] {
-    const group = this.entry(foodName)?.group;
-    if (!group) return [];
+    const original = this.entry(foodName);
+    if (!original?.group) return [];
+    const distance = macroDistance(original);
+    const family = foodFamily(foodName);
+    const originalRaw = isRaw(foodName);
+    const rank = (food: CatalogFood) => [
+      foodFamily(food.name) === family ? 0 : 1,
+      !originalRaw && isRaw(food.name) ? 1 : 0,
+      distance(food),
+    ];
     return this.foods
       .filter(
         (food) =>
-          food.group === group &&
+          food.group === original.group &&
           food.name !== foodName &&
-          !feedback[food.name],
+          !feedback[food.name] &&
+          food.per100g.kcal > 0,
       )
-      .map((food) => this.convert(food.name, kcal))
-      .filter((food): food is PlanFood => food !== null);
+      .map((food) => ({ food, rank: rank(food) }))
+      .sort(
+        (a, b) =>
+          a.rank[0] - b.rank[0] ||
+          a.rank[1] - b.rank[1] ||
+          a.rank[2] - b.rank[2],
+      )
+      .slice(0, limit)
+      .flatMap(({ food }) => this.convert(food.name, kcal) ?? []);
   }
 
   /**

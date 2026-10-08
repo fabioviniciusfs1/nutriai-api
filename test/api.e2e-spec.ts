@@ -252,7 +252,8 @@ describe('plano alimentar', () => {
       `/plan/meals/2/substitutes?food=${encodeURIComponent(ARROZ)}`,
     ).expect(200);
     const names = substitutes.body.map((food: { name: string }) => food.name);
-    // Mesmo grupo (Cereais → carboidratos), sem o próprio alimento.
+    // Sem resposta do Claude: até 8 do mesmo grupo (Cereais → carboidratos), sem o próprio alimento.
+    expect(names.length).toBeLessThanOrEqual(8);
     expect(names).toContain(ARROZ_BRANCO);
     expect(names).not.toContain(ARROZ);
     expect(names).not.toContain('Feijão, carioca, cozido');
@@ -397,6 +398,64 @@ describe('refeição composta pelo assistente', () => {
       ]),
     );
     expect(Math.abs(kcal(created) - 1660)).toBeLessThanOrEqual(20);
+  });
+
+  it('os substitutos vêm do Claude, conferidos no catálogo, e a troca aceita outro grupo', async () => {
+    create.mockReset();
+    const { http } = await newUser();
+    const ARROZ = 'Arroz, integral, cozido';
+    const FEIJAO = 'Feijão, carioca, cozido';
+    const MANDIOCA = 'Mandioca, cozida';
+    create.mockResolvedValueOnce({
+      stop_reason: 'end_turn',
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            names: [
+              MANDIOCA,
+              'Arroz de couve-flor',
+              ARROZ,
+              'feijao, carioca, cozido',
+            ],
+          }),
+        },
+      ],
+    });
+    const substitutes = await http(
+      'get',
+      `/plan/meals/2/substitutes?food=${encodeURIComponent(ARROZ)}`,
+    ).expect(200);
+    expect(create).toHaveBeenCalledTimes(1);
+    const prompt = create.mock.calls[0][0].messages[0].content as string;
+    expect(prompt).toContain(`Substituir: "${ARROZ}"`);
+    const arroz = (
+      (await http('get', '/plan/today').expect(200)).body as TodayPlan
+    ).meals
+      .find((meal) => meal.id === 2)!
+      .foods.find((food) => food.name === ARROZ)!;
+    expect(substitutes.body.map((food: { name: string }) => food.name)).toEqual(
+      [MANDIOCA, FEIJAO],
+    );
+    for (const food of substitutes.body as { kcal: number }[])
+      expect(Math.abs(food.kcal - arroz.kcal)).toBeLessThanOrEqual(2);
+
+    const swapped = (
+      await http('post', '/plan/meals/2/swaps')
+        .send({ foodName: ARROZ, reason: 'nao-quero', substitute: FEIJAO })
+        .expect(200)
+    ).body as TodayPlan;
+    expect(
+      swapped.meals
+        .find((meal) => meal.id === 2)!
+        .foods.filter((food) => food.name === FEIJAO).length,
+    ).toBeGreaterThan(0);
+    await http('post', '/plan/meals/2/swaps')
+      .send({ foodName: FEIJAO, reason: 'nao-quero', substitute: 'Não existe' })
+      .expect(400, {
+        error: 'Esse substituto não está disponível para este alimento.',
+      });
+    create.mockReset();
   });
 
   it('se o Claude falhar, usa a lista fixa de sugestões', async () => {

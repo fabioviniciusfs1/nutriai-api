@@ -79,6 +79,9 @@ npx vitest run -t "redistribuir"                  # por nome do teste
   `parseComposition` descarta nomes fora do catálogo e restritos, e o engine escala a porção. A prévia guarda a
   sugestão (15 min, em memória) para o `POST /plan/meals` usar a mesma. Sem cliente ou com erro, volta para a
   lista fixa (`meal_suggestions`). O cliente e o modelo (`CLAUDE_MODEL`) ficam em `src/ai/`.
+  Também sugere substitutos ao trocar alimento (`substitution.ts`): o Claude devolve nomes, `parseSubstitutes`
+  fica só com os do catálogo (até 8, sem crus se o original não for cru); sem ele, os do mesmo grupo mais
+  parecidos (`FoodCatalog.substituteOptions`). A troca aceita qualquer alimento do catálogo não restrito.
 - Lacuna conhecida: não há rota para marcar refeição feita (`/history/plans` conta todas como seguidas).
 
 ## Contrato com o front

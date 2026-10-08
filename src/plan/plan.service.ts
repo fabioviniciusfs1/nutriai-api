@@ -10,11 +10,12 @@ import type { UserClock } from '../common/timezone.js';
 import type {
   CreateMealPreview,
   FoodFeedback,
+  PlanFood,
   TodayPlan,
 } from '../contract.js';
 import { PlanStateEntity } from '../database/entities/index.js';
 import { DayLogService } from './day-log.service.js';
-import { Planner, PlanRuleError } from './engine/planner.js';
+import { FOOD_NOT_FOUND, Planner, PlanRuleError } from './engine/planner.js';
 import {
   DEFAULT_PLANNER_OPTIONS,
   EMPTY_DAY_PLAN,
@@ -24,6 +25,7 @@ import {
 } from './engine/types.js';
 import { calculateTargets, macroTargets } from '../targets/targets.js';
 import type { CompositionRequest } from './composer/composition.js';
+import type { SubstituteRequest } from './composer/substitution.js';
 import { MealComposerService } from './composer/meal-composer.service.js';
 import { UsersService } from '../users/users.service.js';
 
@@ -105,6 +107,42 @@ export class PlanService {
         })),
       };
       return { request, feedback: planner.state.foodFeedback };
+    });
+  }
+
+  /**
+   * Substitutos do alimento na refeição: sugeridos pelo assistente e conferidos no catálogo; sem ele (ou se
+   * falhar), os do mesmo grupo mais parecidos. A chamada ao assistente fica fora da transação do plano.
+   */
+  async substitutes(
+    userId: string,
+    clock: UserClock,
+    mealId: number,
+    foodName: string,
+  ): Promise<PlanFood[]> {
+    const { request, feedback } = await this.read(userId, clock, (planner) => {
+      const meal = planner.meal(mealId);
+      const food = meal.foods.find((item) => item.name === foodName);
+      if (!food) throw new PlanRuleError('not-found', FOOD_NOT_FOUND);
+      const request: SubstituteRequest = {
+        food: { name: food.name, grams: food.grams },
+        mealTitle: meal.title,
+        time: meal.time,
+        mealFoods: meal.foods
+          .map((item) => item.name)
+          .filter((name) => name !== foodName),
+        restricted: Object.keys(planner.state.foodFeedback),
+      };
+      return { request, feedback: planner.state.foodFeedback };
+    });
+    const names = await this.composer.suggestSubstitutes(request, feedback);
+    return this.read(userId, clock, (planner) => {
+      const suggested = names
+        ? planner.substitutes(mealId, foodName, names)
+        : [];
+      return suggested.length > 0
+        ? suggested
+        : planner.substitutes(mealId, foodName);
     });
   }
 
