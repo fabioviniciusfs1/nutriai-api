@@ -5,7 +5,11 @@ import { AiModule } from './ai/ai.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CatalogModule } from './catalog/catalog.module.js';
 import { ChatModule } from './chat/chat.module.js';
-import { APP_CONFIG, type AppConfig } from './config/app-config.js';
+import {
+  APP_CONFIG,
+  chatEnabled,
+  type AppConfig,
+} from './config/app-config.js';
 import { AppConfigModule } from './config/config.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
@@ -53,7 +57,8 @@ export const observeEnabled = Boolean(
     PlanModule,
     NutritionModule,
     HistoryModule,
-    ChatModule,
+    // Lido quando o módulo carrega, como o Observe: `CHAT_ENABLED=false` desliga o chat.
+    ...(chatEnabled() ? [ChatModule] : []),
   ],
 })
 export class AppModule {}

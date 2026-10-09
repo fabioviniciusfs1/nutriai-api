@@ -39,6 +39,11 @@ function encryptionKey(raw: string | undefined) {
   return key;
 }
 
+/** Chat com o Claude ligado (padrão). `CHAT_ENABLED=false` tira as rotas `/chat/*` (respondem 404). */
+export function chatEnabled(env: NodeJS.ProcessEnv = process.env) {
+  return env.CHAT_ENABLED?.trim().toLowerCase() !== 'false';
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     port: Number(env.PORT ?? 3000),

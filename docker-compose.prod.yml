@@ -40,6 +40,7 @@ services:
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
       HEALTH_SYNC_CRON: ${HEALTH_SYNC_CRON:-0 3 * * *}
       HEALTH_SYNC_TIMEZONE: ${HEALTH_SYNC_TIMEZONE:-America/Sao_Paulo}
+      CHAT_ENABLED: ${CHAT_ENABLED:-true}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_WORKSPACE_ID: ${ANTHROPIC_WORKSPACE_ID:-}
       OBSERVE_APP_KEY: ${OBSERVE_APP_KEY:-}
@@ -54,6 +55,8 @@ services:
       context: ../nutriai-front
       args:
         NEXT_PUBLIC_API_URL: https://${API_DOMAIN}/api
+        # O mesmo CHAT_ENABLED da API; desligar ou religar o chat no front exige novo build.
+        NEXT_PUBLIC_CHAT_ENABLED: ${CHAT_ENABLED:-true}
     restart: unless-stopped
 
   caddy:

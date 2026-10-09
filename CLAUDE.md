@@ -84,6 +84,8 @@ npx vitest run -t "redistribuir"                  # por nome do teste
   conectado); depois dele, busca desde o dia da última sincronização (mínimo 7, máximo 90 dias). Nunca
   quebra a rota se falhar. Sem dados de atividade, o gasto do dia é o `tdee` do perfil.
 - `src/chat/`: Claude (`claude-haiku-4-5`, o mais barato) com o contexto do usuário; sem `ANTHROPIC_API_KEY` o chat responde 503.
+  `CHAT_ENABLED=false` não registra o `ChatModule` (rotas `/chat/*` dão 404; o código e a tabela ficam); no front, o
+  mesmo papel é do `NEXT_PUBLIC_CHAT_ENABLED` (em produção, `docker-compose.prod.yml` passa o `CHAT_ENABLED` para os dois).
 - `src/plan/composer/`: o Claude compõe as refeições novas (nome + alimentos do catálogo em JSON por schema);
   `parseComposition` descarta nomes fora do catálogo e restritos, e o engine escala a porção. A prévia guarda a
   sugestão (15 min, em memória) para o `POST /plan/meals` usar a mesma. Sem cliente ou com erro, volta para a
