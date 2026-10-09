@@ -1,7 +1,7 @@
 // Partes puras das sugestões de substituto pelo assistente: prompt, schema da resposta e validação.
 import type { Diet, FoodFeedback } from '../../contract.js';
 import { FoodCatalog, isRaw, normalize } from '../engine/foods.js';
-import { PERIOD_NAMES, preferenceLines } from './composition.js';
+import { dietLine, PERIOD_NAMES } from './composition.js';
 import { mealPeriod, MAX_SUBSTITUTES } from '../engine/planner.js';
 
 /** Instruções fixas (ficam em cache junto com o catálogo). */
@@ -41,8 +41,6 @@ export type SubstituteRequest = {
   /** Alimentos restritos (não podem ser sugeridos). */
   restricted: string[];
   diet: Diet;
-  /** Preferências do perfil em texto livre (pode ser vazio). */
-  preferences: string;
 };
 
 /** Pedido do usuário para o assistente (muda a cada chamada). */
@@ -53,7 +51,7 @@ export function substitutePrompt(request: SubstituteRequest): string {
     request.mealFoods.length > 0
       ? `Outros alimentos da refeição: ${request.mealFoods.join('; ')}.`
       : 'Outros alimentos da refeição: nenhum.',
-    ...preferenceLines(request.diet, request.preferences),
+    dietLine(request.diet),
     request.restricted.length > 0
       ? `Alimentos restritos (não sugira): ${request.restricted.join('; ')}.`
       : 'Alimentos restritos: nenhum.',

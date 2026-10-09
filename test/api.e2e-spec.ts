@@ -31,7 +31,6 @@ const PROFILE = {
   mealsPerDay: 4,
   weighInDay: 1,
   diet: 'onivora',
-  preferences: '',
 };
 
 /** Espera a montagem do plano individual (que roda em segundo plano depois do primeiro perfil). */
@@ -485,7 +484,8 @@ describe('plano individual do assistente', () => {
   const VEGETARIAN = {
     ...PROFILE,
     diet: 'vegetariana',
-    preferences: '  Almoço de marmita; treino às 18h.  ',
+    // Campo que não existe mais (um front antigo ainda pode mandar): é descartado.
+    preferences: 'Almoço de marmita; treino às 18h.',
   };
   const TOFU = 'Soja, queijo (tofu)';
   const FRANGO = 'Frango, peito, sem pele, grelhado';
@@ -543,10 +543,8 @@ describe('plano individual do assistente', () => {
     );
     const { http } = await newUser();
     const saved = await http('put', '/me/profile').send(VEGETARIAN).expect(200);
-    expect((saved.body as Me).profile).toMatchObject({
-      diet: 'vegetariana',
-      preferences: 'Almoço de marmita; treino às 18h.',
-    });
+    expect((saved.body as Me).profile).toMatchObject({ diet: 'vegetariana' });
+    expect((saved.body as Me).profile).not.toHaveProperty('preferences');
 
     const pending = (await http('get', '/plan/today').expect(200))
       .body as TodayPlan;
@@ -554,7 +552,7 @@ describe('plano individual do assistente', () => {
     expect(create).toHaveBeenCalledTimes(1);
     const prompt = create.mock.calls[0][0].messages[0].content as string;
     expect(prompt).toContain('Tipo de alimentação: vegetariana');
-    expect(prompt).toContain('Almoço de marmita; treino às 18h.');
+    expect(prompt).not.toContain('marmita');
     expect(prompt).toContain('- id 1: café da manhã');
 
     answer(reply(PLAN));
@@ -621,16 +619,11 @@ describe('plano individual do assistente', () => {
     create.mockReset();
   });
 
-  it('valida o tipo de alimentação e as preferências', async () => {
+  it('valida o tipo de alimentação', async () => {
     const { http } = await newUser();
     await http('put', '/me/profile')
       .send({ ...PROFILE, diet: 'carnivora' })
       .expect(400, { error: 'Escolha o tipo de alimentação.' });
-    await http('put', '/me/profile')
-      .send({ ...PROFILE, preferences: 'x'.repeat(501) })
-      .expect(400, {
-        error: 'As preferências devem ter no máximo 500 caracteres.',
-      });
   });
 });
 

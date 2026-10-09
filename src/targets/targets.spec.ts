@@ -11,7 +11,6 @@ const ana: Profile = {
   mealsPerDay: 4,
   weighInDay: 1,
   diet: 'onivora',
-  preferences: '',
 };
 
 describe('calculateTargets', () => {

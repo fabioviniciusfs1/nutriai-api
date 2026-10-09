@@ -147,7 +147,6 @@ export class PlanService {
           foods: meal.foods.map((food) => food.name),
         })),
         diet: profile?.diet ?? 'onivora',
-        preferences: profile?.preferences ?? '',
       };
       return { request, feedback: planner.state.foodFeedback };
     });
@@ -177,7 +176,6 @@ export class PlanService {
           .filter((name) => name !== foodName),
         restricted: Object.keys(planner.state.foodFeedback),
         diet: profile?.diet ?? 'onivora',
-        preferences: profile?.preferences ?? '',
       };
       return { request, feedback: planner.state.foodFeedback };
     });

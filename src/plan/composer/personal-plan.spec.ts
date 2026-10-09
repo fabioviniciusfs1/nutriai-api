@@ -93,7 +93,6 @@ describe('personalPlanPrompt e personalPlanRequest', () => {
     mealsPerDay: 4,
     weighInDay: 1,
     diet: 'vegetariana',
-    preferences: 'Almoço de marmita; treino às 18h.',
   } as const;
 
   it('pede as refeições do plano base pelas refeições por dia, com as metas divididas', () => {
@@ -108,7 +107,6 @@ describe('personalPlanPrompt e personalPlanRequest', () => {
     expect(prompt).toContain('objetivo perder peso');
     expect(prompt).toContain('Meta do dia: 1660 kcal');
     expect(prompt).toContain('Tipo de alimentação: vegetariana');
-    expect(prompt).toContain('Almoço de marmita; treino às 18h.');
     expect(prompt).toContain('não use): Abacate');
     expect(prompt).toContain('- id 1: café da manhã, às 07:30 (manhã)');
     expect(prompt).toContain('- id 4: lanche da tarde, às 16:00 (tarde)');

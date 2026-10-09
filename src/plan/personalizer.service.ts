@@ -185,7 +185,6 @@ export function personalPlanRequest(
       carbs: share(day.carbs, kcal),
     })),
     diet: profile.diet,
-    preferences: profile.preferences,
     restricted,
   };
 }

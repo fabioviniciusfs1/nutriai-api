@@ -10,10 +10,10 @@ import type { FoodCatalog } from '../engine/foods.js';
 import { mealPeriod } from '../engine/planner.js';
 import type { PersonalMeals } from '../engine/types.js';
 import {
+  dietLine,
   parseFoods,
   parseTitle,
   PERIOD_NAMES,
-  preferenceLines,
 } from './composition.js';
 
 /** Instruções fixas (ficam em cache junto com o catálogo). */
@@ -87,8 +87,6 @@ export type PersonalPlanRequest = {
   /** Refeições a montar (ids do plano base), com horário e metas de cada uma. */
   meals: (Macros & { id: number; time: string; kcal: number })[];
   diet: Diet;
-  /** Preferências do perfil em texto livre (pode ser vazio). */
-  preferences: string;
   /** Alimentos restritos (não podem entrar). */
   restricted: string[];
 };
@@ -127,7 +125,7 @@ export function personalPlanPrompt(request: PersonalPlanRequest): string {
     `Usuário: sexo ${profile.sex}, ${profile.age} anos, ${profile.weightKg} kg, ${profile.heightCm} cm, ` +
       `${ACTIVITY_NAMES[profile.activityLevel]}, objetivo ${GOAL_NAMES[profile.goal]}.`,
     `Meta do dia: ${day.kcal} kcal (${macrosText(day)}).`,
-    ...preferenceLines(request.diet, request.preferences),
+    dietLine(request.diet),
     request.restricted.length > 0
       ? `Alimentos restritos (não use): ${request.restricted.join('; ')}.`
       : 'Alimentos restritos: nenhum.',

@@ -158,8 +158,7 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
     "goal": "perder",
     "mealsPerDay": 4,
     "weighInDay": 1,
-    "diet": "vegetariana",
-    "preferences": "Almoço de marmita; treino às 18h."
+    "diet": "vegetariana"
   },
   "targets": { "calories": 1660, "bmr": 1395, "tdee": 2163, "waterLiters": 2.4, "clampedToMinimum": false },
   "weighInDue": true,
@@ -174,8 +173,6 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
   tira do plano individual, das sugestões e dos substitutos o que a dieta exclui (pescetariana: carnes;
   vegetariana: carnes e peixes; vegana: tudo de origem animal, inclusive ovos, laticínios e mel), pela origem
   animal de cada alimento do catálogo (categoria da TACO e nome, nos pratos prontos).
-- `profile.preferences`: texto livre, opcional (vazio = nenhuma), até 500 caracteres depois de aparado
-  ("As preferências devem ter no máximo 500 caracteres."). Vai para o assistente.
 - `weighInDue`: hoje (no fuso do usuário) é `profile.weighInDay` **e** não há pesagem registrada hoje.
 - `google`: conta Google conectada (`null` se não houver). `canDisconnect` é `false` quando a conta foi criada
   pelo Google (é o único jeito de entrar).

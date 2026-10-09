@@ -68,8 +68,6 @@ export type CompositionRequest = {
   /** Refeições que já estão no plano de hoje (título e alimentos). */
   otherMeals: { title: string; foods: string[] }[];
   diet: Diet;
-  /** Preferências do perfil em texto livre (pode ser vazio). */
-  preferences: string;
 };
 
 export const PERIOD_NAMES = {
@@ -78,14 +76,9 @@ export const PERIOD_NAMES = {
   noite: 'noite',
 } as const;
 
-/** Tipo de alimentação e preferências do usuário, como linhas do prompt. */
-export function preferenceLines(diet: Diet, preferences: string): string[] {
-  return [
-    `Tipo de alimentação: ${DIET_NAMES[diet]}.`,
-    preferences.trim()
-      ? `Preferências do usuário (siga quando possível): ${preferences.trim()}`
-      : 'Preferências do usuário: nenhuma informada.',
-  ];
+/** Tipo de alimentação do usuário, como linha do prompt. */
+export function dietLine(diet: Diet): string {
+  return `Tipo de alimentação: ${DIET_NAMES[diet]}.`;
 }
 
 /** Pedido do usuário para o assistente (muda a cada chamada). */
@@ -100,7 +93,7 @@ export function compositionPrompt(request: CompositionRequest): string {
       `Macronutrientes que faltam no dia para esta refeição: ${protein} g de proteína, ${fat} g de gordura, ${carbs} g de carboidrato.`,
     );
   }
-  lines.push(...preferenceLines(request.diet, request.preferences));
+  lines.push(dietLine(request.diet));
   lines.push(
     request.restricted.length > 0
       ? `Alimentos restritos (não use): ${request.restricted.join('; ')}.`
