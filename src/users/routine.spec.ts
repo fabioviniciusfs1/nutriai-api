@@ -61,8 +61,14 @@ describe('routineError', () => {
     expect(error({ trainingEnd: '18:00' })).toBe(
       'O treino deve terminar depois de começar.',
     );
-    // Rotina antiga, salva como "não treino".
+    // Não treina: os dois em branco; só um é erro.
     expect(error({ trainingStart: null, trainingEnd: null })).toBeNull();
+    expect(error({ trainingEnd: null })).toBe(
+      'Informe o início e o fim do treino.',
+    );
+    expect(error({ trainingStart: null })).toBe(
+      'Informe o início e o fim do treino.',
+    );
   });
 
   it('as janelas ficam fora do sono e do treino', () => {
@@ -94,6 +100,25 @@ describe('routineError', () => {
     expect(
       error({ ...lateTraining, ...windows(['22:00', '23:00']) }),
     ).toBeNull();
+  });
+
+  it('"Não sinto" (null) vale em um ou nos dois períodos de fome', () => {
+    expect(error({ hungriestPeriod: null })).toBeNull();
+    expect(error({ leastHungryPeriod: null })).toBeNull();
+    expect(
+      error({ hungriestPeriod: null, leastHungryPeriod: null }),
+    ).toBeNull();
+    const hunger = (change: Partial<Routine>) =>
+      routineLines({ ...routine, ...change }).at(-1);
+    expect(hunger({ leastHungryPeriod: null })).toBe(
+      'Sente mais fome de tarde.',
+    );
+    expect(hunger({ hungriestPeriod: null })).toBe(
+      'Sente menos fome de manhã.',
+    );
+    expect(hunger({ hungriestPeriod: null, leastHungryPeriod: null })).toBe(
+      'Não tem um período do dia com mais ou menos fome.',
+    );
   });
 
   it('os períodos de mais e de menos fome são diferentes', () => {

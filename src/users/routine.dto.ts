@@ -5,6 +5,7 @@ import {
   IsIn,
   IsString,
   Matches,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import type { DayPeriod, Diet, MealSlot, Routine } from '../contract.js';
@@ -41,24 +42,28 @@ export class RoutineDto implements Routine {
   @Matches(TIME, { message: 'Informe a hora em que você dorme.' })
   sleepTime: string;
 
+  @ValidateIf((_, value) => value !== null)
   @IsString({ message: 'Informe o início do treino.' })
   @Matches(TIME, { message: 'Informe o início do treino.' })
-  trainingStart: string;
+  trainingStart: string | null;
 
+  @ValidateIf((_, value) => value !== null)
   @IsString({ message: 'Informe o fim do treino.' })
   @Matches(TIME, { message: 'Informe o fim do treino.' })
-  trainingEnd: string;
+  trainingEnd: string | null;
 
   @IsArray({ message: MEALS_MESSAGE })
   @ArrayUnique({ message: MEALS_MESSAGE })
   @IsIn(MEAL_SLOTS, { each: true, message: MEALS_MESSAGE })
   meals: MealSlot[];
 
+  @ValidateIf((_, value) => value !== null)
   @IsIn(PERIODS, { message: 'Escolha o período em que sente mais fome.' })
-  hungriestPeriod: DayPeriod;
+  hungriestPeriod: DayPeriod | null;
 
+  @ValidateIf((_, value) => value !== null)
   @IsIn(PERIODS, { message: 'Escolha o período em que sente menos fome.' })
-  leastHungryPeriod: DayPeriod;
+  leastHungryPeriod: DayPeriod | null;
 
   @IsIn([0, 1, 2, 3, 4, 5, 6], { message: 'Escolha o dia da pesagem.' })
   weighInDay: 0 | 1 | 2 | 3 | 4 | 5 | 6;

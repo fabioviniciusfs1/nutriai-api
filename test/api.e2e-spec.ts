@@ -201,7 +201,7 @@ describe('perfil e pesos', () => {
       'O período de mais fome e o de menos fome devem ser diferentes.',
     );
     await invalid({ trainingStart: '25:00' }, 'Informe o início do treino.');
-    await invalid({ trainingEnd: null }, 'Informe o fim do treino.');
+    await invalid({ trainingEnd: null }, 'Informe o início e o fim do treino.');
     await invalid(
       { trainingEnd: '18:00' },
       'O treino deve terminar depois de começar.',
@@ -228,6 +228,26 @@ describe('perfil e pesos', () => {
       .body as TodayPlan;
     expect(plan.meals.map((meal) => meal.id)).toEqual([2, 6]);
     expect(Math.abs(kcal(plan) - 1660)).toBeLessThanOrEqual(17);
+    await invalid(
+      { hungriestPeriod: 'madrugada' },
+      'Escolha o período em que sente mais fome.',
+    );
+    // "Não sinto": os períodos de fome em branco.
+    const steady = await http('put', '/me/routine')
+      .send({ ...ROUTINE, hungriestPeriod: null, leastHungryPeriod: null })
+      .expect(200);
+    expect((steady.body as Me).routine).toMatchObject({
+      hungriestPeriod: null,
+      leastHungryPeriod: null,
+    });
+    // Quem não treina manda os dois horários em branco.
+    const idle = await http('put', '/me/routine')
+      .send({ ...ROUTINE, trainingStart: null, trainingEnd: null })
+      .expect(200);
+    expect((idle.body as Me).routine).toMatchObject({
+      trainingStart: null,
+      trainingEnd: null,
+    });
     // Dá para comer logo depois do treino.
     await http('put', '/me/routine')
       .send({ ...ROUTINE, trainingStart: '06:30', trainingEnd: '07:00' })
@@ -682,7 +702,7 @@ describe('plano individual do assistente', () => {
       .send({ ...PROFILE, weightKg: 70 })
       .expect(200);
     await http('put', '/me/routine')
-      .send({ ...VEGETARIAN, trainingStart: '05:00', trainingEnd: '06:15' })
+      .send({ ...VEGETARIAN, trainingStart: null, trainingEnd: null })
       .expect(200);
     await personalizationIdle();
     expect(create).toHaveBeenCalledTimes(1);
@@ -699,9 +719,7 @@ describe('plano individual do assistente', () => {
     await http('post', '/plan/personalize').expect(200);
     await personalizationIdle();
     expect(create).toHaveBeenCalledTimes(2);
-    expect(create.mock.calls[1][0].messages[0].content).toContain(
-      'treina das 05:00 às 06:15',
-    );
+    expect(create.mock.calls[1][0].messages[0].content).toContain('não treina');
     const redone = (await http('get', '/plan/today').expect(200))
       .body as TodayPlan;
     expect(redone.personalization).toBe('ready');

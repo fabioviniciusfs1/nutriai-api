@@ -209,14 +209,15 @@ Corpo: a `routine` inteira. Sem perfil → `400` "Preencha o perfil primeiro.".
   Erros: "Informe pelo menos um horário disponível para comer.", "Em cada horário disponível, o início deve ser
   antes do fim.", "Os horários disponíveis para comer devem estar em ordem e não podem se sobrepor.".
 - `wakeTime`, `sleepTime`: `"HH:MM"` (dormir pode ser antes de acordar: depois da meia-noite).
-- `trainingStart`, `trainingEnd`: `"HH:MM"`, obrigatórios ("Informe o início do treino." / "Informe o fim do
-  treino.") e diferentes ("O treino deve terminar depois de começar."); o fim pode ser antes do início (treino
-  que passa da meia-noite). `GET /me` só traz `null` em rotinas antigas salvas como "não treino".
+- `trainingStart`, `trainingEnd`: `"HH:MM"` os dois, ou `null` os dois (não treina; na tela, a escolha
+  "Treino / Não treino"). Só um preenchido → "Informe o início e o fim do treino."; iguais → "O treino deve
+  terminar depois de começar."; o fim pode ser antes do início (treino que passa da meia-noite).
 - As janelas de `eatingWindows` não podem ter nenhum minuto dentro do sono (de `sleepTime` até `wakeTime`) nem
   do treino: `400` "Os horários para comer não podem cair no horário de sono ou de treino.". Encostar pode (treino
   das 06:00 às 07:00 → janela `07:00–08:00`). O front já tira esses horários da grade.
-- `hungriestPeriod`, `leastHungryPeriod`: `manha | tarde | noite` (manhã até 10:59, tarde até 16:59), diferentes
-  entre si ("O período de mais fome e o de menos fome devem ser diferentes.").
+- `hungriestPeriod`, `leastHungryPeriod`: `manha | tarde | noite` (manhã até 10:59, tarde até 16:59) ou `null`
+  (na tela, "Não sinto": a pessoa não tem um período com mais, ou com menos, fome). Quando os dois são períodos,
+  têm de ser diferentes ("O período de mais fome e o de menos fome devem ser diferentes.").
 - `meals`: as refeições que a pessoa faz no dia, de `cafe-da-manha | lanche-da-manha | almoco |
   lanche-da-tarde | jantar | ceia` — qualquer combinação com pelo menos uma ("Marque pelo menos uma refeição."),
   sem repetir nem valores de fora ("Escolha as refeições que você faz no dia."). A resposta traz na ordem do dia.

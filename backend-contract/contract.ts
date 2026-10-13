@@ -51,16 +51,16 @@ export type Routine = {
   wakeTime: string;
   /** "HH:MM"; pode ser antes de `wakeTime` (dorme depois da meia-noite). */
   sleepTime: string;
-  /** "HH:MM"; `null` só em rotinas antigas salvas como "não treino" (o `PUT` exige os dois horários do treino). */
+  /** "HH:MM"; `null` = não treina (os dois horários do treino vêm juntos: ambos preenchidos ou ambos `null`). */
   trainingStart: string | null;
   /** "HH:MM"; pode ser antes de `trainingStart` (treino que passa da meia-noite). */
   trainingEnd: string | null;
   /** Refeições que a pessoa faz no dia: pelo menos uma, sem repetir (o backend guarda na ordem do dia). */
   meals: MealSlot[];
-  /** Período do dia em que sente mais fome. */
-  hungriestPeriod: DayPeriod;
-  /** Período do dia em que sente menos fome (diferente de `hungriestPeriod`). */
-  leastHungryPeriod: DayPeriod;
+  /** Período do dia em que sente mais fome; `null` = não sente mais fome em nenhum ("Não sinto"). */
+  hungriestPeriod: DayPeriod | null;
+  /** Período do dia em que sente menos fome (diferente de `hungriestPeriod`); `null` = "Não sinto". */
+  leastHungryPeriod: DayPeriod | null;
   /** Dia da semana do lembrete de pesagem: 0 = domingo … 6 = sábado. */
   weighInDay: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   diet: Diet;

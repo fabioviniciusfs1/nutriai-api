@@ -25,9 +25,11 @@ Regras:
   em que o usuário pode comer, em ordem ao longo do dia, sem repetir horário e, quando esses horários
   permitirem, com pelo menos 2 horas entre uma refeição e outra. Cada id é a refeição indicada no pedido (café
   da manhã, lanche, almoço, jantar, ceia): monte um prato próprio dela, no horário que combine com ela.
-- Distribua as calorias do dia pela rotina: refeições maiores no período em que o usuário sente mais fome e
-  menores no período em que sente menos. Se ele treina, deixe uma refeição com carboidrato e proteína até
-  2 horas antes ou depois do treino. Perto da hora de dormir, a refeição deve ser leve.
+- Distribua as calorias do dia pela rotina: refeições maiores no período em que o usuário disse sentir mais fome
+  e menores no período em que disse sentir menos. Se ele não tem um período com mais ou menos fome, mantenha
+  o tamanho usual de cada tipo de refeição (principais maiores que lanches e ceia), sem concentrar o dia numa só.
+  Se ele treina, deixe uma refeição com carboidrato e proteína até 2 horas antes ou depois do treino. Perto da
+  hora de dormir, a refeição deve ser leve.
 - Use de 2 a 6 alimentos por refeição, em gramas de porções caseiras realistas.
 - Prefira alimentos na forma em que são comidos: cozidos, grelhados ou assados; frutas e verduras cruas.
   Não use carnes, grãos, ovos ou farinhas crus (massas secas, como macarrão, podem vir pelo peso cru).

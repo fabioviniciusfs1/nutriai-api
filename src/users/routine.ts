@@ -56,6 +56,9 @@ export function routineError(routine: Routine): string | null {
       return 'Os horários disponíveis para comer devem estar em ordem e não podem se sobrepor.';
   }
   const { trainingStart, trainingEnd } = routine;
+  // Os dois horários juntos, ou nenhum (não treina).
+  if ((trainingStart === null) !== (trainingEnd === null))
+    return 'Informe o início e o fim do treino.';
   if (trainingStart !== null && trainingStart === trainingEnd)
     return 'O treino deve terminar depois de começar.';
   const busy = (window: { start: string; end: string }) =>
@@ -65,9 +68,23 @@ export function routineError(routine: Routine): string | null {
       overlaps(window, trainingStart, trainingEnd));
   if (windows.some(busy))
     return 'Os horários para comer não podem cair no horário de sono ou de treino.';
-  if (routine.hungriestPeriod === routine.leastHungryPeriod)
+  if (
+    routine.hungriestPeriod !== null &&
+    routine.hungriestPeriod === routine.leastHungryPeriod
+  )
     return 'O período de mais fome e o de menos fome devem ser diferentes.';
   return null;
+}
+
+/** O que a pessoa disse sobre a fome ao longo do dia (cada período é opcional). */
+function hungerLine({ hungriestPeriod, leastHungryPeriod }: Routine): string {
+  const parts = [
+    hungriestPeriod && `mais fome de ${PERIOD_NAMES[hungriestPeriod]}`,
+    leastHungryPeriod && `menos fome de ${PERIOD_NAMES[leastHungryPeriod]}`,
+  ].filter(Boolean);
+  return parts.length > 0
+    ? `Sente ${parts.join(' e ')}.`
+    : 'Não tem um período do dia com mais ou menos fome.';
 }
 
 /** A rotina como linhas de prompt para o assistente. */
@@ -82,6 +99,6 @@ export function routineLines(routine: Routine): string[] {
         ? `treina das ${routine.trainingStart} às ${routine.trainingEnd}.`
         : 'não treina.'),
     `Horários em que pode comer: ${windows}.`,
-    `Sente mais fome de ${PERIOD_NAMES[routine.hungriestPeriod]} e menos fome de ${PERIOD_NAMES[routine.leastHungryPeriod]}.`,
+    hungerLine(routine),
   ];
 }
