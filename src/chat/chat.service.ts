@@ -112,6 +112,7 @@ export class ChatService {
         name: user.name,
         today: clock.today,
         profile: user.profile,
+        routine: user.routine,
         targets: user.profile ? calculateTargets(user.profile) : null,
         ...context,
       }),

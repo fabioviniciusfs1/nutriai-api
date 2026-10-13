@@ -113,7 +113,7 @@ export class Planner {
   private readonly permanentPlan: BuiltMeal[];
   private readonly todayScales: Record<number, number>;
   /**
-   * Refeições do plano base que entram no plano inicial, pelas refeições por dia do perfil (com a versão
+   * Refeições do plano base que entram no plano inicial, pelas refeições da rotina (com a versão
    * individual do assistente, quando houver).
    */
   private readonly baseMeals: Catalog['baseMeals'];
@@ -132,7 +132,7 @@ export class Planner {
     // As refeições que o assistente montou para o usuário trocam título e alimentos da refeição base.
     const personal = state.personalMeals ?? {};
     this.baseMeals = catalog.baseMeals
-      .filter((meal) => (meal.minMealsPerDay ?? 3) <= options.mealsPerDay)
+      .filter((meal) => options.meals.includes(meal.slot))
       .map((meal) =>
         personal[meal.id] ? { ...meal, ...personal[meal.id] } : meal,
       );

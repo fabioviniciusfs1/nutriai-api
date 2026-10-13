@@ -2,6 +2,7 @@ import type {
   Diet,
   FoodFeedback,
   FoodGroup,
+  MealSlot,
   Personalization,
   Totals,
 } from '../../contract.js';
@@ -37,8 +38,8 @@ export type BaseMeal = {
   title: string;
   time: string;
   foods: PlanFood[];
-  /** Entra no plano inicial a partir de quantas refeições por dia (padrão 3: sempre). */
-  minMealsPerDay?: number;
+  /** Qual refeição do dia ela é: entra no plano inicial de quem faz essa refeição. */
+  slot: MealSlot;
 };
 
 /** Dados fixos que o engine usa: catálogo, sugestões e plano base. */
@@ -108,18 +109,21 @@ export type PlanState = {
   personalMeals?: PersonalMeals | null;
 };
 
-/** Versão individual das refeições do plano base (id → título e alimentos, nas porções do assistente). */
+/**
+ * Versão individual das refeições do plano base (id → título, alimentos nas porções do assistente e o horário
+ * que ele escolheu pela rotina; sem `time`, o do plano base).
+ */
 export type PersonalMeals = Record<
   number,
-  { title: string; foods: PlanFood[] }
+  { title: string; foods: PlanFood[]; time?: string }
 >;
 
 /** O que o plano usa do perfil do usuário. */
 export type PlannerOptions = {
   /** Meta calórica do dia; `null` (sem perfil) = porções originais do plano base. */
   calorieGoal: number | null;
-  /** Refeições do plano inicial (3 a 6). */
-  mealsPerDay: number;
+  /** Refeições do plano inicial: as que o usuário marcou na rotina. */
+  meals: MealSlot[];
   /** Tipo de alimentação do perfil: sugestões e substitutos fora dela ficam de fora (padrão: onívora). */
   diet?: Diet;
   /** Estado da montagem do plano individual, devolvido em `todayPlan()` (padrão: `null`). */
@@ -130,5 +134,5 @@ export type PlannerOptions = {
 
 export const DEFAULT_PLANNER_OPTIONS: PlannerOptions = {
   calorieGoal: null,
-  mealsPerDay: 3,
+  meals: ['cafe-da-manha', 'almoco', 'jantar'],
 };

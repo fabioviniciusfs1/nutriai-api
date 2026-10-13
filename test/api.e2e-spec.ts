@@ -28,12 +28,27 @@ const PROFILE = {
   heightCm: 165,
   activityLevel: 'moderado',
   goal: 'perder',
-  mealsPerDay: 4,
+};
+
+const ROUTINE = {
+  eatingWindows: [
+    { start: '07:00', end: '08:30' },
+    { start: '12:00', end: '13:30' },
+    { start: '15:30', end: '16:30' },
+    { start: '19:00', end: '21:00' },
+  ],
+  wakeTime: '06:30',
+  sleepTime: '23:00',
+  trainingStart: '18:00',
+  trainingEnd: '19:00',
+  meals: ['cafe-da-manha', 'almoco', 'lanche-da-tarde', 'jantar'],
+  hungriestPeriod: 'noite',
+  leastHungryPeriod: 'manha',
   weighInDay: 1,
   diet: 'onivora',
 };
 
-/** Espera a montagem do plano individual (que roda em segundo plano depois do primeiro perfil). */
+/** Espera a montagem do plano individual (que roda em segundo plano depois da primeira rotina). */
 const personalizationIdle = () => app.get(PlanPersonalizerService).whenIdle();
 
 let counter = 0;
@@ -118,13 +133,17 @@ describe('perfil e pesos', () => {
     const before = await http('get', '/me').expect(200);
     expect(before.body).toMatchObject({
       profile: null,
+      routine: null,
       targets: null,
       weighInDue: false,
       google: null,
     });
 
+    await http('put', '/me/routine')
+      .send(ROUTINE)
+      .expect(400, { error: 'Preencha o perfil primeiro.' });
     const saved = await http('put', '/me/profile').send(PROFILE).expect(200);
-    await personalizationIdle();
+    expect((saved.body as Me).routine).toBeNull();
     expect((saved.body as Me).targets).toEqual({
       calories: 1660,
       bmr: 1395,
@@ -140,6 +159,79 @@ describe('perfil e pesos', () => {
     await http('post', '/profile/estimate')
       .send({ ...PROFILE, age: 10 })
       .expect(400, { error: 'A idade deve estar entre 14 e 100 anos.' });
+  });
+
+  it('salva a rotina depois do perfil e valida os horários', async () => {
+    const { http } = await newUser();
+    await http('put', '/me/profile').send(PROFILE).expect(200);
+    const saved = await http('put', '/me/routine')
+      // Campos desconhecidos são descartados.
+      .send({ ...ROUTINE, preferences: 'Almoço de marmita.' })
+      .expect(200);
+    await personalizationIdle();
+    expect((saved.body as Me).routine).toEqual(ROUTINE);
+
+    const invalid = (routine: object, error: string) =>
+      http('put', '/me/routine')
+        .send({ ...ROUTINE, ...routine })
+        .expect(400, { error });
+    await invalid(
+      { eatingWindows: [] },
+      'Informe pelo menos um horário disponível para comer.',
+    );
+    await invalid(
+      { eatingWindows: [{ start: '13:00', end: '12:00' }] },
+      'Em cada horário disponível, o início deve ser antes do fim.',
+    );
+    await invalid(
+      {
+        eatingWindows: [
+          { start: '12:00', end: '13:00' },
+          { start: '12:30', end: '14:00' },
+        ],
+      },
+      'Os horários disponíveis para comer devem estar em ordem e não podem se sobrepor.',
+    );
+    await invalid(
+      { eatingWindows: [{ start: '7h', end: '12:00' }] },
+      'Informe os horários no formato HH:MM.',
+    );
+    await invalid(
+      { leastHungryPeriod: 'noite' },
+      'O período de mais fome e o de menos fome devem ser diferentes.',
+    );
+    await invalid({ trainingStart: '25:00' }, 'Informe o início do treino.');
+    await invalid({ trainingEnd: null }, 'Informe o fim do treino.');
+    await invalid(
+      { trainingEnd: '18:00' },
+      'O treino deve terminar depois de começar.',
+    );
+    const busy =
+      'Os horários para comer não podem cair no horário de sono ou de treino.';
+    await invalid({ trainingStart: '20:00', trainingEnd: '21:30' }, busy);
+    await invalid({ wakeTime: '07:30' }, busy);
+    await invalid({ meals: [] }, 'Marque pelo menos uma refeição.');
+    await invalid(
+      { meals: ['almoco', 'brunch'] },
+      'Escolha as refeições que você faz no dia.',
+    );
+    await invalid(
+      { meals: ['almoco', 'almoco'] },
+      'Escolha as refeições que você faz no dia.',
+    );
+    // Qualquer combinação vale, e o plano tem só as refeições marcadas (guardadas na ordem do dia).
+    const few = await http('put', '/me/routine')
+      .send({ ...ROUTINE, meals: ['ceia', 'almoco'] })
+      .expect(200);
+    expect((few.body as Me).routine?.meals).toEqual(['almoco', 'ceia']);
+    const plan = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+    expect(plan.meals.map((meal) => meal.id)).toEqual([2, 6]);
+    expect(Math.abs(kcal(plan) - 1660)).toBeLessThanOrEqual(17);
+    // Dá para comer logo depois do treino.
+    await http('put', '/me/routine')
+      .send({ ...ROUTINE, trainingStart: '06:30', trainingEnd: '07:00' })
+      .expect(200);
   });
 
   it('registra pesagens e recusa datas fora do intervalo', async () => {
@@ -347,8 +439,9 @@ describe('refeição composta pelo assistente', () => {
   it('a prévia traz os alimentos do Claude e o criar usa a mesma sugestão', async () => {
     create.mockReset();
     const { http } = await newUser();
-    await http('put', '/me/profile')
-      .send({ ...PROFILE, mealsPerDay: 3 })
+    await http('put', '/me/profile').send(PROFILE).expect(200);
+    await http('put', '/me/routine')
+      .send({ ...ROUTINE, meals: ['cafe-da-manha', 'almoco', 'jantar'] })
       .expect(200);
     await personalizationIdle();
     create.mockReset();
@@ -481,12 +574,7 @@ describe('refeição composta pelo assistente', () => {
 });
 
 describe('plano individual do assistente', () => {
-  const VEGETARIAN = {
-    ...PROFILE,
-    diet: 'vegetariana',
-    // Campo que não existe mais (um front antigo ainda pode mandar): é descartado.
-    preferences: 'Almoço de marmita; treino às 18h.',
-  };
+  const VEGETARIAN = { ...ROUTINE, diet: 'vegetariana' };
   const TOFU = 'Soja, queijo (tofu)';
   const FRANGO = 'Frango, peito, sem pele, grelhado';
   const reply = (text: unknown) => ({
@@ -498,6 +586,7 @@ describe('plano individual do assistente', () => {
       {
         id: 1,
         title: 'Pão com Ovo e Mamão',
+        time: '07:30',
         foods: [
           { name: 'Pão, trigo, forma, integral', grams: 50 },
           { name: 'Ovo, de galinha, inteiro, cozido/10minutos', grams: 100 },
@@ -507,6 +596,7 @@ describe('plano individual do assistente', () => {
       {
         id: 2,
         title: 'Marmita de Tofu com Arroz e Feijão',
+        time: '12:15',
         foods: [
           { name: TOFU, grams: 150 },
           { name: FRANGO, grams: 100 },
@@ -517,6 +607,7 @@ describe('plano individual do assistente', () => {
       {
         id: 4,
         title: 'Iogurte com Banana e Aveia',
+        time: '16:00',
         foods: [
           { name: 'Iogurte, natural', grams: 170 },
           { name: 'Banana, prata, crua', grams: 100 },
@@ -526,6 +617,7 @@ describe('plano individual do assistente', () => {
       {
         id: 3,
         title: 'Omelete com Batata-Doce e Brócolis',
+        time: '20:15',
         foods: [
           { name: 'Ovo, de galinha, inteiro, cozido/10minutos', grams: 100 },
           { name: 'Batata, doce, cozida', grams: 150 },
@@ -535,16 +627,17 @@ describe('plano individual do assistente', () => {
     ],
   };
 
-  it('monta o plano no primeiro perfil, em segundo plano, e não monta de novo', async () => {
+  it('monta o plano na primeira rotina, em segundo plano, e só monta de novo a pedido', async () => {
     create.mockReset();
     let answer: (value: unknown) => void = () => {};
     create.mockImplementationOnce(
       () => new Promise((resolve) => (answer = resolve)),
     );
     const { http } = await newUser();
-    const saved = await http('put', '/me/profile').send(VEGETARIAN).expect(200);
-    expect((saved.body as Me).profile).toMatchObject({ diet: 'vegetariana' });
-    expect((saved.body as Me).profile).not.toHaveProperty('preferences');
+    await http('put', '/me/profile').send(PROFILE).expect(200);
+    expect(create).not.toHaveBeenCalled();
+    const saved = await http('put', '/me/routine').send(VEGETARIAN).expect(200);
+    expect((saved.body as Me).routine).toMatchObject({ diet: 'vegetariana' });
 
     const pending = (await http('get', '/plan/today').expect(200))
       .body as TodayPlan;
@@ -552,8 +645,14 @@ describe('plano individual do assistente', () => {
     expect(create).toHaveBeenCalledTimes(1);
     const prompt = create.mock.calls[0][0].messages[0].content as string;
     expect(prompt).toContain('Tipo de alimentação: vegetariana');
-    expect(prompt).not.toContain('marmita');
-    expect(prompt).toContain('- id 1: café da manhã');
+    expect(prompt).toContain(
+      'Horários em que pode comer: 07:00–08:30, 12:00–13:30, 15:30–16:30, 19:00–21:00.',
+    );
+    expect(prompt).toContain('treina das 18:00 às 19:00');
+    expect(prompt).toContain('- id 4: lanche da tarde\n- id 3: jantar');
+    await http('post', '/plan/personalize').expect(409, {
+      error: 'Seu plano já está sendo montado.',
+    });
 
     answer(reply(PLAN));
     await personalizationIdle();
@@ -566,17 +665,52 @@ describe('plano individual do assistente', () => {
       'Iogurte com Banana e Aveia',
       'Omelete com Batata-Doce e Brócolis',
     ]);
+    // Os horários são os do assistente (dentro das janelas da rotina).
+    expect(ready.meals.map((meal) => meal.time)).toEqual([
+      '07:30',
+      '12:15',
+      '16:00',
+      '20:15',
+    ]);
     const lunch = ready.meals.find((meal) => meal.id === 2)!;
     // Frango fica de fora (vegetariana).
     expect(lunch.foods.map((food) => food.name)).not.toContain(FRANGO);
     expect(Math.abs(kcal(ready) - 1660)).toBeLessThanOrEqual(17);
 
-    // Os próximos perfis não montam de novo.
+    // Salvar o perfil ou a rotina de novo não monta outro plano.
     await http('put', '/me/profile')
-      .send({ ...VEGETARIAN, weightKg: 70 })
+      .send({ ...PROFILE, weightKg: 70 })
+      .expect(200);
+    await http('put', '/me/routine')
+      .send({ ...VEGETARIAN, trainingStart: '05:00', trainingEnd: '06:15' })
       .expect(200);
     await personalizationIdle();
     expect(create).toHaveBeenCalledTimes(1);
+
+    // "Refazer meu plano": monta de novo; horário fora das janelas → espalhados pelas janelas.
+    await http('put', '/plan/meals/1/time').send({ time: '09:00' }).expect(200);
+    create.mockResolvedValueOnce(
+      reply({
+        meals: PLAN.meals.map((meal) =>
+          meal.id === 3 ? { ...meal, time: '23:30' } : meal,
+        ),
+      }),
+    );
+    await http('post', '/plan/personalize').expect(200);
+    await personalizationIdle();
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create.mock.calls[1][0].messages[0].content).toContain(
+      'treina das 05:00 às 06:15',
+    );
+    const redone = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+    expect(redone.personalization).toBe('ready');
+    expect(redone.meals.map((meal) => [meal.id, meal.time])).toEqual([
+      [1, '07:45'],
+      [2, '12:45'],
+      [4, '16:15'],
+      [3, '20:15'],
+    ]);
     create.mockReset();
   });
 
@@ -584,7 +718,8 @@ describe('plano individual do assistente', () => {
     create.mockReset();
     create.mockRejectedValueOnce(new Error('indisponível'));
     const { http } = await newUser();
-    await http('put', '/me/profile').send(VEGETARIAN).expect(200);
+    await http('put', '/me/profile').send(PROFILE).expect(200);
+    await http('put', '/me/routine').send(VEGETARIAN).expect(200);
     await personalizationIdle();
     const failed = (await http('get', '/plan/today').expect(200))
       .body as TodayPlan;
@@ -601,9 +736,6 @@ describe('plano individual do assistente', () => {
     const ready = (await http('get', '/plan/today').expect(200))
       .body as TodayPlan;
     expect(ready.personalization).toBe('ready');
-    await http('post', '/plan/personalize').expect(409, {
-      error: 'Só dá para tentar de novo quando a montagem do plano falhou.',
-    });
 
     // Substitutos também respeitam a dieta.
     create.mockResolvedValueOnce(
@@ -621,8 +753,8 @@ describe('plano individual do assistente', () => {
 
   it('valida o tipo de alimentação', async () => {
     const { http } = await newUser();
-    await http('put', '/me/profile')
-      .send({ ...PROFILE, diet: 'carnivora' })
+    await http('put', '/me/routine')
+      .send({ ...ROUTINE, diet: 'carnivora' })
       .expect(400, { error: 'Escolha o tipo de alimentação.' });
   });
 });
@@ -631,6 +763,7 @@ describe('nutrientes e histórico', () => {
   it('responde nutrientes de hoje e as estatísticas', async () => {
     const { http } = await newUser();
     await http('put', '/me/profile').send(PROFILE).expect(200);
+    await http('put', '/me/routine').send(ROUTINE).expect(200);
     await personalizationIdle();
 
     // Perfil com meta de 1660 kcal e 4 refeições: o plano inicial é escalado para perto da meta.

@@ -35,8 +35,32 @@ export type Profile = {
   heightCm: number;
   activityLevel: ActivityLevel;
   goal: Goal;
-  /** Quantas refeições a pessoa consegue fazer por dia. */
-  mealsPerDay: 3 | 4 | 5 | 6;
+};
+
+/** Período do dia: manhã até 10:59, tarde até 16:59, noite depois. */
+export type DayPeriod = "manha" | "tarde" | "noite";
+
+/** Refeição do dia que a pessoa faz (cada uma é uma refeição do plano). */
+export type MealSlot = "cafe-da-manha" | "lanche-da-manha" | "almoco" | "lanche-da-tarde" | "jantar" | "ceia";
+
+/** Rotina e preferências alimentares: o assistente monta o plano individual a partir dela. */
+export type Routine = {
+  /** Janelas em que dá para comer ("HH:MM"), em ordem, sem sobreposição e com início antes do fim. De 1 a 12. */
+  eatingWindows: { start: string; end: string }[];
+  /** "HH:MM" */
+  wakeTime: string;
+  /** "HH:MM"; pode ser antes de `wakeTime` (dorme depois da meia-noite). */
+  sleepTime: string;
+  /** "HH:MM"; `null` só em rotinas antigas salvas como "não treino" (o `PUT` exige os dois horários do treino). */
+  trainingStart: string | null;
+  /** "HH:MM"; pode ser antes de `trainingStart` (treino que passa da meia-noite). */
+  trainingEnd: string | null;
+  /** Refeições que a pessoa faz no dia: pelo menos uma, sem repetir (o backend guarda na ordem do dia). */
+  meals: MealSlot[];
+  /** Período do dia em que sente mais fome. */
+  hungriestPeriod: DayPeriod;
+  /** Período do dia em que sente menos fome (diferente de `hungriestPeriod`). */
+  leastHungryPeriod: DayPeriod;
   /** Dia da semana do lembrete de pesagem: 0 = domingo … 6 = sábado. */
   weighInDay: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   diet: Diet;
@@ -62,8 +86,10 @@ export type Me = {
   user: { name: string; username: string };
   /** `null` até o usuário preencher o perfil. */
   profile: Profile | null;
+  /** `null` até o usuário preencher a rotina (segundo passo do cadastro). */
+  routine: Routine | null;
   targets: Targets | null;
-  /** Hoje é o dia de pesagem do perfil e ainda não há peso registrado hoje. */
+  /** Hoje é o dia de pesagem da rotina e ainda não há peso registrado hoje. */
   weighInDue: boolean;
   /**
    * Conta Google conectada (dá acesso à Google Health API); `null` se não houver.
@@ -109,9 +135,9 @@ export type Personalization = "pending" | "ready" | "failed" | null;
 export type TodayPlan = {
   meals: PlanMeal[];
   /**
-   * Plano individual montado pelo assistente na primeira vez que o perfil é salvo: `pending` enquanto monta
-   * (o plano padrão aparece por baixo), `failed` se não deu certo (`POST /plan/personalize` tenta de novo),
-   * `ready` quando aplicado e `null` se nunca foi pedido.
+   * Plano individual montado pelo assistente na primeira vez que a rotina é salva (e quando o usuário pede para
+   * refazer, com `POST /plan/personalize`): `pending` enquanto monta (o plano atual aparece por baixo), `failed`
+   * se não deu certo, `ready` quando aplicado e `null` se nunca foi pedido.
    */
   personalization: Personalization;
   /** Se o assistente tem sugestões para uma refeição nova. */

@@ -8,9 +8,6 @@ const ana: Profile = {
   heightCm: 165,
   activityLevel: 'moderado',
   goal: 'perder',
-  mealsPerDay: 4,
-  weighInDay: 1,
-  diet: 'onivora',
 };
 
 describe('calculateTargets', () => {

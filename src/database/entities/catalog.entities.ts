@@ -1,5 +1,5 @@
 import { Column, Entity, PrimaryColumn, Unique } from 'typeorm';
-import type { FoodGroup } from '../../contract.js';
+import type { FoodGroup, MealSlot } from '../../contract.js';
 import type { AnimalTag } from '../../plan/engine/diet.js';
 import type { MealPeriod, PlanFood } from '../../plan/engine/types.js';
 
@@ -67,9 +67,9 @@ export class BaseMealEntity {
   @Column('jsonb')
   foods: PlanFood[];
 
-  /** Entra no plano inicial a partir de quantas refeições por dia (3 = sempre). */
-  @Column('int', { name: 'min_meals_per_day', default: 3 })
-  minMealsPerDay: number;
+  /** Qual refeição do dia ela é: entra no plano de quem marcou essa refeição na rotina. */
+  @Column('text')
+  slot: MealSlot;
 }
 
 export type NutrientSection =

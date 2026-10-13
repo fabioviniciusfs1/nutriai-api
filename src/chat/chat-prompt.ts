@@ -1,10 +1,12 @@
 import type {
   Profile,
   RestrictedFood,
+  Routine,
   Targets,
   TodayPlan,
 } from '../contract.js';
 import { DIET_NAMES } from '../plan/engine/diet.js';
+import { routineLines } from '../users/routine.js';
 
 /** Instruções fixas do assistente (não mudam entre requisições: ficam em cache). */
 export const SYSTEM_PROMPT = `Você é o assistente nutricional do NutriAI, um app brasileiro de plano alimentar.
@@ -32,6 +34,7 @@ export function userContext(input: {
   name: string;
   today: string;
   profile: Profile | null;
+  routine: Routine | null;
   targets: Targets | null;
   plan: TodayPlan;
   restricted: RestrictedFood[];
@@ -40,14 +43,19 @@ export function userContext(input: {
     `Contexto do usuário (hoje é ${input.today}):`,
     `Nome: ${input.name}`,
   ];
-  const { profile, targets } = input;
+  const { profile, routine, targets } = input;
   if (profile && targets) {
     lines.push(
       `Perfil: sexo ${SEX[profile.sex]}, ${profile.age} anos, ${profile.weightKg} kg, ${profile.heightCm} cm, ` +
-        `atividade ${profile.activityLevel}, objetivo ${GOAL[profile.goal]}, ${profile.mealsPerDay} refeições por dia.`,
-      `Tipo de alimentação: ${DIET_NAMES[profile.diet]}.`,
+        `atividade ${profile.activityLevel}, objetivo ${GOAL[profile.goal]}.`,
       `Metas: ${targets.calories} kcal por dia (gasto estimado ${targets.tdee} kcal), água ${targets.waterLiters} L.`,
     );
+    if (routine) {
+      lines.push(
+        `Tipo de alimentação: ${DIET_NAMES[routine.diet]}.`,
+        ...routineLines(routine),
+      );
+    }
   } else {
     lines.push('Perfil ainda não preenchido.');
   }

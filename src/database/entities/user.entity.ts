@@ -4,7 +4,7 @@ import {
   Entity,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import type { Profile } from '../../contract.js';
+import type { Profile, Routine } from '../../contract.js';
 
 @Entity('users')
 export class UserEntity {
@@ -24,6 +24,10 @@ export class UserEntity {
   /** `null` até o primeiro `PUT /me/profile`. */
   @Column('jsonb', { nullable: true })
   profile: Profile | null;
+
+  /** `null` até o primeiro `PUT /me/routine`. */
+  @Column('jsonb', { nullable: true })
+  routine: Routine | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

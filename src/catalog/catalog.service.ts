@@ -51,12 +51,12 @@ export class CatalogService {
             foods: items,
           })),
           baseMeals: baseMeals.map(
-            ({ id, title, time, foods: items, minMealsPerDay }) => ({
+            ({ id, title, time, foods: items, slot }) => ({
               id,
               title,
               time,
               foods: items,
-              minMealsPerDay,
+              slot,
             }),
           ),
         },

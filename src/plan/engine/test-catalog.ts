@@ -1,6 +1,6 @@
 // Catálogo fixo dos testes do engine: os dados de exemplo do front antigo (`backend-contract/reference/mock-data.ts`).
 // Mantém as regras do plano testadas sem depender da TACO.
-import type { FoodGroup } from '../../contract.js';
+import type { FoodGroup, MealSlot } from '../../contract.js';
 import type { AnimalTag } from './diet.js';
 import type { Catalog, MealPeriod, PlanFood } from './types.js';
 
@@ -9,13 +9,14 @@ export const testBaseMeals: {
   id: number;
   title: string;
   time: string;
-  minMealsPerDay?: number;
+  slot: MealSlot;
   foods: PlanFood[];
 }[] = [
   {
     id: 1,
     title: 'Torrada de Abacate com Ovo Poché',
     time: '07:30',
+    slot: 'cafe-da-manha',
     foods: [
       {
         name: 'Pão integral',
@@ -41,6 +42,7 @@ export const testBaseMeals: {
     id: 2,
     title: 'Tacos de Camarão Grelhado com Salsa de Manga',
     time: '12:30',
+    slot: 'almoco',
     foods: [
       {
         name: 'Tortilha integral',
@@ -74,6 +76,7 @@ export const testBaseMeals: {
     id: 3,
     title: 'Bowl de Salmão com Quinoa e Legumes',
     time: '20:00',
+    slot: 'jantar',
     foods: [
       {
         name: 'Salmão grelhado',
@@ -110,12 +113,12 @@ export const testBaseMeals: {
       },
     ],
   },
-  // Lanches: entram no plano inicial conforme as refeições por dia do perfil.
+  // Lanches e ceia: entram no plano inicial de quem marcou essas refeições na rotina.
   {
     id: 4,
     title: 'Lanche da Tarde: Iogurte com Banana',
     time: '16:00',
-    minMealsPerDay: 4,
+    slot: 'lanche-da-tarde',
     foods: [
       {
         name: 'Iogurte grego natural',
@@ -139,7 +142,7 @@ export const testBaseMeals: {
     id: 5,
     title: 'Lanche da Manhã: Maçã',
     time: '10:00',
-    minMealsPerDay: 5,
+    slot: 'lanche-da-manha',
     foods: [
       { name: 'Maçã', grams: 150, carbs: 23, protein: 0, fat: 0, kcal: 84 },
     ],
@@ -148,7 +151,7 @@ export const testBaseMeals: {
     id: 6,
     title: 'Ceia: Kefir',
     time: '22:00',
-    minMealsPerDay: 6,
+    slot: 'ceia',
     foods: [
       { name: 'Kefir', grams: 200, carbs: 10, protein: 6, fat: 6, kcal: 120 },
     ],

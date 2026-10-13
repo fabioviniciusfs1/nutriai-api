@@ -203,8 +203,9 @@ export class MealComposerService {
       text,
       catalog,
       feedback,
-      dietFilter(catalog, request.diet),
+      dietFilter(catalog, request.routine.diet),
       request.meals.map((meal) => meal.id),
+      request.routine.eatingWindows,
     );
     if (!meals)
       this.logger.warn('Plano individual sem todas as refeições válidas.');

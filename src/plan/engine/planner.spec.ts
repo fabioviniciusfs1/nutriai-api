@@ -27,6 +27,19 @@ const EMPTY_STATE: PlanState = {
 const planner = (state: PlanState = EMPTY_STATE) => new Planner(catalog, state);
 const kcalOf = (p: Planner) => p.plan.map((meal) => meal.totals.kcal);
 
+/** As refeições de quem faz `count` por dia, na ordem em que entram: as três principais, depois os lanches e a ceia. */
+const mealsFor = (count: number) =>
+  (
+    [
+      'cafe-da-manha',
+      'almoco',
+      'jantar',
+      'lanche-da-tarde',
+      'lanche-da-manha',
+      'ceia',
+    ] as const
+  ).slice(0, count);
+
 describe('catálogo de teste', () => {
   it('tem todo alimento do plano base e das sugestões', () => {
     const foods = new FoodCatalog(foodCatalog);
@@ -369,7 +382,7 @@ describe('Planner', () => {
 
 describe('plano individual do assistente', () => {
   const personal = (state: PlanState, calorieGoal: number | null = null) =>
-    new Planner(catalog, state, { calorieGoal, mealsPerDay: 4 });
+    new Planner(catalog, state, { calorieGoal, meals: mealsFor(4) });
   const foodsCatalog = new FoodCatalog(catalog.foods);
   const tapioca = {
     title: 'Tofu com Pão Integral',
@@ -388,6 +401,19 @@ describe('plano individual do assistente', () => {
       'Pão integral',
     ]);
     expect(second.title).toBe(planner().plan[1].title);
+  });
+
+  it('usa o horário do assistente; o que o usuário escolher depois vale por cima', () => {
+    const personalMeals = { 1: { ...tapioca, time: '13:15' } };
+    const p = personal({ ...EMPTY_STATE, personalMeals });
+    expect(p.plan.map((meal) => [meal.id, meal.time])).toEqual([
+      [2, '12:30'],
+      [1, '13:15'],
+      [4, '16:00'],
+      [3, '20:00'],
+    ]);
+    const moved = personal(p.changeMealTime(1, '06:00'));
+    expect(moved.plan[0]).toMatchObject({ id: 1, time: '06:00' });
   });
 
   it('as porções do assistente também são escaladas para a meta', () => {
@@ -449,18 +475,24 @@ describe('tipo de alimentação', () => {
   });
 });
 
-describe('meta calórica e refeições por dia', () => {
+describe('meta calórica e refeições da rotina', () => {
   const withGoal = (
     calorieGoal: number | null,
-    mealsPerDay = 3,
+    count = 3,
     state: PlanState = EMPTY_STATE,
   ) =>
     new Planner(catalog, state, {
       calorieGoal,
-      mealsPerDay,
+      meals: mealsFor(count),
     } satisfies PlannerOptions);
 
-  it('o plano inicial tem as refeições do perfil', () => {
+  it('o plano inicial tem as refeições que o usuário faz', () => {
+    const only = (meals: PlannerOptions['meals']) =>
+      new Planner(catalog, EMPTY_STATE, { calorieGoal: null, meals }).plan.map(
+        (meal) => meal.id,
+      );
+    expect(only(['ceia', 'almoco'])).toEqual([2, 6]);
+    expect(only(['lanche-da-manha'])).toEqual([5]);
     expect(withGoal(null, 3).plan.map((meal) => meal.id)).toEqual([1, 2, 3]);
     expect(withGoal(null, 4).plan.map((meal) => meal.id)).toEqual([1, 2, 4, 3]);
     expect(withGoal(null, 6).plan.map((meal) => meal.id)).toEqual([
@@ -654,7 +686,7 @@ describe('meta calórica e refeições por dia', () => {
     expect(
       new Planner(catalog, state, {
         calorieGoal: null,
-        mealsPerDay: 3,
+        meals: mealsFor(3),
         composerAvailable: true,
       }).todayPlan().canCreateMeal,
     ).toBe(true);

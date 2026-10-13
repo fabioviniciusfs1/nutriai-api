@@ -102,18 +102,16 @@ export class PlanService {
   ) {}
 
   /**
-   * Meta calórica, refeições por dia e tipo de alimentação do perfil (sem perfil: porções originais,
-   * 3 refeições).
+   * Meta calórica do perfil, refeições e tipo de alimentação da rotina (sem perfil: porções originais; sem
+   * rotina: café da manhã, almoço e jantar, sem restrição).
    */
   private async plannerOptions(userId: string): Promise<PlannerOptions> {
-    const { profile } = await this.users.get(userId);
-    const composerAvailable = this.composer.available;
-    if (!profile) return { ...DEFAULT_PLANNER_OPTIONS, composerAvailable };
+    const { profile, routine } = await this.users.get(userId);
     return {
-      calorieGoal: calculateTargets(profile).calories,
-      mealsPerDay: profile.mealsPerDay,
-      diet: profile.diet,
-      composerAvailable,
+      calorieGoal: profile ? calculateTargets(profile).calories : null,
+      meals: routine?.meals ?? DEFAULT_PLANNER_OPTIONS.meals,
+      diet: routine?.diet,
+      composerAvailable: this.composer.available,
     };
   }
 
@@ -124,7 +122,7 @@ export class PlanService {
     title: string,
     time: string,
   ) {
-    const { profile } = await this.users.get(userId);
+    const { profile, routine } = await this.users.get(userId);
     const goals = profile ? macroTargets(profile) : null;
     return this.read(userId, clock, (planner) => {
       const { kcal, macros } = planner.newMealTargets(
@@ -146,7 +144,7 @@ export class PlanService {
           title: meal.title,
           foods: meal.foods.map((food) => food.name),
         })),
-        diet: profile?.diet ?? 'onivora',
+        diet: routine?.diet ?? 'onivora',
       };
       return { request, feedback: planner.state.foodFeedback };
     });
@@ -162,7 +160,7 @@ export class PlanService {
     mealId: number,
     foodName: string,
   ): Promise<PlanFood[]> {
-    const { profile } = await this.users.get(userId);
+    const { routine } = await this.users.get(userId);
     const { request, feedback } = await this.read(userId, clock, (planner) => {
       const meal = planner.meal(mealId);
       const food = meal.foods.find((item) => item.name === foodName);
@@ -175,7 +173,7 @@ export class PlanService {
           .map((item) => item.name)
           .filter((name) => name !== foodName),
         restricted: Object.keys(planner.state.foodFeedback),
-        diet: profile?.diet ?? 'onivora',
+        diet: routine?.diet ?? 'onivora',
       };
       return { request, feedback: planner.state.foodFeedback };
     });

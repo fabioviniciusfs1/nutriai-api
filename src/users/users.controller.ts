@@ -4,6 +4,7 @@ import { Clock, type UserClock } from '../common/timezone.js';
 import type { Me, Targets } from '../contract.js';
 import { calculateTargets } from '../targets/targets.js';
 import { ProfileDto, toProfile } from './profile.dto.js';
+import { RoutineDto, toRoutine } from './routine.dto.js';
 import { UsersService } from './users.service.js';
 import { PlanPersonalizerService } from '../plan/personalizer.service.js';
 
@@ -19,15 +20,24 @@ export class UsersController {
     return this.users.me(userId, clock);
   }
 
-  /** Na primeira vez que o perfil é salvo, o assistente começa a montar o plano individual (em segundo plano). */
   @Put('me/profile')
-  async updateProfile(
+  updateProfile(
     @CurrentUser() userId: string,
     @Body() body: ProfileDto,
     @Clock() clock: UserClock,
   ): Promise<Me> {
-    const first = (await this.users.get(userId)).profile === null;
-    const me = await this.users.updateProfile(userId, toProfile(body), clock);
+    return this.users.updateProfile(userId, toProfile(body), clock);
+  }
+
+  /** Na primeira vez que a rotina é salva, o assistente começa a montar o plano individual (em segundo plano). */
+  @Put('me/routine')
+  async updateRoutine(
+    @CurrentUser() userId: string,
+    @Body() body: RoutineDto,
+    @Clock() clock: UserClock,
+  ): Promise<Me> {
+    const first = (await this.users.get(userId)).routine === null;
+    const me = await this.users.updateRoutine(userId, toRoutine(body), clock);
     if (first) await this.personalizer.start(userId);
     return me;
   }

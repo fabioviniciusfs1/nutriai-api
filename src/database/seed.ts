@@ -17,14 +17,7 @@ export async function seedCatalog(dataSource: DataSource) {
     const foods = await manager.find(FoodEntity);
     const { baseMeals, suggestions } = buildSeedPlan(foods);
 
-    await manager.upsert(
-      BaseMealEntity,
-      baseMeals.map((meal) => ({
-        ...meal,
-        minMealsPerDay: meal.minMealsPerDay ?? 3,
-      })),
-      ['id'],
-    );
+    await manager.upsert(BaseMealEntity, baseMeals, ['id']);
     await manager.delete(BaseMealEntity, {
       id: Not(In(baseMeals.map((meal) => meal.id))),
     });

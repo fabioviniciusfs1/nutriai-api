@@ -3,6 +3,8 @@ import { readOds } from '../ods.js';
 import { parseTaco } from './parse.js';
 import { buildSeedPlan } from '../../seed-plan.js';
 import { tacoToCatalog } from './to-catalog.js';
+import { DEFAULT_PLANNER_OPTIONS } from '../../../plan/engine/types.js';
+import { MEAL_SLOTS } from '../../../users/routine.js';
 
 /** Confere a planilha versionada em `data/taco/`. */
 describe('data/taco/tabela-taco.ods', () => {
@@ -48,17 +50,18 @@ describe('semente com a TACO', () => {
 
   it('todo alimento do plano base e das sugestões existe na TACO', () => {
     const { baseMeals, suggestions } = buildSeedPlan(catalog);
-    // As 3 refeições principais (os lanches entram conforme as refeições por dia).
+    // As 3 refeições principais (os lanches e a ceia entram para quem marca na rotina).
     const dayKcal = baseMeals
-      .filter((meal) => !meal.minMealsPerDay || meal.minMealsPerDay <= 3)
+      .filter((meal) => DEFAULT_PLANNER_OPTIONS.meals.includes(meal.slot))
       .flatMap((meal) => meal.foods)
       .reduce((sum, food) => sum + food.kcal, 0);
     expect(dayKcal).toBeGreaterThan(1000);
     expect(dayKcal).toBeLessThan(1300);
     expect(suggestions.length).toBeGreaterThanOrEqual(10);
-    expect(baseMeals.map((meal) => meal.minMealsPerDay ?? 3)).toEqual([
-      3, 3, 3, 4, 5, 6,
-    ]);
+    // Uma refeição base para cada refeição do dia.
+    expect(baseMeals.map((meal) => meal.slot).sort()).toEqual(
+      [...MEAL_SLOTS].sort(),
+    );
     // Títulos dos lanches não podem repetir os das sugestões (senão a sugestão some do "Nova refeição").
     const suggestionTitles = new Set(suggestions.map((meal) => meal.title));
     expect(

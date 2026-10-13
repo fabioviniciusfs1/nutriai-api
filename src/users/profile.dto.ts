@@ -1,5 +1,5 @@
 import { IsIn, IsInt, IsNumber, Max, Min } from 'class-validator';
-import type { ActivityLevel, Diet, Goal, Profile, Sex } from '../contract.js';
+import type { ActivityLevel, Goal, Profile, Sex } from '../contract.js';
 
 /** Perfil completo (corpo de `PUT /me/profile` e `POST /profile/estimate`). */
 export class ProfileDto implements Profile {
@@ -31,32 +31,11 @@ export class ProfileDto implements Profile {
 
   @IsIn(['perder', 'manter', 'ganhar'], { message: 'Informe o objetivo.' })
   goal: Goal;
-
-  @IsIn([3, 4, 5, 6], { message: 'Escolha de 3 a 6 refeições por dia.' })
-  mealsPerDay: 3 | 4 | 5 | 6;
-
-  @IsIn([0, 1, 2, 3, 4, 5, 6], { message: 'Escolha o dia da pesagem.' })
-  weighInDay: 0 | 1 | 2 | 3 | 4 | 5 | 6;
-
-  @IsIn(['onivora', 'pescetariana', 'vegetariana', 'vegana'], {
-    message: 'Escolha o tipo de alimentação.',
-  })
-  diet: Diet;
 }
 
 /** Só os campos do perfil (o DTO validado pode trazer protótipo de classe). */
 export function toProfile(dto: ProfileDto): Profile {
-  const {
-    sex,
-    age,
-    weightKg,
-    heightCm,
-    activityLevel,
-    goal,
-    mealsPerDay,
-    weighInDay,
-    diet,
-  } = dto;
+  const { sex, age, weightKg, heightCm, activityLevel, goal } = dto;
   return {
     sex,
     age,
@@ -64,8 +43,5 @@ export function toProfile(dto: ProfileDto): Profile {
     heightCm,
     activityLevel,
     goal,
-    mealsPerDay,
-    weighInDay,
-    diet,
   };
 }

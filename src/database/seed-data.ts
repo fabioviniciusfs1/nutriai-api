@@ -1,5 +1,6 @@
 // Semente do banco: plano base, sugestões de refeição e nutrientes acompanhados. Os alimentos vêm do
 // catálogo (TACO); aqui só entram nome e gramas, e o seed calcula os nutrientes de cada porção.
+import type { MealSlot } from '../contract.js';
 import type { MealPeriod } from '../plan/engine/types.js';
 
 /** Alimento numa porção, pelo nome exato no catálogo. */
@@ -13,14 +14,15 @@ export const baseMeals: {
   id: number;
   title: string;
   time: string;
-  /** Entra a partir de quantas refeições por dia (sem o campo: sempre). */
-  minMealsPerDay?: number;
+  /** Qual refeição do dia ela é (entra no plano de quem marcou essa refeição na rotina). */
+  slot: MealSlot;
   foods: FoodPortionSeed[];
 }[] = [
   {
     id: 1,
     title: 'Pão Integral com Ovo, Queijo e Mamão',
     time: '07:30',
+    slot: 'cafe-da-manha',
     foods: [
       { name: 'Pão, trigo, forma, integral', grams: 50 },
       { name: 'Ovo, de galinha, inteiro, cozido/10minutos', grams: 50 },
@@ -33,6 +35,7 @@ export const baseMeals: {
     id: 2,
     title: 'Arroz, Feijão e Frango Grelhado com Salada',
     time: '12:30',
+    slot: 'almoco',
     foods: [
       { name: 'Arroz, integral, cozido', grams: 100 },
       { name: 'Feijão, carioca, cozido', grams: 80 },
@@ -46,6 +49,7 @@ export const baseMeals: {
     id: 3,
     title: 'Salmão Grelhado com Batata-Doce e Legumes',
     time: '20:00',
+    slot: 'jantar',
     foods: [
       { name: 'Salmão, sem pele, fresco, grelhado', grams: 100 },
       { name: 'Batata, doce, cozida', grams: 100 },
@@ -54,12 +58,12 @@ export const baseMeals: {
       { name: 'Azeite, de oliva, extra virgem', grams: 5 },
     ],
   },
-  // Lanches: entram no plano inicial conforme as refeições por dia escolhidas no perfil.
+  // Lanches e ceia: entram no plano inicial de quem marcou essas refeições na rotina.
   {
     id: 4,
     title: 'Lanche da Tarde: Iogurte com Banana e Aveia',
     time: '16:00',
-    minMealsPerDay: 4,
+    slot: 'lanche-da-tarde',
     foods: [
       { name: 'Iogurte, natural', grams: 170 },
       { name: 'Banana, prata, crua', grams: 80 },
@@ -70,7 +74,7 @@ export const baseMeals: {
     id: 5,
     title: 'Lanche da Manhã: Laranja com Amendoim',
     time: '10:00',
-    minMealsPerDay: 5,
+    slot: 'lanche-da-manha',
     foods: [
       { name: 'Laranja, pêra, crua', grams: 150 },
       { name: 'Amendoim, torrado, salgado', grams: 15 },
@@ -80,7 +84,7 @@ export const baseMeals: {
     id: 6,
     title: 'Ceia: Iogurte com Kiwi',
     time: '22:00',
-    minMealsPerDay: 6,
+    slot: 'ceia',
     foods: [
       { name: 'Iogurte, natural', grams: 120 },
       { name: 'Kiwi, cru', grams: 80 },

@@ -62,19 +62,29 @@ npx vitest run -t "redistribuir"                  # por nome do teste
   `food-substitution.ts`). `Planner` recebe o catálogo e o `PlanState` e devolve o novo estado ou uma prévia;
   `PlanService` carrega/salva o estado (lock da linha em `plan_states`) e grava a foto do dia (`day_logs`),
   que é a base de `/nutrition/today` e `/history/*`. Mude regras do plano no engine, com teste em `planner.spec.ts`.
-- Plano inicial: refeições base com `minMealsPerDay <= profile.mealsPerDay` (lanches 4, 5 e 6), e todas as
+- Perfil e rotina (`src/users/`): o cadastro tem dois passos. `users.profile` só tem o que a meta usa (sexo,
+  idade, peso, altura, atividade, objetivo); `users.routine` (`PUT /me/routine`, exige o perfil) tem as janelas
+  para comer (sempre fora do sono e do treino), sono, início e fim do treino, períodos de mais e menos fome, as refeições que a pessoa faz (`meals`: café da
+  manhã, lanche da manhã, almoço, lanche da tarde, jantar, ceia; pelo menos uma), dia da pesagem e tipo de
+  alimentação. As regras entre os campos e as linhas de prompt ficam em `routine.ts` (`routineError`,
+  `routineLines`, `MEAL_SLOTS`). Sem rotina: café da manhã, almoço e jantar, sem restrição.
+- Plano inicial: as refeições base cujo `slot` (`base_meals.slot`, uma por refeição do dia) está em
+  `routine.meals`, e todas as
   porções multiplicadas pelo `goalFactor` do `Planner` (meta calórica ÷ kcal do plano inicial, ajustado para o
   total arredondado ficar o mais perto da meta). Alimentos acrescentados e refeições criadas são guardados sem
-  esse fator; ele é recalculado a cada requisição pelo perfil (`PlanService.plannerOptions`).
+  esse fator; ele é recalculado a cada requisição pelo perfil e pela rotina (`PlanService.plannerOptions`).
   Com meta, criar refeição leva o dia de volta para a meta (a nova fica com `meta ÷ (n + 1)`, as outras se
   ajustam e podem aumentar); as demais ações nunca aumentam o total.
-- Plano individual (`src/plan/personalizer.service.ts`): no primeiro `PUT /me/profile`, o Claude monta as refeições
+- Plano individual (`src/plan/personalizer.service.ts`): no primeiro `PUT /me/routine`, o Claude monta as refeições
   do plano base para o usuário em segundo plano (`composer/personal-plan.ts`, com o `CLAUDE_PLAN_MODEL`, Sonnet, e
-  `fallbacks: 'default'` no endpoint beta); ficam em `plan_states.personal_meals`
-  (id da refeição base → título e alimentos) e o `Planner` usa no lugar das padrão. Estado em
-  `plan_states.personalization` (`pending` com mais de 2 min vira `failed`); `POST /plan/personalize` tenta de novo.
-  Nos e2e, espere com `PlanPersonalizerService.whenIdle()` depois do primeiro perfil (ele usa o mock do Claude).
-- Tipo de alimentação (`profile.diet`): `src/plan/engine/diet.ts` marca a origem animal de cada alimento
+  `fallbacks: 'default'` no endpoint beta), escolhendo o horário de cada uma dentro das janelas da rotina e
+  distribuindo as calorias por ela; ficam em `plan_states.personal_meals` (id da refeição base → título,
+  alimentos e horário) e o `Planner` usa no lugar das padrão. Horário fora das janelas, repetido ou ilegível:
+  `spreadMealTimes` espalha todas pelas janelas. Estado em `plan_states.personalization` (`pending` antigo vira
+  `failed`); `POST /plan/personalize` monta de novo (depois de uma falha ou quando o usuário muda a rotina e pede
+  para refazer). Nos e2e, espere com `PlanPersonalizerService.whenIdle()` depois da primeira rotina (ele usa o
+  mock do Claude).
+- Tipo de alimentação (`routine.diet`): `src/plan/engine/diet.ts` marca a origem animal de cada alimento
   (`foods.animal`, pela categoria da TACO e por palavras do nome) e `allowedByDiet` filtra o plano individual,
   as sugestões fixas, as refeições compostas e os substitutos.
 - `src/health/`: importa a atividade da Google Health API para `activity_days`: ao conectar o Google, nas

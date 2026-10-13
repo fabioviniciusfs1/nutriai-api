@@ -110,7 +110,8 @@ Resposta `200`: `{ "token": "..." }`, igual ao login. Código inválido, expirad
 
 #### Conectar o Google a uma conta existente 🔒
 
-Quem se cadastrou com usuário e senha conecta o Google no card "Google Health" do `/perfil` — é o que dá
+Quem se cadastrou com usuário e senha conecta o Google na página "Conexão Google Health" (`/google-health`, no
+menu que abre ao clicar no nome; o retorno do Google continua em `/perfil/google`) — é o que dá
 acesso aos dados da Google Health API. Como a navegação do navegador não leva o `Authorization`, o front
 pede a URL antes, com `fetch`:
 
@@ -155,8 +156,21 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
     "weightKg": 68.5,
     "heightCm": 165,
     "activityLevel": "moderado",
-    "goal": "perder",
-    "mealsPerDay": 4,
+    "goal": "perder"
+  },
+  "routine": {
+    "eatingWindows": [
+      { "start": "07:00", "end": "08:30" },
+      { "start": "12:00", "end": "13:30" },
+      { "start": "19:00", "end": "21:00" }
+    ],
+    "wakeTime": "06:30",
+    "sleepTime": "23:00",
+    "trainingStart": "18:00",
+    "trainingEnd": "19:00",
+    "meals": ["cafe-da-manha", "almoco", "lanche-da-tarde", "jantar"],
+    "hungriestPeriod": "noite",
+    "leastHungryPeriod": "manha",
     "weighInDay": 1,
     "diet": "vegetariana"
   },
@@ -166,24 +180,53 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
 }
 ```
 
-- `profile` e `targets` são `null` até o primeiro `PUT /me/profile` (o front leva o usuário para `/perfil`).
+- O cadastro tem dois passos: perfil e rotina. `profile` e `targets` são `null` até o primeiro
+  `PUT /me/profile` (o front leva o usuário para `/perfil`); `routine` é `null` até o primeiro `PUT /me/routine`
+  (o front leva para `/rotina`). As outras páginas exigem os dois.
 - `profile.sex`: `feminino | masculino`; `activityLevel`: `sedentario | leve | moderado | intenso | extremo`;
-  `goal`: `perder | manter | ganhar`; `mealsPerDay`: 3–6; `weighInDay`: 0 = domingo … 6 = sábado.
-- `profile.diet`: `onivora | pescetariana | vegetariana | vegana` ("Escolha o tipo de alimentação."). O backend
+  `goal`: `perder | manter | ganhar`.
+- `routine`: ver `PUT /me/routine`. `weighInDay`: 0 = domingo … 6 = sábado.
+- `routine.diet`: `onivora | pescetariana | vegetariana | vegana` ("Escolha o tipo de alimentação."). O backend
   tira do plano individual, das sugestões e dos substitutos o que a dieta exclui (pescetariana: carnes;
   vegetariana: carnes e peixes; vegana: tudo de origem animal, inclusive ovos, laticínios e mel), pela origem
   animal de cada alimento do catálogo (categoria da TACO e nome, nos pratos prontos).
-- `weighInDue`: hoje (no fuso do usuário) é `profile.weighInDay` **e** não há pesagem registrada hoje.
+- `weighInDue`: hoje (no fuso do usuário) é `routine.weighInDay` **e** não há pesagem registrada hoje.
 - `google`: conta Google conectada (`null` se não houver). `canDisconnect` é `false` quando a conta foi criada
   pelo Google (é o único jeito de entrar).
 
 ### `PUT /me/profile` → `Me`
 
-Corpo: o `profile` inteiro. Recalcula `targets`.
+Corpo: o `profile` inteiro. Recalcula `targets`. Não monta o plano individual (isso é da rotina).
 
-Na **primeira vez** (perfil era `null`) e com o assistente configurado, começa a montagem do **plano
+### `PUT /me/routine` → `Me`
+
+Corpo: a `routine` inteira. Sem perfil → `400` "Preencha o perfil primeiro.".
+
+- `eatingWindows`: de 1 a 12 janelas `{ "start": "HH:MM", "end": "HH:MM" }` em que a pessoa pode comer, iguais
+  todos os dias: início antes do fim, em ordem e sem sobreposição (uma pode começar quando a outra termina).
+  O front mostra as 24 horas do dia para marcar e manda horas cheias, juntando as vizinhas numa janela só
+  (07, 08 e 12 marcadas → `07:00–09:00` e `12:00–13:00`); a hora das 23 termina em `23:59`.
+  Erros: "Informe pelo menos um horário disponível para comer.", "Em cada horário disponível, o início deve ser
+  antes do fim.", "Os horários disponíveis para comer devem estar em ordem e não podem se sobrepor.".
+- `wakeTime`, `sleepTime`: `"HH:MM"` (dormir pode ser antes de acordar: depois da meia-noite).
+- `trainingStart`, `trainingEnd`: `"HH:MM"`, obrigatórios ("Informe o início do treino." / "Informe o fim do
+  treino.") e diferentes ("O treino deve terminar depois de começar."); o fim pode ser antes do início (treino
+  que passa da meia-noite). `GET /me` só traz `null` em rotinas antigas salvas como "não treino".
+- As janelas de `eatingWindows` não podem ter nenhum minuto dentro do sono (de `sleepTime` até `wakeTime`) nem
+  do treino: `400` "Os horários para comer não podem cair no horário de sono ou de treino.". Encostar pode (treino
+  das 06:00 às 07:00 → janela `07:00–08:00`). O front já tira esses horários da grade.
+- `hungriestPeriod`, `leastHungryPeriod`: `manha | tarde | noite` (manhã até 10:59, tarde até 16:59), diferentes
+  entre si ("O período de mais fome e o de menos fome devem ser diferentes.").
+- `meals`: as refeições que a pessoa faz no dia, de `cafe-da-manha | lanche-da-manha | almoco |
+  lanche-da-tarde | jantar | ceia` — qualquer combinação com pelo menos uma ("Marque pelo menos uma refeição."),
+  sem repetir nem valores de fora ("Escolha as refeições que você faz no dia."). A resposta traz na ordem do dia.
+- `weighInDay`, `diet`: como em `GET /me`.
+
+Na **primeira vez** (rotina era `null`) e com o assistente configurado, começa a montagem do **plano
 individual** em segundo plano (ver "Plano individual" em `GET /plan/today`); a resposta não espera por ela.
-Salvar o perfil de novo não monta outro plano.
+Salvar a rotina de novo **não** monta outro plano: o front pergunta ao usuário e, se ele quiser, chama
+`POST /plan/personalize`. Sem refazer, a rotina nova vale para o que não depende do plano individual
+(refeições do plano padrão, tipo de alimentação nas sugestões e substitutos, dia da pesagem).
 
 ### `POST /profile/estimate` → `Targets`
 
@@ -238,29 +281,37 @@ O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por h
 
 - `totals` = soma dos alimentos já arredondados, como aparecem.
 - `extraId` ≠ `null`: alimento acrescentado pelo usuário (tem botão de remover).
-- `personalization`: montagem do plano individual — `pending` (montando; `meals` traz o plano padrão, mas o front
-  mostra só um card "Montando seu plano personalizado…" e pergunta de novo a cada poucos segundos), `ready` (aplicado), `failed` (não deu certo; fica o plano padrão) ou `null`
-  (nunca pedido: usuário antigo ou sem assistente).
+- `personalization`: montagem do plano individual — `pending` (montando; `meals` traz o plano atual, mas o front
+  mostra só um card "Montando seu plano personalizado…" e pergunta de novo a cada poucos segundos), `ready` (aplicado), `failed` (não deu certo; o plano não muda) ou `null`
+  (nunca pedido: sem assistente).
 - `canCreateMeal`: há sugestões de refeição disponíveis (com o assistente, sempre; senão o botão "Nova refeição" fica desativado).
 
 **Todas as rotas de alteração do plano abaixo respondem `200` com o `TodayPlan` atualizado.**
 
-**Plano individual**: no primeiro perfil, o assistente monta as refeições do plano base para o usuário (mesmos
-ids, horários e quantidade pelo `mealsPerDay`), com o perfil, as metas do dia e de cada refeição, o tipo de
-alimentação, as preferências e os restritos. Só alimentos do catálogo entram; os restritos e os de fora da
-dieta são descartados. Quando fica pronto, as mudanças feitas no plano nesse meio-tempo são zeradas (as
-restrições e trocas gerais ficam). Refeição base sem versão do assistente (ex.: o usuário aumentou as
-refeições por dia depois) continua a padrão.
+**Plano individual**: na primeira rotina, o assistente monta as refeições do plano base que o usuário marcou em
+`routine.meals` (mesmos ids; cada uma no seu papel: café da manhã, lanche, almoço…), com o perfil, as metas do dia, o tipo de alimentação, os restritos e a
+rotina. Ele escolhe o **horário** de cada refeição dentro de `eatingWindows` e distribui as calorias pela rotina
+(refeições maiores no período de mais fome, menores no de menos, uma refeição perto do treino, leve perto de
+dormir). Se algum horário vier fora das janelas, repetido ou ilegível, o backend espalha as refeições por igual
+pelo tempo das janelas (em passos de 5 minutos), na ordem do dia. Só alimentos do catálogo
+entram; os restritos e os de fora da dieta são descartados. Quando fica pronto, as mudanças feitas no plano
+(inclusive horários escolhidos pelo usuário) são zeradas; as restrições e trocas gerais ficam. Refeição base
+sem versão do assistente (ex.: o usuário marcou mais uma refeição depois, sem refazer) continua a padrão.
+Sem o assistente, o plano padrão fica com os horários do plano base.
 
 ### `POST /plan/personalize` → `TodayPlan`
 
-Tenta de novo montar o plano individual, **só** com `personalization: "failed"` (senão `409` "Só dá para
-tentar de novo quando a montagem do plano falhou."). Responde na hora, já com `pending`.
+Monta o plano individual de novo, com o perfil e a rotina atuais: é o "Refazer meu plano" depois de mudar a
+rotina e o "tentar de novo" depois de uma falha. Responde na hora, já com `pending`. Com uma montagem em
+andamento → `409` "Seu plano já está sendo montado."; sem perfil ou rotina → `409` "Preencha o perfil e a
+rotina para montar o plano."; sem o assistente → `503` "O assistente está indisponível agora. Tente de novo em
+instantes.".
 
 **Plano inicial**, antes das mudanças do usuário:
 
-- Tem `profile.mealsPerDay` refeições (as do plano individual, quando houver): café, almoço e jantar sempre, mais um lanche da tarde (a partir de 4),
-  um da manhã (5) e uma ceia (6). Depois o usuário cria ou remove refeições à vontade.
+- Tem as refeições de `routine.meals` (as do plano individual, quando houver), uma do plano base para cada: café da
+  manhã, lanche da manhã, almoço, lanche da tarde, jantar e ceia. Sem rotina: café da manhã, almoço e jantar.
+  Depois o usuário cria ou remove refeições à vontade.
 - As porções de todas as refeições são escaladas na mesma proporção para o total do dia ficar o mais perto
   possível de `targets.calories`. Sem perfil, ficam as porções de referência. Se a meta mudar, o plano todo
   acompanha (inclusive o que o usuário acrescentou).

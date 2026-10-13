@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -12,13 +13,14 @@ import {
   weekday,
   type UserClock,
 } from '../common/timezone.js';
-import type { Me, Profile } from '../contract.js';
+import type { Me, Profile, Routine } from '../contract.js';
 import {
   GoogleAccountEntity,
   UserEntity,
   WeightEntity,
 } from '../database/entities/index.js';
 import { calculateTargets } from '../targets/targets.js';
+import { routineError } from './routine.js';
 
 @Injectable()
 export class UsersService {
@@ -44,6 +46,7 @@ export class UsersService {
     return {
       user: { name: user.name, username: user.username },
       profile: user.profile,
+      routine: user.routine,
       targets: user.profile ? calculateTargets(user.profile) : null,
       weighInDue: await this.weighInDue(user, clock),
       // Conta criada pelo Google (sem senha) não pode desconectar: seria o único jeito de entrar.
@@ -64,9 +67,24 @@ export class UsersService {
     return this.me(userId, clock);
   }
 
-  /** Hoje é o dia de pesagem do perfil e ainda não há peso registrado hoje (no fuso do usuário). */
+  /** Salva a rotina (o perfil vem antes: é o primeiro passo do cadastro). */
+  async updateRoutine(
+    userId: string,
+    routine: Routine,
+    clock: UserClock,
+  ): Promise<Me> {
+    const error = routineError(routine);
+    if (error) throw new BadRequestException(error);
+    const user = await this.get(userId);
+    if (!user.profile)
+      throw new BadRequestException('Preencha o perfil primeiro.');
+    await this.users.update({ id: userId }, { routine });
+    return this.me(userId, clock);
+  }
+
+  /** Hoje é o dia de pesagem da rotina e ainda não há peso registrado hoje (no fuso do usuário). */
   private async weighInDue(user: UserEntity, { today, timeZone }: UserClock) {
-    if (!user.profile || weekday(today) !== user.profile.weighInDay)
+    if (!user.routine || weekday(today) !== user.routine.weighInDay)
       return false;
     // Margem de dois dias para cobrir qualquer fuso; o filtro exato é pelo dia local.
     const recent = await this.weights.findBy({
