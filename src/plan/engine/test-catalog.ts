@@ -2,7 +2,7 @@
 // Mantém as regras do plano testadas sem depender da TACO.
 import type { FoodGroup, MealSlot } from '../../contract.js';
 import type { AnimalTag } from './diet.js';
-import type { Catalog, MealPeriod, PlanFood } from './types.js';
+import type { Catalog, PlanFood } from './types.js';
 
 /** Plano base: as refeições com que todo usuário começa. */
 export const testBaseMeals: {
@@ -158,7 +158,7 @@ export const testBaseMeals: {
   },
 ];
 
-/** Catálogo de alimentos com nutrientes por 100 g. Todo alimento do plano e das sugestões precisa estar aqui. */
+/** Catálogo de alimentos com nutrientes por 100 g. Todo alimento do plano precisa estar aqui. */
 export const testFoods: {
   name: string;
   group: FoodGroup;
@@ -432,177 +432,7 @@ export const testFoods: {
   },
 ];
 
-/** Refeições que o assistente sugere (criar refeição e "sugerir uma nova"), na ordem de preferência. */
-export const testSuggestions: {
-  title: string;
-  periods: MealPeriod[];
-  foods: PlanFood[];
-}[] = [
-  {
-    title: 'Iogurte Grego com Granola e Morangos',
-    periods: ['manha', 'tarde'],
-    foods: [
-      {
-        name: 'Iogurte grego natural',
-        grams: 170,
-        carbs: 7,
-        protein: 15,
-        fat: 7,
-        kcal: 150,
-      },
-      {
-        name: 'Granola sem açúcar',
-        grams: 30,
-        carbs: 19,
-        protein: 3,
-        fat: 4,
-        kcal: 125,
-      },
-      { name: 'Morangos', grams: 100, carbs: 8, protein: 1, fat: 0, kcal: 35 },
-      { name: 'Mel', grams: 7, carbs: 6, protein: 0, fat: 0, kcal: 20 },
-    ],
-  },
-  {
-    title: 'Frango Grelhado com Arroz Integral e Salada',
-    periods: ['tarde', 'noite'],
-    foods: [
-      {
-        name: 'Peito de frango grelhado',
-        grams: 120,
-        carbs: 0,
-        protein: 36,
-        fat: 4,
-        kcal: 190,
-      },
-      {
-        name: 'Arroz integral',
-        grams: 100,
-        carbs: 23,
-        protein: 3,
-        fat: 1,
-        kcal: 110,
-      },
-      {
-        name: 'Salada de folhas e tomate',
-        grams: 80,
-        carbs: 4,
-        protein: 1,
-        fat: 0,
-        kcal: 20,
-      },
-      {
-        name: 'Azeite de oliva',
-        grams: 5,
-        carbs: 0,
-        protein: 0,
-        fat: 5,
-        kcal: 40,
-      },
-    ],
-  },
-  {
-    title: 'Omelete de Espinafre com Pão Integral',
-    periods: ['manha', 'noite'],
-    foods: [
-      { name: 'Ovos', grams: 100, carbs: 1, protein: 12, fat: 10, kcal: 140 },
-      {
-        name: 'Espinafre refogado',
-        grams: 50,
-        carbs: 2,
-        protein: 1,
-        fat: 0,
-        kcal: 15,
-      },
-      {
-        name: 'Queijo branco',
-        grams: 30,
-        carbs: 1,
-        protein: 5,
-        fat: 4,
-        kcal: 65,
-      },
-      {
-        name: 'Pão integral',
-        grams: 25,
-        carbs: 12,
-        protein: 3,
-        fat: 1,
-        kcal: 70,
-      },
-    ],
-  },
-  {
-    title: 'Tilápia Assada com Batata-Doce e Brócolis',
-    periods: ['tarde', 'noite'],
-    foods: [
-      {
-        name: 'Tilápia assada',
-        grams: 150,
-        carbs: 0,
-        protein: 30,
-        fat: 4,
-        kcal: 160,
-      },
-      {
-        name: 'Batata-doce cozida',
-        grams: 120,
-        carbs: 24,
-        protein: 2,
-        fat: 0,
-        kcal: 105,
-      },
-      {
-        name: 'Brócolis no vapor',
-        grams: 80,
-        carbs: 6,
-        protein: 3,
-        fat: 0,
-        kcal: 35,
-      },
-      {
-        name: 'Azeite de oliva',
-        grams: 5,
-        carbs: 0,
-        protein: 0,
-        fat: 5,
-        kcal: 40,
-      },
-    ],
-  },
-  {
-    title: 'Banana com Pasta de Amendoim e Aveia',
-    periods: ['manha', 'tarde'],
-    foods: [
-      {
-        name: 'Banana-prata',
-        grams: 90,
-        carbs: 23,
-        protein: 1,
-        fat: 0,
-        kcal: 90,
-      },
-      {
-        name: 'Pasta de amendoim integral',
-        grams: 15,
-        carbs: 3,
-        protein: 4,
-        fat: 7,
-        kcal: 90,
-      },
-      {
-        name: 'Aveia em flocos',
-        grams: 15,
-        carbs: 9,
-        protein: 2,
-        fat: 1,
-        kcal: 55,
-      },
-    ],
-  },
-];
-
 export const testCatalog: Catalog = {
   foods: testFoods,
-  suggestions: testSuggestions,
   baseMeals: testBaseMeals,
 };

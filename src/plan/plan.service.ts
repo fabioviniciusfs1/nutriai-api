@@ -8,7 +8,6 @@ import type { DataSource, EntityManager } from 'typeorm';
 import { CatalogService } from '../catalog/catalog.service.js';
 import type { UserClock } from '../common/timezone.js';
 import type {
-  CreateMealPreview,
   FoodFeedback,
   Personalization,
   PlanFood,
@@ -19,27 +18,20 @@ import { DayLogService } from './day-log.service.js';
 import { FOOD_NOT_FOUND, Planner, PlanRuleError } from './engine/planner.js';
 import {
   DEFAULT_PLANNER_OPTIONS,
-  EMPTY_DAY_PLAN,
   EMPTY_PLAN_CHANGES,
   type PlannerOptions,
   type PlanState,
 } from './engine/types.js';
-import { calculateTargets, macroTargets } from '../targets/targets.js';
-import type { CompositionRequest } from './composer/composition.js';
+import { calculateTargets } from '../targets/targets.js';
 import type { SubstituteRequest } from './composer/substitution.js';
 import { MealComposerService } from './composer/meal-composer.service.js';
 import { UsersService } from '../users/users.service.js';
 
-function toPlanState(entity: PlanStateEntity, today: string): PlanState {
+function toPlanState(entity: PlanStateEntity): PlanState {
   return {
     mealTimes: entity.mealTimes,
     // Mescla com o vazio: estados salvos antes de um campo existir continuam válidos.
     planChanges: { ...EMPTY_PLAN_CHANGES, ...entity.planChanges },
-    // As mudanças "só de hoje" de outro dia são descartadas.
-    dayPlan:
-      entity.dayPlan?.date === today
-        ? { ...EMPTY_DAY_PLAN, ...entity.dayPlan.changes }
-        : EMPTY_DAY_PLAN,
     foodFeedback: entity.foodFeedback,
     foodSubstitutes: entity.foodSubstitutes,
     mealFoodSwaps: entity.mealFoodSwaps,
@@ -111,43 +103,7 @@ export class PlanService {
       calorieGoal: profile ? calculateTargets(profile).calories : null,
       meals: routine?.meals ?? DEFAULT_PLANNER_OPTIONS.meals,
       diet: routine?.diet,
-      composerAvailable: this.composer.available,
     };
-  }
-
-  /** O que o assistente precisa para compor a refeição nova: metas dela, restrições e o plano de hoje. */
-  private async compositionRequest(
-    userId: string,
-    clock: UserClock,
-    title: string,
-    time: string,
-  ) {
-    const { profile, routine } = await this.users.get(userId);
-    const goals = profile ? macroTargets(profile) : null;
-    return this.read(userId, clock, (planner) => {
-      const { kcal, macros } = planner.newMealTargets(
-        goals
-          ? {
-              protein: goals.proteinas,
-              fat: goals.gorduras,
-              carbs: goals.carboidratos,
-            }
-          : null,
-      );
-      const request: CompositionRequest = {
-        title,
-        time,
-        kcal,
-        macros,
-        restricted: Object.keys(planner.state.foodFeedback),
-        otherMeals: planner.plan.map((meal) => ({
-          title: meal.title,
-          foods: meal.foods.map((food) => food.name),
-        })),
-        diet: routine?.diet ?? 'onivora',
-      };
-      return { request, feedback: planner.state.foodFeedback };
-    });
   }
 
   /**
@@ -188,51 +144,6 @@ export class PlanService {
     });
   }
 
-  /**
-   * Prévia de uma refeição nova, com os alimentos compostos pelo assistente (ou da lista fixa, se ele não
-   * estiver disponível). A chamada ao assistente fica fora da transação do plano.
-   */
-  async previewMeal(
-    userId: string,
-    clock: UserClock,
-    title: string,
-    time: string,
-  ): Promise<CreateMealPreview> {
-    const { request, feedback } = await this.compositionRequest(
-      userId,
-      clock,
-      title,
-      time,
-    );
-    const composed =
-      (await this.composer.composeForPreview(userId, request, feedback)) ??
-      undefined;
-    return this.read(userId, clock, (planner) =>
-      planner.previewNewMeal(title, time, composed),
-    );
-  }
-
-  /** Cria a refeição com a mesma sugestão da prévia (ou compõe uma, se não houve prévia). */
-  async createMeal(
-    userId: string,
-    clock: UserClock,
-    title: string,
-    time: string,
-  ): Promise<TodayPlan> {
-    const { request, feedback } = await this.compositionRequest(
-      userId,
-      clock,
-      title,
-      time,
-    );
-    const composed =
-      (await this.composer.composeForCreate(userId, request, feedback)) ??
-      undefined;
-    return this.update(userId, clock, (planner) =>
-      planner.createMeal(title, time, composed),
-    );
-  }
-
   /** Estado do plano com lock da linha (cria a linha na primeira vez). */
   private lockState(manager: EntityManager, userId: string) {
     return lockPlanState(manager, userId);
@@ -262,11 +173,7 @@ export class PlanService {
           ...profileOptions,
           personalization: personalizationStatus(entity),
         };
-        const planner = new Planner(
-          catalog,
-          toPlanState(entity, today),
-          options,
-        );
+        const planner = new Planner(catalog, toPlanState(entity), options);
         const { state, result, flagged } = change(planner);
         let after = planner;
         if (state) {
@@ -275,7 +182,6 @@ export class PlanService {
             Object.assign(entity, {
               mealTimes: state.mealTimes,
               planChanges: state.planChanges,
-              dayPlan: { date: today, changes: state.dayPlan },
               foodFeedback: state.foodFeedback,
               foodSubstitutes: state.foodSubstitutes,
               mealFoodSwaps: state.mealFoodSwaps,

@@ -2,7 +2,6 @@ import { ActivityDayEntity } from './activity-day.entity.js';
 import {
   BaseMealEntity,
   FoodEntity,
-  MealSuggestionEntity,
   NutrientDefEntity,
 } from './catalog.entities.js';
 import { ChatMessageEntity } from './chat-message.entity.js';
@@ -21,7 +20,6 @@ export {
   DayLogEntity,
   FoodEntity,
   GoogleAccountEntity,
-  MealSuggestionEntity,
   NutrientDefEntity,
   OAuthCodeEntity,
   PlanStateEntity,
@@ -37,7 +35,6 @@ export const ENTITIES = [
   DayLogEntity,
   FoodEntity,
   GoogleAccountEntity,
-  MealSuggestionEntity,
   NutrientDefEntity,
   OAuthCodeEntity,
   PlanStateEntity,

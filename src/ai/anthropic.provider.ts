@@ -3,12 +3,12 @@ import type { Provider } from '@nestjs/common';
 import { APP_CONFIG, type AppConfig } from '../config/app-config.js';
 
 /**
- * Cliente da API da Anthropic; `null` sem `ANTHROPIC_API_KEY` (o chat responde 503 e as refeições
- * novas saem da lista fixa de sugestões).
+ * Cliente da API da Anthropic; `null` sem `ANTHROPIC_API_KEY` (o chat responde 503, o plano fica o
+ * padrão e os substitutos são os do mesmo grupo).
  */
 export const ANTHROPIC_CLIENT = Symbol('ANTHROPIC_CLIENT');
 
-/** Modelo usado pelo chat e pela composição de refeições (o mais barato, por escolha do usuário). */
+/** Modelo usado pelo chat e pelos substitutos (o mais barato, por escolha do usuário). */
 export const CLAUDE_MODEL = 'claude-haiku-4-5';
 
 /** Modelo da montagem do plano individual: roda uma vez por usuário, então vale um modelo mais forte. */

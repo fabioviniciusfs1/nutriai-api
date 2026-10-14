@@ -1,28 +1,17 @@
 // Regras do plano do dia (porte de `reference/MealPlan.tsx` e das funções de `reference/auth.ts`).
 // Tudo puro: recebe o estado do usuário e devolve o novo estado ou uma prévia, sem I/O.
 import type {
-  CreateMealPreview,
   FoodFeedback,
   FoodSearchResult,
-  KcalChange,
   PlanMeal,
-  RemovalOptions,
-  RemoveMealOption,
   RestrictedFood,
   TodayPlan,
   Totals,
 } from '../../contract.js';
-import {
-  FoodCatalog,
-  scaleFoods,
-  sumTotals,
-  usesRestrictedFood,
-} from './foods.js';
+import { FoodCatalog, scaleFoods, sumTotals } from './foods.js';
 import type {
   Catalog,
-  DayPlanChanges,
   MealPeriod,
-  MealSuggestion,
   PlanChanges,
   PlanFood,
   PlannerOptions,
@@ -109,9 +98,6 @@ export class Planner {
   private readonly foods: FoodCatalog;
   /** O que o usuário vê hoje. */
   readonly plan: BuiltMeal[];
-  /** Só com as mudanças permanentes: base para criar refeições e acrescentar alimentos. */
-  private readonly permanentPlan: BuiltMeal[];
-  private readonly todayScales: Record<number, number>;
   /**
    * Refeições do plano base que entram no plano inicial, pelas refeições da rotina (com a versão
    * individual do assistente, quando houver).
@@ -140,40 +126,19 @@ export class Planner {
       this.baseMeals.map((meal) => meal.foods),
       options.calorieGoal,
     );
-    this.plan = this.buildPlan(state.planChanges, state.dayPlan);
-    this.permanentPlan = this.buildPlan(state.planChanges);
-    this.todayScales = Object.fromEntries(
-      this.plan.map((meal) => [
-        meal.id,
-        (state.planChanges.scales[meal.id] ?? 1) *
-          (state.dayPlan.scales[meal.id] ?? 1),
-      ]),
-    );
+    this.plan = this.buildPlan(state.planChanges);
   }
 
-  /** Plano com as mudanças permanentes `changes` e, se `day` vier, também com as de hoje. */
-  private buildPlan(changes: PlanChanges, day?: DayPlanChanges): BuiltMeal[] {
+  /** Plano com as mudanças `changes`, nos horários do usuário. */
+  private buildPlan(changes: PlanChanges): BuiltMeal[] {
     const { mealTimes, foodSubstitutes, mealFoodSwaps } = this.state;
-    const baseMeals = [
-      ...this.baseMeals.map((meal) => ({
-        ...meal,
-        time: mealTimes[meal.id] ?? meal.time,
-      })),
-      ...changes.added,
-    ];
-    return baseMeals
-      .filter(
-        (meal) =>
-          !changes.removed.includes(meal.id) && !day?.removed.includes(meal.id),
-      )
+    return this.baseMeals
       .map((meal) => {
-        const replacement = day?.replacements[meal.id];
-        const scale =
-          (changes.scales[meal.id] ?? 1) * (day?.scales[meal.id] ?? 1);
+        const scale = changes.scales[meal.id] ?? 1;
         // As trocas da refeição ("Não quero") valem por cima das gerais ("Não gosto"/"Não tenho").
         const swaps = { ...foodSubstitutes, ...mealFoodSwaps[meal.id] };
         const planFoods = this.foods
-          .resolve(replacement?.foods ?? meal.foods, swaps)
+          .resolve(meal.foods, swaps)
           .map((food) => ({ ...food, extraId: null as string | null }));
         const extras = (changes.extraFoods[meal.id] ?? []).flatMap((extra) =>
           this.foods
@@ -181,13 +146,12 @@ export class Planner {
             .map((resolved) => ({ ...plain(resolved), extraId: extra.id })),
         );
         const baseFoods = [...planFoods, ...extras];
-        // Porções ajustadas: menores quando uma refeição ou alimento novo abriu espaço, maiores
-        // quando receberam as calorias de uma refeição removida.
+        // Porções ajustadas: menores quando um alimento acrescentado abriu espaço.
         const foods = scaleFoods(baseFoods, this.goalFactor * scale);
         return {
           id: meal.id,
-          title: replacement?.title ?? meal.title,
-          time: meal.time,
+          title: meal.title,
+          time: mealTimes[meal.id] ?? meal.time,
           totals: sumTotals(foods),
           foods,
           totalsAt: (nextScale: number) =>
@@ -207,10 +171,6 @@ export class Planner {
         foods,
       })),
       personalization: this.options.personalization ?? null,
-      // Com o assistente sempre há o que sugerir; sem ele, só enquanto houver sugestões da lista fixa.
-      canCreateMeal:
-        this.options.composerAvailable === true ||
-        this.availableAlternatives().length > 0,
     };
   }
 
@@ -231,12 +191,8 @@ export class Planner {
     });
   }
 
-  private withDayPlan(changes: Partial<DayPlanChanges>): PlanState {
-    return this.withState({ dayPlan: { ...this.state.dayPlan, ...changes } });
-  }
-
   // ---------------------------------------------------------------------------------------------
-  // Sugestões de refeição
+  // Tipo de alimentação
 
   /** O alimento cabe no tipo de alimentação do perfil (alimento fora do catálogo: cabe). */
   private allowed = (name: string) => {
@@ -244,35 +200,11 @@ export class Planner {
     return !entry || allowedByDiet(entry, this.options.diet ?? 'onivora');
   };
 
-  /** O assistente evita sugerir refeições com alimentos restritos (enquanto não forem liberados). */
-  private byRestriction = (a: MealSuggestion, b: MealSuggestion) =>
-    Number(usesRestrictedFood(a.foods, this.state.foodFeedback)) -
-    Number(usesRestrictedFood(b.foods, this.state.foodFeedback));
-
-  /** Sugestões que ainda não estão no plano, preferindo as sem alimentos restritos. */
-  availableAlternatives(): MealSuggestion[] {
-    const { planChanges, dayPlan } = this.state;
-    const usedTitles = new Set([
-      ...this.catalog.baseMeals.map((meal) => meal.title),
-      ...this.baseMeals.map((meal) => meal.title),
-      ...Object.values(dayPlan.replacements).map((meal) => meal.title),
-      ...planChanges.added.map((meal) => meal.suggestion),
-    ]);
-    // Sugestões com alimento fora do tipo de alimentação do perfil nem entram.
-    return this.catalog.suggestions
-      .filter(
-        (meal) =>
-          !usedTitles.has(meal.title) &&
-          meal.foods.every((food) => this.allowed(food.name)),
-      )
-      .sort(this.byRestriction);
-  }
-
   // ---------------------------------------------------------------------------------------------
   // Porções
 
   /**
-   * Fator que todas as refeições do plano permanente recebem para o total do dia passar a ser
+   * Fator que todas as refeições do plano recebem para o total do dia passar a ser
    * `targetKcal` (abrir espaço para calorias novas sem passar do total atual).
    */
   private shareFactor(meals: BuiltMeal[], targetKcal: number) {
@@ -286,188 +218,13 @@ export class Planner {
     );
   }
 
-  /** Como ficam as refeições de hoje se as porções permanentes mudarem por `factor`. */
-  private previewSources(factor: number): KcalChange[] {
-    return this.plan.map((meal) => ({
-      mealId: meal.id,
-      title: meal.title,
-      time: meal.time,
-      before: meal.totals.kcal,
-      after: meal.totalsAt(this.todayScales[meal.id] * factor).kcal,
-    }));
-  }
-
   /** Todas as refeições do plano permanente com as porções multiplicadas por `factor`. */
   private scaleAll(factor: number) {
     const { scales } = this.state.planChanges;
     const nextScales = { ...scales };
-    for (const meal of this.permanentPlan)
+    for (const meal of this.plan)
       nextScales[meal.id] = (scales[meal.id] ?? 1) * factor;
     return nextScales;
-  }
-
-  // ---------------------------------------------------------------------------------------------
-  // Criar refeição
-
-  /**
-   * Sugestão da lista fixa para um horário: a primeira do período que ainda não está no plano, preferindo
-   * as sem alimentos restritos; se acabarem, repete. É a reserva quando o assistente não compõe uma.
-   */
-  private fixedSuggestion(time: string): MealSuggestion {
-    const all = this.catalog.suggestions;
-    if (all.length === 0)
-      throw new PlanRuleError(
-        'invalid',
-        'Não há sugestões de refeição disponíveis.',
-      );
-    const period = mealPeriod(time);
-    const inPeriod = (meal: MealSuggestion) => meal.periods.includes(period);
-    return (
-      this.availableAlternatives().find(inPeriod) ??
-      [...all].sort(this.byRestriction).find(inPeriod) ??
-      all[0]
-    );
-  }
-
-  /**
-   * Quanto a refeição nova deve ter, para o assistente compor os alimentos: kcal (a parte justa da meta
-   * ou do dia) e, com `macroGoals`, os gramas de cada macro que faltam no dia depois de as outras
-   * refeições se ajustarem.
-   */
-  newMealTargets(
-    macroGoals: { protein: number; fat: number; carbs: number } | null,
-  ) {
-    const others = sumTotals(this.permanentPlan.map((meal) => meal.totals));
-    const mealCount = this.permanentPlan.length + 1;
-    const goal = this.options.calorieGoal;
-    const kcal = Math.round(
-      goal ? goal / mealCount : others.kcal > 0 ? others.kcal / mealCount : 500,
-    );
-    if (!macroGoals) return { kcal, macros: null };
-    // As outras refeições passam a somar `goal − kcal`, na mesma proporção de macros de hoje.
-    const othersShare =
-      others.kcal > 0 && goal ? Math.max(0, goal - kcal) / others.kcal : 0;
-    const remaining = (target: number, current: number) =>
-      Math.max(0, Math.round(target - current * othersShare));
-    return {
-      kcal,
-      macros: {
-        protein: remaining(macroGoals.protein, others.protein),
-        fat: remaining(macroGoals.fat, others.fat),
-        carbs: remaining(macroGoals.carbs, others.carbs),
-      },
-    };
-  }
-
-  /**
-   * Refeição nova a partir de uma sugestão: a composta pelo assistente (`composed`) ou a da lista fixa
-   * para o período. Com meta calórica, o dia volta para a meta: a nova
-   * fica com `meta ÷ (nº de refeições + 1)` e as outras se ajustam na mesma proporção. Sem meta, o total
-   * do dia não muda: a nova fica com no máximo a "parte justa" do dia e as outras diminuem.
-   */
-  private planNewMeal(time: string, composed?: MealSuggestion) {
-    const suggestion = composed ?? this.fixedSuggestion(time);
-
-    const dayKcal = sumTotals(
-      this.permanentPlan.map((meal) => meal.totals),
-    ).kcal;
-    const suggestedKcal = sumTotals(suggestion.foods).kcal;
-    const goal = this.options.calorieGoal;
-    const mealCount = this.permanentPlan.length + 1;
-    let portion: number;
-    let othersTarget: number;
-    if (goal && suggestedKcal > 0) {
-      // Com meta: depois de criar, o dia volta para a meta. A refeição nova fica com a parte justa da
-      // meta e as outras se ajustam (diminuem ou aumentam) para o total ficar nela.
-      portion = goal / mealCount / suggestedKcal;
-      othersTarget = goal - this.newMealTotals(suggestion.foods, portion).kcal;
-    } else {
-      // Sem meta: o total do dia não muda. A refeição nova fica com no máximo a parte justa do dia;
-      // com o plano vazio, entra com a porção original.
-      portion =
-        dayKcal === 0 || suggestedKcal === 0
-          ? 1
-          : Math.min(1, dayKcal / mealCount / suggestedKcal);
-      othersTarget =
-        dayKcal - this.newMealTotals(suggestion.foods, portion).kcal;
-    }
-    const totals = this.newMealTotals(suggestion.foods, portion);
-    const othersFactor = this.shareFactor(this.permanentPlan, othersTarget);
-    return {
-      suggestion: suggestion.title,
-      foods: suggestion.foods,
-      portion,
-      totals,
-      othersFactor,
-    };
-  }
-
-  /**
-   * Totais da refeição nova como o plano vai mostrar: ela é guardada com o fator `portion ÷ goalFactor`
-   * e montada com `goalFactor ×` esse fator (a mesma conta, para o arredondamento bater).
-   */
-  private newMealTotals(foods: PlanFood[], portion: number) {
-    return sumTotals(
-      scaleFoods(foods, this.goalFactor * (portion / this.goalFactor)),
-    );
-  }
-
-  createMeal(
-    title: string,
-    time: string,
-    composed?: MealSuggestion,
-  ): PlanState {
-    const { suggestion, foods, portion, othersFactor } = this.planNewMeal(
-      time,
-      composed,
-    );
-    const { added } = this.state.planChanges;
-    const id = Math.max(1000, ...added.map((meal) => meal.id)) + 1;
-    // A refeição guarda os alimentos da sugestão e o fator da porção escolhida (sem o da meta, que
-    // entra ao montar o plano).
-    return this.withPlanChanges({
-      scales: {
-        ...this.scaleAll(othersFactor),
-        [id]: portion / this.goalFactor,
-      },
-      added: [...added, { id, title, time, suggestion, foods }],
-    });
-  }
-
-  previewNewMeal(
-    title: string,
-    time: string,
-    composed?: MealSuggestion,
-  ): CreateMealPreview {
-    const { suggestion, totals, othersFactor } = this.planNewMeal(
-      time,
-      composed,
-    );
-    const after = new Planner(
-      this.catalog,
-      this.createMeal(title, time, composed),
-      this.options,
-    );
-    const created = after.plan.find(
-      (meal) => !this.plan.some((item) => item.id === meal.id),
-    );
-    return {
-      suggestion,
-      foods: (created?.foods ?? []).map(
-        ({ name, grams, carbs, protein, fat, kcal }) => ({
-          name,
-          grams,
-          carbs,
-          protein,
-          fat,
-          kcal,
-        }),
-      ),
-      totals,
-      reductionPercent: Math.round((1 - othersFactor) * 100),
-      changes: this.previewSources(othersFactor),
-      dayKcal: after.dayKcal(),
-    };
   }
 
   /** Total de calorias do plano de hoje. */
@@ -483,16 +240,14 @@ export class Planner {
    * e o fator que todas as refeições recebem para o total do dia não aumentar.
    */
   private planFood(mealId: number, foodName: string) {
-    const meal = this.permanentPlan.find((item) => item.id === mealId);
+    const meal = this.plan.find((item) => item.id === mealId);
     if (!meal) return null;
-    const dayKcal = sumTotals(
-      this.permanentPlan.map((item) => item.totals),
-    ).kcal;
+    const dayKcal = sumTotals(this.plan.map((item) => item.totals)).kcal;
     const portionKcal =
       Math.round(meal.totals.kcal / (meal.foods.length + 1)) || 100;
     const food = this.foods.convert(foodName, portionKcal);
     if (!food) return null;
-    const factor = this.shareFactor(this.permanentPlan, dayKcal - food.kcal);
+    const factor = this.shareFactor(this.plan, dayKcal - food.kcal);
     return { food, reductionPercent: Math.round((1 - factor) * 100), factor };
   }
 
@@ -569,9 +324,7 @@ export class Planner {
     if (!current.some((food) => food.id === extraId))
       throw new PlanRuleError('not-found', FOOD_NOT_FOUND);
 
-    const dayKcal = sumTotals(
-      this.permanentPlan.map((meal) => meal.totals),
-    ).kcal;
+    const dayKcal = sumTotals(this.plan.map((meal) => meal.totals)).kcal;
     const extraFoods = {
       ...planChanges.extraFoods,
       [mealId]: current.filter((food) => food.id !== extraId),
@@ -598,132 +351,8 @@ export class Planner {
 
   changeMealTime(id: number, time: string): PlanState {
     this.meal(id);
-    const { added } = this.state.planChanges;
-    // Refeições criadas guardam o horário junto delas; as do plano base, nos horários do usuário.
-    if (added.some((meal) => meal.id === id)) {
-      return this.withPlanChanges({
-        added: added.map((meal) => (meal.id === id ? { ...meal, time } : meal)),
-      });
-    }
     return this.withState({
       mealTimes: { ...this.state.mealTimes, [id]: time },
-    });
-  }
-
-  // ---------------------------------------------------------------------------------------------
-  // Remover refeição
-
-  /**
-   * "Redistribuir": as refeições seguintes aumentam as porções na mesma proporção para receber as
-   * calorias da removida, sem passar do total que o dia tinha.
-   */
-  private planRedistribution(mealId: number) {
-    const removing = this.meal(mealId);
-    const nextMeals = this.plan.filter((meal) => meal.time > removing.time);
-    if (nextMeals.length === 0)
-      return { nextMeals, factor: 1, preview: [] as KcalChange[] };
-    const nextKcal = nextMeals.reduce((sum, meal) => sum + meal.totals.kcal, 0);
-    const limit = nextKcal + removing.totals.kcal;
-    const factor =
-      nextKcal === 0
-        ? 1
-        : fitFactor(nextMeals, this.todayScales, limit / nextKcal, limit);
-    return {
-      nextMeals,
-      factor,
-      preview: nextMeals.map((meal) => ({
-        mealId: meal.id,
-        title: meal.title,
-        time: meal.time,
-        before: meal.totals.kcal,
-        after: meal.totalsAt(this.todayScales[meal.id] * factor).kcal,
-      })),
-    };
-  }
-
-  /**
-   * "Sugerir uma nova": a sugestão de calorias mais próximas da porção original (fator 1) da
-   * refeição, entre as que não estão no plano, preferindo as sem alimentos restritos.
-   */
-  private removalSuggestion(mealId: number) {
-    // Porção original da refeição, na mesma escala das sugestões (sem o fator da meta).
-    const target = this.meal(mealId).totalsAt(1).kcal / this.goalFactor;
-    const [alternative] = [...this.availableAlternatives()].sort(
-      (a, b) =>
-        this.byRestriction(a, b) ||
-        Math.abs(sumTotals(a.foods).kcal - target) -
-          Math.abs(sumTotals(b.foods).kcal - target),
-    );
-    return alternative;
-  }
-
-  removalOptions(mealId: number): RemovalOptions {
-    const alternative = this.removalSuggestion(mealId);
-    let suggestion: RemovalOptions['suggestion'] = null;
-    if (alternative) {
-      // A sugestão herda o ajuste de porção da refeição: mostra as calorias como vão aparecer.
-      const after = new Planner(
-        this.catalog,
-        this.confirmRemoval(mealId, 'suggest'),
-        this.options,
-      );
-      suggestion = {
-        title: alternative.title,
-        kcal: after.meal(mealId).totals.kcal,
-      };
-    }
-    return {
-      suggestion,
-      redistribution: this.planRedistribution(mealId).preview,
-    };
-  }
-
-  confirmRemoval(mealId: number, option: RemoveMealOption): PlanState {
-    this.meal(mealId);
-    const { planChanges, dayPlan } = this.state;
-
-    if (option === 'suggest') {
-      const alternative = this.removalSuggestion(mealId);
-      if (!alternative)
-        throw new PlanRuleError(
-          'invalid',
-          'Não há outra refeição para sugerir agora.',
-        );
-      return this.withDayPlan({
-        replacements: {
-          ...dayPlan.replacements,
-          [mealId]: { title: alternative.title, foods: alternative.foods },
-        },
-      });
-    }
-
-    if (option === 'redistribute') {
-      const { nextMeals, factor } = this.planRedistribution(mealId);
-      if (nextMeals.length === 0) {
-        throw new PlanRuleError(
-          'invalid',
-          'Não há refeições depois desta para receber as calorias.',
-        );
-      }
-      const scales = { ...dayPlan.scales };
-      for (const meal of nextMeals)
-        scales[meal.id] = (dayPlan.scales[meal.id] ?? 1) * factor;
-      return this.withDayPlan({
-        removed: [...dayPlan.removed, mealId],
-        scales,
-      });
-    }
-
-    // "Não fazer nada" é permanente: para voltar a ter a refeição, o usuário cria outra.
-    const extraFoods = { ...planChanges.extraFoods };
-    delete extraFoods[mealId];
-    const isCreated = planChanges.added.some((meal) => meal.id === mealId);
-    return this.withPlanChanges({
-      extraFoods,
-      added: planChanges.added.filter((meal) => meal.id !== mealId),
-      removed: isCreated
-        ? planChanges.removed
-        : [...planChanges.removed, mealId],
     });
   }
 

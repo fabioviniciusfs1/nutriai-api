@@ -15,7 +15,7 @@ do comportamento (é código do front: os imports não resolvem aqui, serve só 
 | --- | --- |
 | Dados de exemplo (plano, catálogo, sugestões, nutrientes, histórico, chat) | [`reference/mock-data.ts`](reference/mock-data.ts) |
 | Meta calórica e água | [`reference/calorie-target.ts`](reference/calorie-target.ts) |
-| Plano do dia, criar/remover refeição, acrescentar alimento, porções | [`reference/MealPlan.tsx`](reference/MealPlan.tsx) |
+| Plano do dia, acrescentar alimento, porções | [`reference/MealPlan.tsx`](reference/MealPlan.tsx) |
 | Trocas de alimentos e substitutos | [`reference/food-substitution.ts`](reference/food-substitution.ts) |
 | Busca de alimentos | [`reference/AddFoodDialog.tsx`](reference/AddFoodDialog.tsx) |
 | O que era guardado por usuário | [`reference/auth.ts`](reference/auth.ts) |
@@ -187,7 +187,7 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
   `goal`: `perder | manter | ganhar`.
 - `routine`: ver `PUT /me/routine`. `weighInDay`: 0 = domingo … 6 = sábado.
 - `routine.diet`: `onivora | pescetariana | vegetariana | vegana` ("Escolha o tipo de alimentação."). O backend
-  tira do plano individual, das sugestões e dos substitutos o que a dieta exclui (pescetariana: carnes;
+  tira do plano individual e dos substitutos o que a dieta exclui (pescetariana: carnes;
   vegetariana: carnes e peixes; vegana: tudo de origem animal, inclusive ovos, laticínios e mel), pela origem
   animal de cada alimento do catálogo (categoria da TACO e nome, nos pratos prontos).
 - `weighInDue`: hoje (no fuso do usuário) é `routine.weighInDay` **e** não há pesagem registrada hoje.
@@ -227,7 +227,7 @@ Na **primeira vez** (rotina era `null`) e com o assistente configurado, começa 
 individual** em segundo plano (ver "Plano individual" em `GET /plan/today`); a resposta não espera por ela.
 Salvar a rotina de novo **não** monta outro plano: o front pergunta ao usuário e, se ele quiser, chama
 `POST /plan/personalize`. Sem refazer, a rotina nova vale para o que não depende do plano individual
-(refeições do plano padrão, tipo de alimentação nas sugestões e substitutos, dia da pesagem).
+(refeições do plano padrão, tipo de alimentação nos substitutos, dia da pesagem).
 
 ### `POST /profile/estimate` → `Targets`
 
@@ -263,7 +263,6 @@ O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por h
 
 ```json
 {
-  "canCreateMeal": true,
   "personalization": "ready",
   "meals": [
     {
@@ -285,7 +284,6 @@ O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por h
 - `personalization`: montagem do plano individual — `pending` (montando; `meals` traz o plano atual, mas o front
   mostra só um card "Montando seu plano personalizado…" e pergunta de novo a cada poucos segundos), `ready` (aplicado), `failed` (não deu certo; o plano não muda) ou `null`
   (nunca pedido: sem assistente).
-- `canCreateMeal`: há sugestões de refeição disponíveis (com o assistente, sempre; senão o botão "Nova refeição" fica desativado).
 
 **Todas as rotas de alteração do plano abaixo respondem `200` com o `TodayPlan` atualizado.**
 
@@ -312,90 +310,30 @@ instantes.".
 
 - Tem as refeições de `routine.meals` (as do plano individual, quando houver), uma do plano base para cada: café da
   manhã, lanche da manhã, almoço, lanche da tarde, jantar e ceia. Sem rotina: café da manhã, almoço e jantar.
-  Depois o usuário cria ou remove refeições à vontade.
+  Para incluir ou tirar uma refeição, o usuário muda a rotina (`PUT /me/routine`); não há rota para criar nem
+  remover refeição avulsa.
 - As porções de todas as refeições são escaladas na mesma proporção para o total do dia ficar o mais perto
   possível de `targets.calories`. Sem perfil, ficam as porções de referência. Se a meta mudar, o plano todo
   acompanha (inclusive o que o usuário acrescentou).
 
-**Como o plano de hoje é montado** (o que o usuário muda fica guardado em duas camadas):
+**Como o plano de hoje é montado** (o que o usuário muda é permanente, até ele desfazer: horários escolhidos,
+alimentos acrescentados por refeição, trocas de alimentos e um fator de porção por refeição):
 
-- **Permanente** (até o usuário desfazer): refeições removidas com "não fazer nada", refeições criadas
-  (ids ≥ 1001), alimentos acrescentados por refeição, horários escolhidos, trocas de alimentos e um fator de
-  porção por refeição.
-- **Só de hoje** (descartado quando o dia vira): refeições removidas com "redistribuir", refeições trocadas
-  por uma sugestão e um fator de porção por refeição.
 - Para cada refeição: aplica as trocas de alimentos (ver "Trocas"), junta os alimentos acrescentados e
-  multiplica as porções por `fator permanente × fator de hoje` (gramas e nutrientes, arredondando; gramas no
-  mínimo 1).
+  multiplica as porções pelo fator dela (gramas e nutrientes, arredondando; gramas no mínimo 1).
 - Sempre que um fator sobe para compensar calorias, confira os valores **já arredondados**: se o total do dia
   passar do total anterior, reduza o fator aos poucos (×0,999) até caber. O dia nunca ganha calorias com uma
-  ação do usuário, exceto ao criar refeição com meta calórica (ver "Criar refeição"), que leva o dia de volta
-  para a meta.
+  ação do usuário.
 
 ### `PUT /plan/meals/{id}/time`
 
 Corpo: `{ "time": "08:00" }`. Permanente.
 
-### Remover refeição
+### Incluir ou tirar refeição
 
-`GET /plan/meals/{id}/removal-options` → `RemovalOptions`
-
-```json
-{
-  "suggestion": { "title": "Iogurte Grego com Granola e Morangos", "kcal": 330 },
-  "redistribution": [{ "mealId": 3, "title": "Bowl de Salmão", "time": "20:00", "before": 435, "after": 520 }]
-}
-```
-
-`POST /plan/meals/{id}/removal` com `{ "option": "suggest" | "redistribute" | "nothing" }`:
-
-- `suggest` (só hoje): troca pela sugestão de calorias mais próximas da porção original (fator 1) da
-  refeição, entre as que ainda não estão no plano, preferindo as sem alimentos restritos. Mesmo id e horário.
-  `suggestion` é `null` se não houver nenhuma.
-- `redistribute` (só hoje): a refeição sai e as refeições **seguintes** (horário maior) aumentam as porções
-  pelo mesmo fator, para receber as calorias dela, sem passar do total que o dia tinha. `redistribution`
-  lista o antes/depois delas (vazio se não houver refeição depois — então a opção não vale).
-- `nothing` (permanente): a refeição sai do plano; as calorias não são repostas. Se for uma refeição criada,
-  apaga ela e os alimentos acrescentados a ela.
-
-### Criar refeição
-
-`POST /plan/meal-preview` com `{ "title": "Lanche pré-treino", "time": "16:00" }` → `CreateMealPreview`
-(nada é salvo):
-
-```json
-{
-  "suggestion": "Omelete de Queijo com Salada",
-  "foods": [
-    { "name": "Ovo, de galinha, inteiro, cozido/10minutos", "grams": 100, "carbs": 1, "protein": 13, "fat": 10, "kcal": 146 },
-    { "name": "Queijo, minas, frescal", "grams": 40, "carbs": 1, "protein": 7, "fat": 8, "kcal": 106 },
-    { "name": "Alface, crespa, crua", "grams": 40, "carbs": 1, "protein": 1, "fat": 0, "kcal": 4 }
-  ],
-  "totals": { "carbs": 3, "protein": 21, "fat": 18, "kcal": 256 },
-  "reductionPercent": 17,
-  "changes": [{ "mealId": 1, "title": "Torrada de Abacate", "time": "07:30", "before": 350, "after": 290 }],
-  "dayKcal": 1160
-}
-```
-
-`POST /plan/meals` com o mesmo corpo cria de fato (permanente).
-
-- Os alimentos são escolhidos pelo assistente (Claude) entre os do catálogo, considerando o nome da refeição,
-  o horário, os alimentos restritos, as outras refeições do dia e quanto falta de cada macronutriente. O
-  backend valida os nomes e calcula porções e nutrientes pelo catálogo. `suggestion` é o nome que o
-  assistente deu e `foods` são os alimentos nas porções em que vão entrar. O `POST /plan/meals` com o mesmo
-  nome e horário usa a mesma sugestão da prévia (guardada por 15 minutos).
-- Sem o assistente (sem chave da API ou se ele falhar), os alimentos vêm de uma sugestão fixa do período do
-  horário (manhã < 11:00, tarde < 17:00, noite), preferindo uma que ainda não está no plano e sem alimentos
-  restritos.
-- **Com meta calórica** (usuário com perfil): depois de criar, o dia volta para a meta. A refeição nova fica
-  com `targets.calories ÷ (nº de refeições + 1)` e todas as outras ajustam as porções pelo mesmo fator para o
-  total ficar o mais perto possível da meta, sem passar dela. Com o plano vazio, a nova fica com a meta inteira.
-- **Sem meta:** a porção da sugestão é reduzida para no máximo `calorias do dia ÷ (nº de refeições + 1)` e as
-  outras reduzem as porções para o total do dia não mudar. Com o plano vazio, a sugestão entra com a porção
-  original.
-- `reductionPercent` = quanto as outras refeições diminuem (%); **negativo = aumentam** (o dia estava abaixo
-  da meta). `changes` = antes/depois de cada uma; `dayKcal` = total do dia depois de criar.
+Não há rota para criar nem remover uma refeição avulsa: as refeições do dia vêm de `routine.meals`. Para
+incluir ou tirar uma, o usuário muda a rotina (`PUT /me/routine`). Uma refeição incluída entra com a versão
+padrão do plano base (ou a do assistente, se ele refizer o plano com `POST /plan/personalize`).
 
 ### Acrescentar alimento
 
@@ -474,8 +412,7 @@ com as **mesmas calorias** do alimento como aparece na refeição, sem o própri
 `DELETE /foods/restricted/{name}` ("Liberar") → `RestrictedFood[]` atualizada. Só tira a restrição (o
 alimento volta a poder ser sugerido e oferecido); **as trocas já feitas continuam**.
 
-**Alimentos restritos:** nunca aparecem como substitutos nem na busca, e as sugestões de refeição (criar,
-"sugerir uma nova") preferem as que não os usam.
+**Alimentos restritos:** nunca aparecem como substitutos nem na busca.
 
 ## Nutrientes 🔒
 

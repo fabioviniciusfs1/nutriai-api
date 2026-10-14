@@ -1,14 +1,10 @@
 import { Column, Entity, PrimaryColumn, VersionColumn } from 'typeorm';
 import type { FoodFeedback, Personalization } from '../../contract.js';
-import type {
-  DayPlanChanges,
-  PersonalMeals,
-  PlanChanges,
-} from '../../plan/engine/types.js';
+import type { PersonalMeals, PlanChanges } from '../../plan/engine/types.js';
 
 /**
  * Mudanças do usuário no plano (espelha o que o front antigo guardava em `reference/auth.ts`).
- * Permanentes até o usuário desfazer, exceto `dayPlan`, que só vale no dia em que foi feito.
+ * Permanentes até o usuário desfazer.
  */
 @Entity('plan_states')
 export class PlanStateEntity {
@@ -21,13 +17,9 @@ export class PlanStateEntity {
 
   @Column('jsonb', {
     name: 'plan_changes',
-    default: { removed: [], added: [], extraFoods: {}, scales: {} },
+    default: { extraFoods: {}, scales: {} },
   })
   planChanges: PlanChanges;
-
-  /** Mudanças de um dia ("sugerir" e "redistribuir"); em outro dia são ignoradas. */
-  @Column('jsonb', { name: 'day_plan', nullable: true })
-  dayPlan: { date: string; changes: DayPlanChanges } | null;
 
   /** Alimentos restritos (nome → marcação). Liberar tira daqui, mas não desfaz as trocas. */
   @Column('jsonb', { name: 'food_feedback', default: {} })

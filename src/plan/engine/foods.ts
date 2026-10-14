@@ -211,14 +211,6 @@ export class FoodCatalog {
   }
 }
 
-/** Se a refeição usa algum alimento restrito (o assistente evita essas sugestões). */
-export function usesRestrictedFood(
-  foods: { name: string }[],
-  feedback: Record<string, FoodFeedback>,
-) {
-  return foods.some((food) => feedback[food.name]);
-}
-
 /** Compara nomes sem diferenciar maiúsculas, acentos nem pontuação ("feijao" encontra "Feijão"). */
 export function normalize(text: string) {
   return (

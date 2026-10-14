@@ -48,8 +48,8 @@ describe('semente com a TACO', () => {
     readOds(readFileSync('data/taco/tabela-taco.ods')),
   ).foods.flatMap((food) => tacoToCatalog(food) ?? []);
 
-  it('todo alimento do plano base e das sugestões existe na TACO', () => {
-    const { baseMeals, suggestions } = buildSeedPlan(catalog);
+  it('todo alimento do plano base existe na TACO', () => {
+    const { baseMeals } = buildSeedPlan(catalog);
     // As 3 refeições principais (os lanches e a ceia entram para quem marca na rotina).
     const dayKcal = baseMeals
       .filter((meal) => DEFAULT_PLANNER_OPTIONS.meals.includes(meal.slot))
@@ -57,21 +57,10 @@ describe('semente com a TACO', () => {
       .reduce((sum, food) => sum + food.kcal, 0);
     expect(dayKcal).toBeGreaterThan(1000);
     expect(dayKcal).toBeLessThan(1300);
-    expect(suggestions.length).toBeGreaterThanOrEqual(10);
     // Uma refeição base para cada refeição do dia.
     expect(baseMeals.map((meal) => meal.slot).sort()).toEqual(
       [...MEAL_SLOTS].sort(),
     );
-    // Títulos dos lanches não podem repetir os das sugestões (senão a sugestão some do "Nova refeição").
-    const suggestionTitles = new Set(suggestions.map((meal) => meal.title));
-    expect(
-      baseMeals.filter((meal) => suggestionTitles.has(meal.title)),
-    ).toEqual([]);
-    for (const period of ['manha', 'tarde', 'noite'] as const) {
-      expect(suggestions.some((meal) => meal.periods.includes(period))).toBe(
-        true,
-      );
-    }
   });
 
   it('falha com mensagem clara sem o catálogo', () => {

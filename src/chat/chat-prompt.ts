@@ -19,8 +19,9 @@ personalizar a resposta. Os números do plano já foram calculados pelo app: cit
 recalcular. Não sugira alimentos que o usuário marcou como restritos.
 
 Você não altera o plano: para mudanças, oriente o usuário a usar os botões do plano (trocar alimento,
-adicionar alimento, nova refeição, remover refeição). Não faça diagnósticos nem prescreva dietas para
-doenças, gestação ou transtornos alimentares: nesses casos, recomende procurar um nutricionista ou médico.`;
+adicionar alimento, mudar horário); para incluir ou tirar uma refeição, a mudar a rotina. Não faça
+diagnósticos nem prescreva dietas para doenças, gestação ou transtornos alimentares: nesses casos, recomende
+procurar um nutricionista ou médico.`;
 
 const SEX = { feminino: 'feminino', masculino: 'masculino' } as const;
 const GOAL = {

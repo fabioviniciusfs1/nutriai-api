@@ -140,34 +140,6 @@ export type TodayPlan = {
    * se não deu certo, `ready` quando aplicado e `null` se nunca foi pedido.
    */
   personalization: Personalization;
-  /** Se o assistente tem sugestões para uma refeição nova. */
-  canCreateMeal: boolean;
-};
-
-/** Como as calorias de uma refeição mudam com uma ação (mostrado antes de confirmar). */
-export type KcalChange = { mealId: number; title: string; time: string; before: number; after: number };
-
-export type RemoveMealOption = "suggest" | "redistribute" | "nothing";
-
-export type RemovalOptions = {
-  /** Refeição que o assistente sugere no lugar ("sugerir uma nova"); `null` se não houver. */
-  suggestion: { title: string; kcal: number } | null;
-  /** Refeições seguintes com as calorias antes/depois de "redistribuir" (vazio se não houver). */
-  redistribution: KcalChange[];
-};
-
-export type CreateMealPreview = {
-  /** Nome da refeição que o assistente sugere (ex.: "Omelete com Salada"); a refeição fica com o nome do usuário. */
-  suggestion: string;
-  /** Alimentos sugeridos, nas porções em que vão entrar no plano. */
-  foods: PlanFood[];
-  /** Totais da refeição que o assistente vai sugerir. */
-  totals: Totals;
-  /** Quanto as porções das outras refeições diminuem (%). */
-  reductionPercent: number;
-  changes: KcalChange[];
-  /** Total do dia depois de criar (continua igual ao de antes). */
-  dayKcal: number;
 };
 
 export type FoodSearchResult = {

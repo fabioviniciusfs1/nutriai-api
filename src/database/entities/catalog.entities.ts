@@ -1,7 +1,7 @@
 import { Column, Entity, PrimaryColumn, Unique } from 'typeorm';
 import type { FoodGroup, MealSlot } from '../../contract.js';
 import type { AnimalTag } from '../../plan/engine/diet.js';
-import type { MealPeriod, PlanFood } from '../../plan/engine/types.js';
+import type { PlanFood } from '../../plan/engine/types.js';
 
 type Per100g = { carbs: number; protein: number; fat: number; kcal: number };
 
@@ -33,23 +33,6 @@ export class FoodEntity {
 
   @Column('int', { name: 'source_id' })
   sourceId: number;
-}
-
-/** Refeição que o assistente pode sugerir (criar refeição, "sugerir uma nova"). */
-@Entity('meal_suggestions')
-export class MealSuggestionEntity {
-  @PrimaryColumn('text')
-  title: string;
-
-  @Column('jsonb')
-  periods: MealPeriod[];
-
-  @Column('jsonb')
-  foods: PlanFood[];
-
-  /** Ordem original (a escolha das sugestões depende dela). */
-  @Column('int')
-  position: number;
 }
 
 /** Refeição do plano base. */

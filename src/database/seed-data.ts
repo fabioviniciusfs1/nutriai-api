@@ -1,7 +1,6 @@
-// Semente do banco: plano base, sugestões de refeição e nutrientes acompanhados. Os alimentos vêm do
+// Semente do banco: plano base e nutrientes acompanhados. Os alimentos vêm do
 // catálogo (TACO); aqui só entram nome e gramas, e o seed calcula os nutrientes de cada porção.
 import type { MealSlot } from '../contract.js';
-import type { MealPeriod } from '../plan/engine/types.js';
 
 /** Alimento numa porção, pelo nome exato no catálogo. */
 export type FoodPortionSeed = { name: string; grams: number };
@@ -88,108 +87,6 @@ export const baseMeals: {
     foods: [
       { name: 'Iogurte, natural', grams: 120 },
       { name: 'Kiwi, cru', grams: 80 },
-    ],
-  },
-];
-
-/** Refeições que o assistente sugere (criar refeição e "sugerir uma nova"), na ordem de preferência. */
-export const mealSuggestions: {
-  title: string;
-  periods: MealPeriod[];
-  foods: FoodPortionSeed[];
-}[] = [
-  {
-    title: 'Iogurte Natural com Aveia, Morangos e Mel',
-    periods: ['manha', 'tarde'],
-    foods: [
-      { name: 'Iogurte, natural', grams: 170 },
-      { name: 'Aveia, flocos, crua', grams: 30 },
-      { name: 'Morango, cru', grams: 100 },
-      { name: 'Mel, de abelha', grams: 10 },
-    ],
-  },
-  {
-    title: 'Patinho Grelhado com Arroz e Abobrinha',
-    periods: ['tarde', 'noite'],
-    foods: [
-      { name: 'Carne, bovina, patinho, sem gordura, grelhado', grams: 100 },
-      { name: 'Arroz, tipo 1, cozido', grams: 100 },
-      { name: 'Abobrinha, italiana, refogada', grams: 80 },
-    ],
-  },
-  {
-    title: 'Cuscuz Nordestino com Ovo e Queijo',
-    periods: ['manha', 'noite'],
-    foods: [
-      { name: 'Cuscuz, de milho, cozido com sal', grams: 120 },
-      { name: 'Ovo, de galinha, inteiro, cozido/10minutos', grams: 50 },
-      { name: 'Queijo, minas, frescal', grams: 30 },
-    ],
-  },
-  {
-    title: 'Banana com Aveia e Amendoim',
-    periods: ['manha', 'tarde'],
-    foods: [
-      { name: 'Banana, prata, crua', grams: 100 },
-      { name: 'Aveia, flocos, crua', grams: 20 },
-      { name: 'Amendoim, torrado, salgado', grams: 15 },
-    ],
-  },
-  {
-    title: 'Sanduíche Integral de Atum',
-    periods: ['tarde'],
-    foods: [
-      { name: 'Pão, trigo, forma, integral', grams: 50 },
-      { name: 'Atum, conserva em óleo', grams: 60 },
-      { name: 'Alface, crespa, crua', grams: 20 },
-      { name: 'Tomate, com semente, cru', grams: 40 },
-    ],
-  },
-  {
-    title: 'Frutas com Castanha-do-Brasil',
-    periods: ['manha', 'tarde'],
-    foods: [
-      { name: 'Maçã, Fuji, com casca, crua', grams: 130 },
-      { name: 'Kiwi, cru', grams: 80 },
-      { name: 'Castanha-do-Brasil, crua', grams: 10 },
-    ],
-  },
-  {
-    title: 'Sardinha Assada com Mandioca e Couve',
-    periods: ['tarde', 'noite'],
-    foods: [
-      { name: 'Sardinha, assada', grams: 100 },
-      { name: 'Mandioca, cozida', grams: 100 },
-      { name: 'Couve, manteiga, refogada', grams: 50 },
-    ],
-  },
-  {
-    title: 'Lentilha com Arroz Integral e Legumes',
-    periods: ['tarde', 'noite'],
-    foods: [
-      { name: 'Lentilha, cozida', grams: 100 },
-      { name: 'Arroz, integral, cozido', grams: 100 },
-      { name: 'Cenoura, cozida', grams: 50 },
-      { name: 'Abobrinha, italiana, refogada', grams: 50 },
-    ],
-  },
-  {
-    title: 'Pão Francês com Queijo e Café',
-    periods: ['manha', 'tarde'],
-    foods: [
-      { name: 'Pão, trigo, francês', grams: 50 },
-      { name: 'Queijo, minas, frescal', grams: 30 },
-      { name: 'Café, infusão 10%', grams: 100 },
-    ],
-  },
-  {
-    title: 'Músculo Cozido com Batata e Legumes',
-    periods: ['noite'],
-    foods: [
-      { name: 'Carne, bovina, músculo, sem gordura, cozido', grams: 100 },
-      { name: 'Batata, inglesa, cozida', grams: 100 },
-      { name: 'Cenoura, cozida', grams: 50 },
-      { name: 'Chuchu, cozido', grams: 50 },
     ],
   },
 ];

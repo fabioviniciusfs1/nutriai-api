@@ -271,28 +271,13 @@ describe('perfil e pesos', () => {
 });
 
 describe('plano alimentar', () => {
-  it('mantém o total do dia ao criar refeição e acrescentar alimento', async () => {
+  it('mantém o total do dia ao acrescentar alimento', async () => {
     const { http } = await newUser();
     const today = (await http('get', '/plan/today').expect(200))
       .body as TodayPlan;
     expect(today.meals.map((meal) => meal.totals.kcal)).toEqual([
       348, 399, 399,
     ]);
-    expect(today.canCreateMeal).toBe(true);
-
-    const preview = await http('post', '/plan/meal-preview')
-      .send({ title: 'Lanche', time: '16:00' })
-      .expect(200);
-    const created = (
-      await http('post', '/plan/meals')
-        .send({ title: 'Lanche', time: '16:00' })
-        .expect(200)
-    ).body as TodayPlan;
-    expect(kcal(created)).toBe(preview.body.dayKcal);
-    expect(kcal(created)).toBeLessThanOrEqual(kcal(today));
-    expect(created.meals.find((meal) => meal.title === 'Lanche')?.id).toBe(
-      1001,
-    );
 
     const search = await http(
       'get',
@@ -304,7 +289,7 @@ describe('plano alimentar', () => {
         .send({ foodName: 'Banana, prata, crua' })
         .expect(200)
     ).body as TodayPlan;
-    expect(kcal(added)).toBeLessThanOrEqual(kcal(created));
+    expect(kcal(added)).toBeLessThanOrEqual(kcal(today));
     const extra = added.meals[0].foods.find((food) => food.extraId !== null)!;
     expect(extra.name).toBe('Banana, prata, crua');
 
@@ -315,49 +300,24 @@ describe('plano alimentar', () => {
       true,
     );
 
-    await http('put', '/plan/meals/1001/time')
-      .send({ time: '21:30' })
-      .expect(200);
+    await http('put', '/plan/meals/1/time').send({ time: '09:30' }).expect(200);
     await http('put', '/plan/meals/1/time')
       .send({ time: '25:00' })
       .expect(400, { error: 'Informe o horário no formato HH:MM.' });
   });
 
-  it('remove refeições (redistribuir só hoje, não fazer nada permanente)', async () => {
+  it('não cria nem remove refeição avulsa (as refeições vêm da rotina)', async () => {
     const { http } = await newUser();
-    const options = await http('get', '/plan/meals/1/removal-options').expect(
-      200,
-    );
-    expect(
-      options.body.redistribution.map(
-        (change: { mealId: number }) => change.mealId,
-      ),
-    ).toEqual([2, 3]);
-    expect(options.body.suggestion).toEqual({
-      title: expect.any(String),
-      kcal: expect.any(Number),
-    });
-
-    const redistributed = (
-      await http('post', '/plan/meals/1/removal')
-        .send({ option: 'redistribute' })
-        .expect(200)
-    ).body as TodayPlan;
-    expect(redistributed.meals.map((meal) => meal.id)).toEqual([2, 3]);
-    expect(kcal(redistributed)).toBeLessThanOrEqual(1146);
-
-    const nothing = (
-      await http('post', '/plan/meals/3/removal')
-        .send({ option: 'nothing' })
-        .expect(200)
-    ).body as TodayPlan;
-    expect(nothing.meals.map((meal) => meal.id)).toEqual([2]);
-    await http('post', '/plan/meals/2/removal')
-      .send({ option: 'redistribute' })
-      .expect(400);
-    await http('get', '/plan/meals/99/removal-options').expect(404, {
-      error: 'Refeição não encontrada.',
-    });
+    await http('get', '/plan/meals/1/removal-options').expect(404);
+    await http('post', '/plan/meals/1/removal')
+      .send({ option: 'nothing' })
+      .expect(404);
+    await http('post', '/plan/meals')
+      .send({ title: 'Lanche', time: '16:00' })
+      .expect(404);
+    await http('put', '/plan/meals/99/time')
+      .send({ time: '09:00' })
+      .expect(404, { error: 'Refeição não encontrada.' });
   });
 
   it('troca alimentos e lista/libera restrições', async () => {
@@ -455,73 +415,7 @@ describe('plano alimentar', () => {
   });
 });
 
-describe('refeição composta pelo assistente', () => {
-  it('a prévia traz os alimentos do Claude e o criar usa a mesma sugestão', async () => {
-    create.mockReset();
-    const { http } = await newUser();
-    await http('put', '/me/profile').send(PROFILE).expect(200);
-    await http('put', '/me/routine')
-      .send({ ...ROUTINE, meals: ['cafe-da-manha', 'almoco', 'jantar'] })
-      .expect(200);
-    await personalizationIdle();
-    create.mockReset();
-
-    create.mockResolvedValueOnce({
-      stop_reason: 'end_turn',
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            title: 'Omelete com Salada',
-            foods: [
-              {
-                name: 'Ovo, de galinha, inteiro, cozido/10minutos',
-                grams: 100,
-              },
-              { name: 'Queijo, minas, frescal', grams: 30 },
-              { name: 'Alface, crespa, crua', grams: 40 },
-              { name: 'Pizza de calabresa', grams: 200 },
-            ],
-          }),
-        },
-      ],
-    });
-    const preview = await http('post', '/plan/meal-preview')
-      .send({ title: 'Jantar leve', time: '21:00' })
-      .expect(200);
-    expect(preview.body.suggestion).toBe('Omelete com Salada');
-    // O alimento inventado (fora da TACO) é descartado.
-    expect(
-      preview.body.foods.map((food: { name: string }) => food.name),
-    ).toEqual([
-      'Ovo, de galinha, inteiro, cozido/10minutos',
-      'Queijo, minas, frescal',
-      'Alface, crespa, crua',
-    ]);
-
-    const params = create.mock.calls[0][0];
-    expect(params.model).toBe('claude-haiku-4-5');
-    expect(params.output_config.format.type).toBe('json_schema');
-    expect(params.system[1].text).toContain('Arroz, integral, cozido |');
-    expect(params.messages[0].content).toContain('"Jantar leve", às 21:00');
-
-    const created = (
-      await http('post', '/plan/meals')
-        .send({ title: 'Jantar leve', time: '21:00' })
-        .expect(200)
-    ).body as TodayPlan;
-    // Usou a sugestão guardada da prévia: nenhuma chamada nova.
-    expect(create).toHaveBeenCalledTimes(1);
-    const meal = created.meals.find((item) => item.title === 'Jantar leve')!;
-    expect(meal.foods.map((food) => [food.name, food.grams])).toEqual(
-      preview.body.foods.map((food: { name: string; grams: number }) => [
-        food.name,
-        food.grams,
-      ]),
-    );
-    expect(Math.abs(kcal(created) - 1660)).toBeLessThanOrEqual(20);
-  });
-
+describe('substitutos do assistente', () => {
   it('os substitutos vêm do Claude, conferidos no catálogo, e a troca aceita outro grupo', async () => {
     create.mockReset();
     const { http } = await newUser();
@@ -580,15 +474,15 @@ describe('refeição composta pelo assistente', () => {
     create.mockReset();
   });
 
-  it('se o Claude falhar, usa a lista fixa de sugestões', async () => {
+  it('se o Claude falhar, usa os substitutos do mesmo grupo', async () => {
     create.mockReset();
     create.mockRejectedValue(new Error('indisponível'));
     const { http } = await newUser();
-    const preview = await http('post', '/plan/meal-preview')
-      .send({ title: 'Lanche', time: '16:00' })
-      .expect(200);
-    expect(preview.body.suggestion).toEqual(expect.any(String));
-    expect(preview.body.foods.length).toBeGreaterThan(0);
+    const substitutes = await http(
+      'get',
+      `/plan/meals/2/substitutes?food=${encodeURIComponent('Arroz, integral, cozido')}`,
+    ).expect(200);
+    expect(substitutes.body.length).toBeGreaterThan(0);
     create.mockReset();
   });
 });

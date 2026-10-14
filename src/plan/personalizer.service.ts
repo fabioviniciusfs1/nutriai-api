@@ -116,7 +116,6 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
                   personalization: 'ready',
                   // O plano novo começa limpo; restrições e trocas gerais ficam.
                   planChanges: EMPTY_PLAN_CHANGES,
-                  dayPlan: null,
                   mealTimes: {},
                   mealFoodSwaps: {},
                 }

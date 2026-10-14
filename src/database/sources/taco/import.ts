@@ -8,7 +8,7 @@ import { TACO_SOURCE, tacoToCatalog } from './to-catalog.js';
 
 /**
  * Importa a planilha da TACO: grava `taco_alimentos`, atualiza o catálogo do app (`foods` com
- * `source = 'taco'`) e refaz a semente (plano base, sugestões e nutrientes), tudo numa transação.
+ * `source = 'taco'`) e refaz a semente (plano base e nutrientes), tudo numa transação.
  */
 export async function importTaco(dataSource: DataSource, file: string) {
   const { foods, warnings } = parseTaco(readOds(await readFile(file)));

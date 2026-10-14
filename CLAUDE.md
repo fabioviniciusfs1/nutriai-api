@@ -15,7 +15,7 @@ login com Google (OAuth + Google Health API) e chat com Claude (API da Anthropic
 cp .env.example .env   # e preencha JWT_SECRET, TOKEN_ENCRYPTION_KEY, Google e Anthropic
 docker compose up -d   # Postgres na porta 5433 (bancos nutriai e nutriai_test)
 npm run db:import-taco -- data/taco/tabela-taco.ods   # catálogo (TACO) + semente; reinicie a API depois
-npm run db:seed        # só a semente (plano base, sugestões, nutrientes); exige a TACO importada
+npm run db:seed        # só a semente (plano base, nutrientes); exige a TACO importada
 npm run start:dev      # servidor em watch mode (porta: env PORT; o .env.example usa 3001)
 npm run build          # nest build → dist/
 npm run lint           # oxlint --type-aware em src/ e test/
@@ -24,7 +24,7 @@ npm test               # testes unitários (vitest, arquivos *.spec.ts)
 npm run test:e2e       # testes e2e contra o banco nutriai_test (zera o schema a cada execução)
 npm run db:migrate     # aplica migrations (db:revert desfaz a última); rodam do build em dist/
 npx vitest run src/plan/engine/planner.spec.ts   # um arquivo
-npx vitest run -t "redistribuir"                  # por nome do teste
+npx vitest run -t "não gosto"                     # por nome do teste
 ```
 
 ## Particularidades do setup
@@ -48,7 +48,7 @@ npx vitest run -t "redistribuir"                  # por nome do teste
 - O catálogo do app (`foods`, o que o engine usa) é derivado da fonte por `taco/to-catalog.ts`: grupo do app
   pela categoria da TACO (faixa de id), micronutrientes com os ids de `nutrient_defs`. Alimentos sem energia
   ficam de fora (591 de 597). Nova fonte = nova pasta em `sources/` com tabela própria e `foods.source` próprio.
-- Plano base e sugestões (`src/database/seed-data.ts`) listam só `{ name, grams }` com nomes exatos do
+- O plano base (`src/database/seed-data.ts`) lista só `{ name, grams }` com nomes exatos do
   catálogo; o seed calcula os nutrientes (`seed-plan.ts`). O `CatalogService` guarda o catálogo em memória:
   depois de importar, reinicie a API.
 - Os testes do engine usam um catálogo fixo (`src/plan/engine/test-catalog.ts`, os dados do mock antigo).
@@ -71,10 +71,11 @@ npx vitest run -t "redistribuir"                  # por nome do teste
 - Plano inicial: as refeições base cujo `slot` (`base_meals.slot`, uma por refeição do dia) está em
   `routine.meals`, e todas as
   porções multiplicadas pelo `goalFactor` do `Planner` (meta calórica ÷ kcal do plano inicial, ajustado para o
-  total arredondado ficar o mais perto da meta). Alimentos acrescentados e refeições criadas são guardados sem
-  esse fator; ele é recalculado a cada requisição pelo perfil e pela rotina (`PlanService.plannerOptions`).
-  Com meta, criar refeição leva o dia de volta para a meta (a nova fica com `meta ÷ (n + 1)`, as outras se
-  ajustam e podem aumentar); as demais ações nunca aumentam o total.
+  total arredondado ficar o mais perto da meta). Alimentos acrescentados são guardados sem esse fator; ele é
+  recalculado a cada requisição pelo perfil e pela rotina (`PlanService.plannerOptions`). Nenhuma ação aumenta
+  o total do dia.
+- Não há rota para criar nem remover refeição: as refeições do dia são as de `routine.meals`. O que o usuário
+  muda no plano é permanente (`plan_states`): horários, alimentos acrescentados, trocas e fatores de porção.
 - Plano individual (`src/plan/personalizer.service.ts`): no primeiro `PUT /me/routine`, o Claude monta as refeições
   do plano base para o usuário em segundo plano (`composer/personal-plan.ts`, com o `CLAUDE_PLAN_MODEL`, Sonnet, e
   `fallbacks: 'default'` no endpoint beta), escolhendo o horário de cada uma dentro das janelas da rotina e
@@ -85,8 +86,8 @@ npx vitest run -t "redistribuir"                  # por nome do teste
   para refazer). Nos e2e, espere com `PlanPersonalizerService.whenIdle()` depois da primeira rotina (ele usa o
   mock do Claude).
 - Tipo de alimentação (`routine.diet`): `src/plan/engine/diet.ts` marca a origem animal de cada alimento
-  (`foods.animal`, pela categoria da TACO e por palavras do nome) e `allowedByDiet` filtra o plano individual,
-  as sugestões fixas, as refeições compostas e os substitutos.
+  (`foods.animal`, pela categoria da TACO e por palavras do nome) e `allowedByDiet` filtra o plano individual
+  e os substitutos.
 - `src/health/`: importa a atividade da Google Health API para `activity_days`: ao conectar o Google, nas
   rotas de nutrição/histórico quando a última vez foi há mais de 1 h, e todo dia de madrugada
   (`HealthSyncScheduler`: `HEALTH_SYNC_CRON`, padrão `0 3 * * *`, fuso `HEALTH_SYNC_TIMEZONE`; `off`
@@ -96,11 +97,9 @@ npx vitest run -t "redistribuir"                  # por nome do teste
 - `src/chat/`: Claude (`claude-haiku-4-5`, o mais barato) com o contexto do usuário; sem `ANTHROPIC_API_KEY` o chat responde 503.
   `CHAT_ENABLED=false` não registra o `ChatModule` (rotas `/chat/*` dão 404; o código e a tabela ficam); no front, o
   mesmo papel é do `NEXT_PUBLIC_CHAT_ENABLED` (em produção, `docker-compose.prod.yml` passa o `CHAT_ENABLED` para os dois).
-- `src/plan/composer/`: o Claude compõe as refeições novas (nome + alimentos do catálogo em JSON por schema);
-  `parseComposition` descarta nomes fora do catálogo e restritos, e o engine escala a porção. A prévia guarda a
-  sugestão (15 min, em memória) para o `POST /plan/meals` usar a mesma. Sem cliente ou com erro, volta para a
-  lista fixa (`meal_suggestions`). O cliente e o modelo (`CLAUDE_MODEL`) ficam em `src/ai/`.
-  Também sugere substitutos ao trocar alimento (`substitution.ts`): o Claude devolve nomes, `parseSubstitutes`
+- `src/plan/composer/`: os pedidos ao Claude com o catálogo no system (`composition.ts`: `catalogPrompt` e
+  `parseFoods`, que descarta nomes fora do catálogo, restritos e fora da dieta). O cliente e o modelo
+  (`CLAUDE_MODEL`) ficam em `src/ai/`. Sugere substitutos ao trocar alimento (`substitution.ts`): o Claude devolve nomes, `parseSubstitutes`
   fica só com os do catálogo (até 8, sem crus se o original não for cru); sem ele, os do mesmo grupo mais
   parecidos (`FoodCatalog.substituteOptions`). A troca aceita qualquer alimento do catálogo não restrito.
 - Lacuna conhecida: não há rota para marcar refeição feita (`/history/plans` conta todas como seguidas).

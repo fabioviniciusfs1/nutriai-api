@@ -4,12 +4,11 @@ import type { Repository } from 'typeorm';
 import {
   BaseMealEntity,
   FoodEntity,
-  MealSuggestionEntity,
   NutrientDefEntity,
 } from '../database/entities/index.js';
 import type { Catalog } from '../plan/engine/types.js';
 
-/** Catálogo fixo (alimentos, sugestões, plano base, nutrientes), lido do banco e guardado em memória. */
+/** Catálogo fixo (alimentos, plano base, nutrientes), lido do banco e guardado em memória. */
 @Injectable()
 export class CatalogService {
   private cached: Promise<{
@@ -21,8 +20,6 @@ export class CatalogService {
   constructor(
     @InjectRepository(FoodEntity)
     private readonly foods: Repository<FoodEntity>,
-    @InjectRepository(MealSuggestionEntity)
-    private readonly suggestions: Repository<MealSuggestionEntity>,
     @InjectRepository(BaseMealEntity)
     private readonly baseMeals: Repository<BaseMealEntity>,
     @InjectRepository(NutrientDefEntity)
@@ -31,9 +28,8 @@ export class CatalogService {
 
   private load() {
     this.cached ??= (async () => {
-      const [foods, suggestions, baseMeals, nutrients] = await Promise.all([
+      const [foods, baseMeals, nutrients] = await Promise.all([
         this.foods.find({ order: { name: 'ASC' } }),
-        this.suggestions.find({ order: { position: 'ASC' } }),
         this.baseMeals.find({ order: { id: 'ASC' } }),
         this.nutrients.find({ order: { position: 'ASC' } }),
       ]);
@@ -44,11 +40,6 @@ export class CatalogService {
             group,
             per100g,
             animal,
-          })),
-          suggestions: suggestions.map(({ title, periods, foods: items }) => ({
-            title,
-            periods,
-            foods: items,
           })),
           baseMeals: baseMeals.map(
             ({ id, title, time, foods: items, slot }) => ({
