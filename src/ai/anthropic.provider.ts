@@ -9,7 +9,7 @@ import { APP_CONFIG, type AppConfig } from '../config/app-config.js';
 export const ANTHROPIC_CLIENT = Symbol('ANTHROPIC_CLIENT');
 
 /** Modelo usado pelo chat e pelos substitutos (o mais barato, por escolha do usuário). */
-export const CLAUDE_MODEL = 'claude-haiku-4-5';
+export const CLAUDE_MODEL = 'claude-haiku-5-5';
 
 /** Modelo da montagem do plano individual: roda uma vez por usuário, então vale um modelo mais forte. */
 export const CLAUDE_PLAN_MODEL = 'claude-sonnet-5-5';

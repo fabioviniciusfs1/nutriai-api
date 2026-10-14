@@ -899,7 +899,7 @@ describe('chat', () => {
     });
 
     const params = create.mock.calls[0][0];
-    expect(params).toMatchObject({ model: 'claude-haiku-4-5' });
+    expect(params).toMatchObject({ model: 'claude-haiku-5-5' });
     expect(params.messages).toEqual([
       { role: 'user', content: 'Quantas calorias hoje?' },
     ]);
