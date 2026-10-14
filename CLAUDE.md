@@ -80,8 +80,10 @@ npx vitest run -t "não gosto"                     # por nome do teste
   do plano base para o usuário em segundo plano (`composer/personal-plan.ts`, com o `CLAUDE_PLAN_MODEL`, Sonnet, e
   `fallbacks: 'default'` no endpoint beta), escolhendo o horário de cada uma dentro das janelas da rotina e
   distribuindo as calorias por ela; ficam em `plan_states.personal_meals` (id da refeição base → título,
-  alimentos e horário) e o `Planner` usa no lugar das padrão. Horário fora das janelas, repetido ou ilegível:
-  `spreadMealTimes` espalha todas pelas janelas. Estado em `plan_states.personalization` (`pending` antigo vira
+  alimentos e horário) e o `Planner` usa no lugar das padrão. No máximo 6 h entre uma refeição e a seguinte, ou até o
+  início da próxima janela se 6 h depois não pode comer (`nextMealDeadline`). Horário fora das janelas, repetido,
+  ilegível ou passando desse limite: `spreadMealTimes` espalha todas pelas janelas e `fitFastingLimit` adianta
+  as que passam do limite. Estado em `plan_states.personalization` (`pending` antigo vira
   `failed`); `POST /plan/personalize` monta de novo (depois de uma falha ou quando o usuário muda a rotina e pede
   para refazer). Nos e2e, espere com `PlanPersonalizerService.whenIdle()` depois da primeira rotina (ele usa o
   mock do Claude).

@@ -23,7 +23,9 @@ Regras:
   horário e ao objetivo do usuário. O dia deve ser variado: não repita o alimento principal entre refeições.
 - Escolha o horário de cada refeição ("time", no formato HH:MM, com minutos múltiplos de 5) dentro dos horários
   em que o usuário pode comer, em ordem ao longo do dia, sem repetir horário e, quando esses horários
-  permitirem, com pelo menos 2 horas entre uma refeição e outra. Cada id é a refeição indicada no pedido (café
+  permitirem, com pelo menos 2 horas entre uma refeição e outra. Entre uma refeição e a seguinte, no máximo 6
+  horas; se 6 horas depois de uma refeição o usuário não puder comer, a próxima fica no início do próximo horário
+  em que ele pode comer. Cada id é a refeição indicada no pedido (café
   da manhã, lanche, almoço, jantar, ceia): monte um prato próprio dela, no horário que combine com ela.
 - Distribua as calorias do dia pela rotina: refeições maiores no período em que o usuário disse sentir mais fome
   e menores no período em que disse sentir menos. Se ele não tem um período com mais ou menos fome, mantenha
@@ -165,11 +167,68 @@ export function spreadMealTimes(
   });
 }
 
+/** No máximo 6 horas entre uma refeição e a seguinte (o sono da noite não conta). */
+export const MAX_FASTING_MINUTES = 6 * 60;
+
+/**
+ * Até quando (em minutos do dia) deve vir a refeição seguinte a uma às `time`: 6 horas depois, se nesse horário
+ * o usuário pode comer; senão, o início da primeira janela depois disso (as janelas não permitem antes).
+ * `null` se não há janela depois (não haveria onde pôr outra refeição).
+ */
+export function nextMealDeadline(
+  time: string,
+  windows: EatingWindow[],
+): number | null {
+  const limit = minutes(time) + MAX_FASTING_MINUTES;
+  const spans = windows.map(({ start, end }) => ({
+    start: minutes(start),
+    end: minutes(end),
+  }));
+  if (spans.some(({ start, end }) => start <= limit && limit <= end))
+    return limit;
+  const later = spans
+    .filter(({ start }) => start > limit)
+    .map(({ start }) => start);
+  return later.length > 0 ? Math.min(...later) : null;
+}
+
+/** Cada refeição (na ordem dos horários) fica até o prazo da anterior (`nextMealDeadline`). */
+export function withinFastingLimit(
+  times: string[],
+  windows: EatingWindow[],
+): boolean {
+  const sorted = [...times].sort();
+  return sorted.every((time, index) => {
+    if (index === 0) return true;
+    const deadline = nextMealDeadline(sorted[index - 1], windows);
+    return deadline === null || minutes(time) <= deadline;
+  });
+}
+
+/**
+ * Puxa para mais cedo, na ordem, cada horário que passa do prazo da refeição anterior (o prazo sempre cai numa
+ * janela). Só adianta horários e nunca para antes do anterior: a ordem e os horários distintos se mantêm.
+ */
+export function fitFastingLimit(
+  times: string[],
+  windows: EatingWindow[],
+): string[] {
+  const result = [...times];
+  for (let index = 1; index < result.length; index++) {
+    const deadline = nextMealDeadline(result[index - 1], windows);
+    if (deadline !== null && minutes(result[index]) > deadline)
+      result[index] = timeOf(deadline);
+  }
+  return result;
+}
+
 /**
  * Lê a resposta do assistente e devolve as refeições pedidas (`ids`), cada uma na porção dele com os nutrientes
  * do catálogo. Alimentos fora do catálogo, restritos ou fora do tipo de alimentação são descartados; `null` se
  * alguma refeição pedida não vier ou ficar sem alimentos. Se algum horário vier inválido, repetido ou fora das
- * `windows`, todas ficam com horários espalhados pelas janelas, na ordem de `ids` (a do dia).
+ * `windows`, ou se passar de 6 horas entre uma refeição e a seguinte quando as janelas permitem menos
+ * (`withinFastingLimit`), todas ficam com horários espalhados pelas janelas, na ordem de `ids` (a do dia), sem
+ * passar desse limite.
  */
 export function parsePersonalPlan(
   text: string,
@@ -211,9 +270,13 @@ export function parsePersonalPlan(
       (time) =>
         TIME.test(time) &&
         windows.some(({ start, end }) => start <= time && time <= end),
-    );
+    ) &&
+    withinFastingLimit(Object.values(times), windows);
   if (!valid) {
-    const spread = spreadMealTimes(windows, ids.length);
+    const spread = fitFastingLimit(
+      spreadMealTimes(windows, ids.length),
+      windows,
+    );
     ids.forEach((id, index) => (times[id] = spread[index]));
   }
   for (const id of ids) result[id].time = times[id];

@@ -291,8 +291,12 @@ O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por h
 `routine.meals` (mesmos ids; cada uma no seu papel: café da manhã, lanche, almoço…), com o perfil, as metas do dia, o tipo de alimentação, os restritos e a
 rotina. Ele escolhe o **horário** de cada refeição dentro de `eatingWindows` e distribui as calorias pela rotina
 (refeições maiores no período de mais fome, menores no de menos, uma refeição perto do treino, leve perto de
-dormir). Se algum horário vier fora das janelas, repetido ou ilegível, o backend espalha as refeições por igual
-pelo tempo das janelas (em passos de 5 minutos), na ordem do dia. Só alimentos do catálogo
+dormir). Entre uma refeição e a seguinte, **no máximo 6 horas** (o sono da noite não conta), salvo quando as
+janelas não permitem: se 6 horas depois de uma refeição o usuário não pode comer, a próxima vem no início da
+próxima janela (ex.: janelas 12:00–13:00 e 19:00–20:00, almoço às 12:00 → jantar até as 19:00). Se algum
+horário vier fora das janelas, repetido, ilegível ou passar desse limite, o backend espalha as refeições por
+igual pelo tempo das janelas (em passos de 5 minutos), na ordem do dia, e adianta as que passariam do limite.
+Só alimentos do catálogo
 entram; os restritos e os de fora da dieta são descartados. Quando fica pronto, as mudanças feitas no plano
 (inclusive horários escolhidos pelo usuário) são zeradas; as restrições e trocas gerais ficam. Refeição base
 sem versão do assistente (ex.: o usuário marcou mais uma refeição depois, sem refazer) continua a padrão.
