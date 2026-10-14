@@ -92,6 +92,8 @@ export function goalFactor(meals: PlanFood[][], goal: number | null): number {
 export const MEAL_NOT_FOUND = 'Refeição não encontrada.';
 /** Quantos substitutos oferecer ao trocar um alimento. */
 export const MAX_SUBSTITUTES = 8;
+/** Quantos alimentos a pesquisa do diálogo de troca devolve. */
+export const MAX_SEARCH_SUBSTITUTES = 20;
 export const FOOD_NOT_FOUND = 'Alimento não encontrado.';
 
 export class Planner {
@@ -397,6 +399,33 @@ export class Planner {
           this.foods.substitute(name, foodName, food.kcal, feedback) ?? [],
       )
       .slice(0, MAX_SUBSTITUTES);
+  }
+
+  /**
+   * Pesquisa do diálogo de troca, para quem já sabe o que quer comer: alimentos cujo nome contém `query` (ou
+   * os mais parecidos, se nenhum), com as mesmas calorias que o alimento tem na refeição, sem o próprio, sem
+   * restritos e sem os de fora do tipo de alimentação. No máximo `MAX_SEARCH_SUBSTITUTES`.
+   */
+  searchSubstitutes(
+    mealId: number,
+    foodName: string,
+    query: string,
+  ): PlanFood[] {
+    const food = this.mealFood(mealId, foodName);
+    const feedback = this.state.foodFeedback;
+    return this.foods
+      .search(query, feedback)
+      .candidates.filter((candidate) => this.allowed(candidate.name))
+      .flatMap(
+        (candidate) =>
+          this.foods.substitute(
+            candidate.name,
+            foodName,
+            food.kcal,
+            feedback,
+          ) ?? [],
+      )
+      .slice(0, MAX_SEARCH_SUBSTITUTES);
   }
 
   /**

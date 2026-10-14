@@ -243,6 +243,28 @@ describe('Planner', () => {
       ).toEqual(['Banana-prata']);
     });
 
+    it('pesquisa: por parte do nome, sem acento, com as mesmas calorias, sem o próprio e sem restritos', () => {
+      const found = planner().searchSubstitutes(2, 'Guacamole', 'BANANA');
+      expect(found.map((food) => food.name)).toEqual(['Banana-prata']);
+      expect(Math.abs(found[0].kcal - 65)).toBeLessThanOrEqual(3);
+
+      expect(
+        planner()
+          .searchSubstitutes(2, 'Guacamole', 'guaca')
+          .map((food) => food.name),
+      ).not.toContain('Guacamole');
+      const state = planner().swapFood(1, 'Abacate', 'nao-posso', null);
+      expect(
+        planner(state)
+          .searchSubstitutes(2, 'Guacamole', 'abacate')
+          .map((food) => food.name),
+      ).not.toContain('Abacate');
+      // Nenhum nome bate: os mais parecidos.
+      expect(
+        planner().searchSubstitutes(2, 'Guacamole', 'bananna').length,
+      ).toBeGreaterThan(0);
+    });
+
     it('com os nomes do assistente: na ordem dele, de qualquer grupo, só os válidos', () => {
       const state = planner().swapFood(1, 'Azeite de oliva', 'nao-quero', null);
       const options = planner(state).substitutes(2, 'Guacamole', [
@@ -373,6 +395,11 @@ describe('tipo de alimentação', () => {
         'Tilápia assada',
       ),
     ).toThrow(PlanRuleError);
+    expect(
+      vegetarian()
+        .searchSubstitutes(3, 'Salmão grelhado', 'frango')
+        .map((food) => food.name),
+    ).not.toContain('Peito de frango grelhado');
   });
 });
 

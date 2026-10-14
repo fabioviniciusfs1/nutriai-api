@@ -496,6 +496,22 @@ describe('substitutos do assistente', () => {
     create.mockReset();
   });
 
+  it('a pesquisa usa só o catálogo, sem o Claude', async () => {
+    create.mockReset();
+    const { http } = await newUser();
+    const found = (
+      await http(
+        'get',
+        `/plan/meals/2/substitutes?food=${encodeURIComponent('Arroz, integral, cozido')}&q=banana`,
+      ).expect(200)
+    ).body as PlanMeal['foods'];
+    expect(found.length).toBeGreaterThan(0);
+    expect(
+      found.every((food) => food.name.toLowerCase().includes('banana')),
+    ).toBe(true);
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it('se o Claude falhar, usa os substitutos do mesmo grupo', async () => {
     create.mockReset();
     create.mockRejectedValue(new Error('indisponível'));

@@ -380,12 +380,17 @@ com as **mesmas calorias** do alimento como aparece na refeição, sem o própri
   primeiro os da mesma família (mesmo começo do nome, ex. "Arroz, …"), sem preferir os crus, e pela proporção
   de proteína, gordura e carboidrato.
 - Alimentos fora do tipo de alimentação do perfil nunca entram (nem são aceitos no `POST /swaps`).
-- Lista vazia: não há substitutos (o alimento sai sem substituto).
+- Lista vazia: não há substitutos (o usuário ainda pode escolher "Sem substituto").
 - **"Ver mais"**: a mesma rota com um `exclude` para cada nome já mostrado
   (`?food=Guacamole&exclude=Abacate&exclude=Azeite%20de%20oliva`; um parâmetro por nome, porque os nomes têm
   vírgula) devolve até 8 opções **novas**, sem nenhum dos excluídos. Lista vazia = não há mais opções. Vale
   no máximo 64 nomes em `exclude` (o resto é ignorado), então o front para de oferecer o "Ver mais" com 64
   opções na tela.
+- **Pesquisa** (quem já sabe o que quer comer): `?food=Guacamole&q=banana` devolve, sem chamar o assistente, até
+  **20** alimentos do catálogo cujo nome contém o texto (sem diferenciar maiúsculas, acentos e pontuação; se
+  nenhum bate, os mais parecidos), de **qualquer grupo**, com as mesmas calorias, sem o próprio, sem os
+  restritos e sem os de fora do tipo de alimentação. O diálogo de troca abre só com a pesquisa e o card "Sem
+  substituto"; as sugestões vêm quando o usuário clica em "Sugerir".
 
 `POST /plan/meals/{id}/swaps` com:
 

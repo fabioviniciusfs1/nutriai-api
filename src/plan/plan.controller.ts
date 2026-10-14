@@ -116,8 +116,15 @@ export class PlanController {
     @Param('id', MealId()) id: number,
     @Query('food') food: string | undefined,
     @Query('exclude') exclude: string | string[] | undefined,
+    @Query('q') q: string | undefined,
   ): Promise<PlanFood[]> {
     const foodName = requiredQuery(food, 'Informe o alimento.');
+    // Pesquisa de quem já sabe o que quer comer: só o catálogo, sem o assistente.
+    const query = typeof q === 'string' ? q.trim() : '';
+    if (query)
+      return this.plan.read(userId, clock, (planner) =>
+        planner.searchSubstitutes(id, foodName, query),
+      );
     // "Ver mais": os nomes já mostrados, um `exclude` por nome (os nomes da TACO têm vírgula).
     const shown = [exclude ?? []]
       .flat()
