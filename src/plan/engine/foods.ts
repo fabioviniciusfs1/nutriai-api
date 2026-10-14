@@ -1,5 +1,5 @@
 // Porções, trocas e busca de alimentos (porte de `reference/food-substitution.ts` e `AddFoodDialog.tsx`).
-// - "Não gosto" e "Não tenho": troca permanente em todas as refeições.
+// - "Não gosto", "Não tenho" e "Não posso": troca permanente em todas as refeições.
 // - "Não quero": troca permanente só na refeição marcada.
 // O substituto entra com as mesmas calorias. Liberar o alimento não desfaz trocas já feitas.
 import type { FoodFeedback } from '../../contract.js';

@@ -25,7 +25,7 @@ export class PlanStateEntity {
   @Column('jsonb', { name: 'food_feedback', default: {} })
   foodFeedback: Record<string, FoodFeedback>;
 
-  /** Trocas de "Não gosto"/"Não tenho" em todas as refeições (nome → substituto; "" = sem substituto). */
+  /** Trocas de "Não gosto"/"Não tenho"/"Não posso" em todas as refeições (nome → substituto; "" = sem substituto). */
   @Column('jsonb', { name: 'food_substitutes', default: {} })
   foodSubstitutes: Record<string, string>;
 

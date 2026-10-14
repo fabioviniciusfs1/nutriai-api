@@ -391,7 +391,7 @@ com as **mesmas calorias** do alimento como aparece na refeição, sem o própri
 - `substitute: null` = o alimento sai sem substituto.
 - `substitute`: qualquer alimento do catálogo com calorias, que não seja o próprio nem esteja restrito
   (senão `400` "Esse substituto não está disponível para este alimento.").
-- `nao-gosto` / `nao-tenho`: troca **permanente em todas as refeições**, e o alimento fica restrito com essa
+- `nao-gosto` / `nao-tenho` / `nao-posso`: troca **permanente em todas as refeições**, e o alimento fica restrito com essa
   marcação.
 - `nao-quero`: troca **permanente só nesta refeição** (as outras continuam com ele), e o alimento fica
   restrito com `nao-quero` **só se ainda não tiver marcação**.

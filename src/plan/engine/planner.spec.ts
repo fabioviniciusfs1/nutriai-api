@@ -140,6 +140,16 @@ describe('Planner', () => {
   });
 
   describe('trocas', () => {
+    it('não posso troca em todas as refeições e marca o alimento', () => {
+      const state = planner().swapFood(1, 'Azeite de oliva', 'nao-posso', null);
+      const p = planner(state);
+      for (const id of [1, 3])
+        expect(p.meal(id).foods.map((food) => food.name)).not.toContain(
+          'Azeite de oliva',
+        );
+      expect(state.foodFeedback['Azeite de oliva']).toBe('nao-posso');
+    });
+
     it('não gosto troca em todas as refeições, com as mesmas calorias, seguindo a cadeia', () => {
       let state = planner().swapFood(2, 'Guacamole', 'nao-gosto', 'Abacate');
       // 65 kcal de Guacamole = 33 g de Abacate (as gramas são inteiras, então as kcal ficam próximas).

@@ -415,6 +415,28 @@ describe('plano alimentar', () => {
   });
 });
 
+describe('não posso', () => {
+  it('troca em todas as refeições e lista o alimento como restrito', async () => {
+    const { http } = await newUser();
+    const AZEITE = 'Azeite, de oliva, extra virgem';
+    const plan = (
+      await http('post', '/plan/meals/2/swaps')
+        .send({ foodName: AZEITE, reason: 'nao-posso', substitute: null })
+        .expect(200)
+    ).body as TodayPlan;
+    for (const meal of plan.meals)
+      expect(meal.foods.map((food) => food.name)).not.toContain(AZEITE);
+    const restricted = await http('get', '/foods/restricted').expect(200);
+    expect(restricted.body).toEqual([
+      expect.objectContaining({
+        name: AZEITE,
+        feedback: 'nao-posso',
+        onlyInMeal: false,
+      }),
+    ]);
+  });
+});
+
 describe('substitutos do assistente', () => {
   it('os substitutos vêm do Claude, conferidos no catálogo, e a troca aceita outro grupo', async () => {
     create.mockReset();

@@ -11,8 +11,8 @@ export type Goal = 'perder' | 'manter' | 'ganhar';
 /** Tipo de alimentação: o que a pessoa não come (o backend tira esses alimentos do que o assistente sugere). */
 export type Diet = 'onivora' | 'pescetariana' | 'vegetariana' | 'vegana';
 
-/** Motivo de trocar um alimento: "Não gosto", "Não quero", "Não tenho". */
-export type FoodFeedback = 'nao-gosto' | 'nao-quero' | 'nao-tenho';
+/** Motivo de trocar um alimento: "Não gosto", "Não quero", "Não tenho", "Não posso". */
+export type FoodFeedback = 'nao-gosto' | 'nao-quero' | 'nao-tenho' | 'nao-posso';
 
 /** Grupo do alimento no catálogo; substitutos são sempre do mesmo grupo. */
 export type FoodGroup =

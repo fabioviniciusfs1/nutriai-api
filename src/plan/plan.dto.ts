@@ -27,7 +27,7 @@ export class SwapDto {
   @MinLength(1, { message: 'Escolha o alimento.' })
   foodName: string;
 
-  @IsIn(['nao-gosto', 'nao-quero', 'nao-tenho'], {
+  @IsIn(['nao-gosto', 'nao-quero', 'nao-tenho', 'nao-posso'], {
     message: 'Escolha o motivo da troca.',
   })
   reason: FoodFeedback;

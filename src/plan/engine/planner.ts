@@ -135,7 +135,7 @@ export class Planner {
     return this.baseMeals
       .map((meal) => {
         const scale = changes.scales[meal.id] ?? 1;
-        // As trocas da refeição ("Não quero") valem por cima das gerais ("Não gosto"/"Não tenho").
+        // As trocas da refeição ("Não quero") valem por cima das gerais ("Não gosto"/"Não tenho"/"Não posso").
         const swaps = { ...foodSubstitutes, ...mealFoodSwaps[meal.id] };
         const planFoods = this.foods
           .resolve(meal.foods, swaps)
@@ -392,7 +392,7 @@ export class Planner {
   }
 
   /**
-   * "Não gosto" / "Não tenho": troca permanente em todas as refeições e o alimento fica restrito.
+   * "Não gosto" / "Não tenho" / "Não posso": troca permanente em todas as refeições e o alimento fica restrito.
    * "Não quero": troca permanente só nesta refeição; fica restrito só se ainda não tiver marcação.
    * `substitute` `null` = sai sem substituto.
    */
