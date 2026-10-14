@@ -12,7 +12,8 @@ export type Goal = 'perder' | 'manter' | 'ganhar';
 export type Diet = 'onivora' | 'pescetariana' | 'vegetariana' | 'vegana';
 
 /** Motivo de trocar um alimento: "Não gosto", "Não quero", "Não tenho", "Não posso". */
-export type FoodFeedback = 'nao-gosto' | 'nao-quero' | 'nao-tenho' | 'nao-posso';
+export type FoodFeedback =
+  'nao-gosto' | 'nao-quero' | 'nao-tenho' | 'nao-posso';
 
 /** Grupo do alimento no catálogo; substitutos são sempre do mesmo grupo. */
 export type FoodGroup =

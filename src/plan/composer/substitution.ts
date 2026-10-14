@@ -41,6 +41,8 @@ export type SubstituteRequest = {
   /** Alimentos restritos (não podem ser sugeridos). */
   restricted: string[];
   diet: Diet;
+  /** Substitutos já mostrados ao usuário ("Ver mais"): não podem se repetir. */
+  exclude: string[];
 };
 
 /** Pedido do usuário para o assistente (muda a cada chamada). */
@@ -55,6 +57,11 @@ export function substitutePrompt(request: SubstituteRequest): string {
     request.restricted.length > 0
       ? `Alimentos restritos (não sugira): ${request.restricted.join('; ')}.`
       : 'Alimentos restritos: nenhum.',
+    ...(request.exclude.length > 0
+      ? [
+          `Já oferecidos ao usuário (não repita): ${request.exclude.join('; ')}.`,
+        ]
+      : []),
   ].join('\n');
 }
 

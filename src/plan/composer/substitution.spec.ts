@@ -102,10 +102,27 @@ describe('substitutePrompt', () => {
       mealFoods: ['Arroz integral'],
       restricted: ['Abacate'],
       diet: 'onivora',
+      exclude: [],
     });
     expect(prompt).toContain('"Guacamole" (30 g)');
     expect(prompt).toContain('"Bowl de Frango", às 12:30 (tarde)');
     expect(prompt).toContain('Outros alimentos da refeição: Arroz integral.');
     expect(prompt).toContain('Alimentos restritos (não sugira): Abacate.');
+    expect(prompt).not.toContain('Já oferecidos');
+  });
+
+  it('no "Ver mais", lista os já oferecidos para não repetir', () => {
+    const prompt = substitutePrompt({
+      food: { name: 'Guacamole', grams: 30 },
+      mealTitle: 'Bowl de Frango',
+      time: '12:30',
+      mealFoods: [],
+      restricted: [],
+      diet: 'onivora',
+      exclude: ['Abacate', 'Azeite de oliva'],
+    });
+    expect(prompt).toContain(
+      'Já oferecidos ao usuário (não repita): Abacate; Azeite de oliva.',
+    );
   });
 });

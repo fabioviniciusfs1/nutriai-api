@@ -505,6 +505,24 @@ describe('substitutos do assistente', () => {
       `/plan/meals/2/substitutes?food=${encodeURIComponent('Arroz, integral, cozido')}`,
     ).expect(200);
     expect(substitutes.body.length).toBeGreaterThan(0);
+
+    // "Ver mais": um `exclude` por nome já mostrado; volta só opções novas, até acabarem.
+    const path = `/plan/meals/2/substitutes?food=${encodeURIComponent('Arroz, integral, cozido')}`;
+    let shown: string[] = substitutes.body.map(
+      (food: { name: string }) => food.name,
+    );
+    for (let page = 0; page < 20; page++) {
+      const exclude = shown
+        .map((name) => `&exclude=${encodeURIComponent(name)}`)
+        .join('');
+      const more = (await http('get', `${path}${exclude}`).expect(200))
+        .body as PlanMeal['foods'];
+      const names = more.map((food) => food.name);
+      expect(names.filter((name) => shown.includes(name))).toEqual([]);
+      if (names.length === 0) break;
+      shown = [...shown, ...names];
+    }
+    expect(shown.length).toBeGreaterThan(substitutes.body.length);
     create.mockReset();
   });
 });

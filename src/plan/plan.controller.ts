@@ -25,6 +25,9 @@ const MealId = () =>
     exceptionFactory: () => new NotFoundException(MEAL_NOT_FOUND),
   });
 
+/** Quantos nomes já mostrados o "Ver mais" pode mandar. */
+const MAX_EXCLUDED = 64;
+
 function requiredQuery(value: string | undefined, message: string) {
   if (!value?.trim()) throw new BadRequestException(message);
   return value.trim();
@@ -112,9 +115,17 @@ export class PlanController {
     @Clock() clock: UserClock,
     @Param('id', MealId()) id: number,
     @Query('food') food: string | undefined,
+    @Query('exclude') exclude: string | string[] | undefined,
   ): Promise<PlanFood[]> {
     const foodName = requiredQuery(food, 'Informe o alimento.');
-    return this.plan.substitutes(userId, clock, id, foodName);
+    // "Ver mais": os nomes já mostrados, um `exclude` por nome (os nomes da TACO têm vírgula).
+    const shown = [exclude ?? []]
+      .flat()
+      .filter((name) => typeof name === 'string')
+      .map((name) => name.trim())
+      .filter(Boolean)
+      .slice(0, MAX_EXCLUDED);
+    return this.plan.substitutes(userId, clock, id, foodName, shown);
   }
 
   @Post('meals/:id/swaps')

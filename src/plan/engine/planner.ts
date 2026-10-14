@@ -369,21 +369,29 @@ export class Planner {
   /**
    * Substitutos do alimento, com as mesmas calorias que ele tem na refeição, sem o próprio e sem os restritos.
    * `names` (sugeridos pelo assistente, na ordem dele): só os que existem no catálogo. Sem `names`: os do
-   * mesmo grupo mais parecidos em macronutrientes. No máximo `MAX_SUBSTITUTES`.
+   * mesmo grupo mais parecidos em macronutrientes. No máximo `MAX_SUBSTITUTES`, sem os de `exclude` (os já
+   * mostrados, no "Ver mais").
    */
-  substitutes(mealId: number, foodName: string, names?: string[]): PlanFood[] {
+  substitutes(
+    mealId: number,
+    foodName: string,
+    names?: string[],
+    exclude: string[] = [],
+  ): PlanFood[] {
     const food = this.mealFood(mealId, foodName);
     const feedback = this.state.foodFeedback;
+    const excluded = new Set(exclude);
+    const offered = (name: string) => this.allowed(name) && !excluded.has(name);
     if (!names)
       return this.foods.substituteOptions(
         foodName,
         food.kcal,
         feedback,
         MAX_SUBSTITUTES,
-        this.allowed,
+        offered,
       );
     return [...new Set(names)]
-      .filter(this.allowed)
+      .filter(offered)
       .flatMap(
         (name) =>
           this.foods.substitute(name, foodName, food.kcal, feedback) ?? [],

@@ -381,6 +381,11 @@ com as **mesmas calorias** do alimento como aparece na refeição, sem o própri
   de proteína, gordura e carboidrato.
 - Alimentos fora do tipo de alimentação do perfil nunca entram (nem são aceitos no `POST /swaps`).
 - Lista vazia: não há substitutos (o alimento sai sem substituto).
+- **"Ver mais"**: a mesma rota com um `exclude` para cada nome já mostrado
+  (`?food=Guacamole&exclude=Abacate&exclude=Azeite%20de%20oliva`; um parâmetro por nome, porque os nomes têm
+  vírgula) devolve até 8 opções **novas**, sem nenhum dos excluídos. Lista vazia = não há mais opções. Vale
+  no máximo 64 nomes em `exclude` (o resto é ignorado), então o front para de oferecer o "Ver mais" com 64
+  opções na tela.
 
 `POST /plan/meals/{id}/swaps` com:
 

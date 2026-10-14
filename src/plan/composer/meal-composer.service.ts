@@ -77,12 +77,14 @@ export class MealComposerService {
     });
     if (text === null) return null;
     const catalog = new FoodCatalog((await this.catalog.catalog()).foods);
+    const inDiet = dietFilter(catalog, request.diet);
+    const excluded = new Set(request.exclude);
     const names = parseSubstitutes(
       text,
       catalog,
       feedback,
       request.food.name,
-      dietFilter(catalog, request.diet),
+      (name) => inDiet(name) && !excluded.has(name),
     );
     if (names.length === 0) {
       this.logger.warn('Sugestão de substitutos sem alimentos do catálogo.');

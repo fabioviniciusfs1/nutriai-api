@@ -115,6 +115,7 @@ export class PlanService {
     clock: UserClock,
     mealId: number,
     foodName: string,
+    exclude: string[] = [],
   ): Promise<PlanFood[]> {
     const { routine } = await this.users.get(userId);
     const { request, feedback } = await this.read(userId, clock, (planner) => {
@@ -130,17 +131,18 @@ export class PlanService {
           .filter((name) => name !== foodName),
         restricted: Object.keys(planner.state.foodFeedback),
         diet: routine?.diet ?? 'onivora',
+        exclude,
       };
       return { request, feedback: planner.state.foodFeedback };
     });
     const names = await this.composer.suggestSubstitutes(request, feedback);
     return this.read(userId, clock, (planner) => {
       const suggested = names
-        ? planner.substitutes(mealId, foodName, names)
+        ? planner.substitutes(mealId, foodName, names, exclude)
         : [];
       return suggested.length > 0
         ? suggested
-        : planner.substitutes(mealId, foodName);
+        : planner.substitutes(mealId, foodName, undefined, exclude);
     });
   }
 

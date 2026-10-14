@@ -225,6 +225,24 @@ describe('Planner', () => {
       ]);
     });
 
+    it('"Ver mais": sem os já mostrados, com e sem os nomes do assistente', () => {
+      const shown = ['Abacate', 'Azeite de oliva'];
+      expect(
+        planner()
+          .substitutes(2, 'Guacamole', undefined, shown)
+          .map((food) => food.name),
+      ).toEqual([
+        'Mix de castanhas',
+        'Pasta de amendoim integral',
+        'Semente de chia',
+      ]);
+      expect(
+        planner()
+          .substitutes(2, 'Guacamole', ['Abacate', 'Banana-prata'], shown)
+          .map((food) => food.name),
+      ).toEqual(['Banana-prata']);
+    });
+
     it('com os nomes do assistente: na ordem dele, de qualquer grupo, só os válidos', () => {
       const state = planner().swapFood(1, 'Azeite de oliva', 'nao-quero', null);
       const options = planner(state).substitutes(2, 'Guacamole', [
