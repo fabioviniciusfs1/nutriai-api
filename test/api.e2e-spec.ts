@@ -28,6 +28,7 @@ const PROFILE = {
   heightCm: 165,
   activityLevel: 'moderado',
   goal: 'perder',
+  targetWeightKg: 60,
 };
 
 const ROUTINE = {
@@ -159,6 +160,80 @@ describe('perfil e pesos', () => {
     await http('post', '/profile/estimate')
       .send({ ...PROFILE, age: 10 })
       .expect(400, { error: 'A idade deve estar entre 14 e 100 anos.' });
+
+    const projection = await http('post', '/profile/projection')
+      .send({ ...PROFILE, targetWeightKg: 60 })
+      .expect(200);
+    expect(projection.body).toMatchObject({
+      months: 4.3,
+      weeklyChangeKg: -0.5,
+    });
+    await http('post', '/profile/projection')
+      .send({ ...PROFILE, targetWeightKg: 70 })
+      .expect(400, {
+        error: 'Para perder peso, o peso meta deve ser menor que o atual.',
+      });
+    await http('post', '/profile/projection')
+      .send({ ...PROFILE, targetWeightKg: null })
+      .expect(400, { error: 'Informe o peso meta.' });
+    await http('post', '/profile/projection')
+      .send({ ...PROFILE, targetWeightKg: 20 })
+      .expect(400, { error: 'O peso meta deve estar entre 30 e 300 kg.' });
+  });
+
+  it('salva o peso meta no perfil e deixa mudar depois do cadastro', async () => {
+    const { http, username } = await newUser();
+    await http('put', '/me/target-weight')
+      .send({ targetWeightKg: 60 })
+      .expect(400, { error: 'Preencha o perfil primeiro.' });
+    await http('put', '/me/profile')
+      .send({ ...PROFILE, targetWeightKg: undefined })
+      .expect(400, { error: 'Informe o peso meta.' });
+    await http('put', '/me/profile')
+      .send({ ...PROFILE, goal: 'manter', targetWeightKg: 60 })
+      .expect(400, {
+        error: 'Com o objetivo de manter o peso, não há peso meta.',
+      });
+
+    const saved = await http('put', '/me/profile')
+      .send({ ...PROFILE, targetWeightKg: 60 })
+      .expect(200);
+    expect((saved.body as Me).profile).toEqual({
+      ...PROFILE,
+      targetWeightKg: 60,
+    });
+    await http('put', '/me/routine').send(ROUTINE).expect(200);
+    await personalizationIdle();
+
+    const changed = await http('put', '/me/target-weight')
+      .send({ targetWeightKg: 62.5 })
+      .expect(200);
+    expect((changed.body as Me).profile?.targetWeightKg).toBe(62.5);
+    // As metas continuam as do perfil.
+    expect((changed.body as Me).targets?.calories).toBe(1660);
+    await http('put', '/me/target-weight')
+      .send({ targetWeightKg: 70 })
+      .expect(400, {
+        error: 'Para perder peso, o peso meta deve ser menor que o atual.',
+      });
+    await http('put', '/me/target-weight')
+      .send({ targetWeightKg: 400 })
+      .expect(400, { error: 'O peso meta deve estar entre 30 e 300 kg.' });
+
+    // Obrigatório para perder ou ganhar: não dá para tirar.
+    await http('put', '/me/target-weight')
+      .send({ targetWeightKg: null })
+      .expect(400, { error: 'Informe o peso meta.' });
+
+    // Perfis salvos antes do peso meta não têm o campo.
+    await app
+      .get(DataSource)
+      .query(
+        `UPDATE users SET profile = profile - 'targetWeightKg' WHERE username = $1`,
+        [username],
+      );
+    const me = await http('get', '/me').expect(200);
+    expect((me.body as Me).profile?.targetWeightKg).toBeNull();
   });
 
   it('salva a rotina depois do perfil e valida os horários', async () => {

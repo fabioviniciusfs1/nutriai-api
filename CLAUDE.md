@@ -62,8 +62,9 @@ npx vitest run -t "não gosto"                     # por nome do teste
   `food-substitution.ts`). `Planner` recebe o catálogo e o `PlanState` e devolve o novo estado ou uma prévia;
   `PlanService` carrega/salva o estado (lock da linha em `plan_states`) e grava a foto do dia (`day_logs`),
   que é a base de `/nutrition/today` e `/history/*`. Mude regras do plano no engine, com teste em `planner.spec.ts`.
-- Perfil e rotina (`src/users/`): o cadastro tem dois passos. `users.profile` só tem o que a meta usa (sexo,
-  idade, peso, altura, atividade, objetivo); `users.routine` (`PUT /me/routine`, exige o perfil) tem as janelas
+- Perfil e rotina (`src/users/`): o cadastro tem dois passos. `users.profile` tem o que a meta usa (sexo,
+  idade, peso, altura, atividade, objetivo) e o peso meta (`targetWeightKg`, o único campo que muda depois do
+  cadastro: `PUT /me/target-weight`; `projectWeight` em `src/targets/` faz a projeção pela regra de 7.700 kcal/kg); `users.routine` (`PUT /me/routine`, exige o perfil) tem as janelas
   para comer (sempre fora do sono e do treino), sono, início e fim do treino, períodos de mais e menos fome, as refeições que a pessoa faz (`meals`: café da
   manhã, lanche da manhã, almoço, lanche da tarde, jantar, ceia; pelo menos uma), dia da pesagem e tipo de
   alimentação. As regras entre os campos e as linhas de prompt ficam em `routine.ts` (`routineError`,

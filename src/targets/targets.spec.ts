@@ -1,5 +1,11 @@
 import type { Profile } from '../contract.js';
-import { calculateTargets, macroTargets, perKg } from './targets.js';
+import {
+  calculateTargets,
+  macroTargets,
+  perKg,
+  projectWeight,
+  targetWeightError,
+} from './targets.js';
 
 const ana: Profile = {
   sex: 'feminino',
@@ -8,6 +14,7 @@ const ana: Profile = {
   heightCm: 165,
   activityLevel: 'moderado',
   goal: 'perder',
+  targetWeightKg: null,
 };
 
 describe('calculateTargets', () => {
@@ -75,5 +82,114 @@ describe('perKg', () => {
   it('uma casa decimal', () => {
     expect(perKg(137, 68.5)).toBe(2);
     expect(perKg(81, 68.5)).toBe(1.2);
+  });
+});
+
+describe('projectWeight', () => {
+  it('perde ~7.700 kcal por kg com o déficit da meta', () => {
+    // 1660 − 2163 = −503 kcal/dia
+    expect(projectWeight({ ...ana, targetWeightKg: 60 })).toEqual({
+      months: 4.3,
+      weeklyChangeKg: -0.5,
+      points: [
+        { month: 0, weightKg: 68.5 },
+        { month: 1, weightKg: 66.5 },
+        { month: 2, weightKg: 64.5 },
+        { month: 3, weightKg: 62.5 },
+        { month: 4, weightKg: 60.5 },
+        { month: 4.3, weightKg: 60 },
+      ],
+    });
+  });
+
+  it('ganha com o superávit da meta', () => {
+    // 2460 − 2163 = +297 kcal/dia
+    expect(
+      projectWeight({ ...ana, goal: 'ganhar', targetWeightKg: 72 }),
+    ).toEqual({
+      months: 3,
+      weeklyChangeKg: 0.3,
+      points: [
+        { month: 0, weightKg: 68.5 },
+        { month: 1, weightKg: 69.7 },
+        { month: 2, weightKg: 70.8 },
+        { month: 3, weightKg: 72 },
+      ],
+    });
+  });
+
+  it('demora mais quando a meta sobe até o piso', () => {
+    // Gasto 1411, meta no piso de 1200: déficit de 211 kcal/dia.
+    const small: Profile = {
+      ...ana,
+      weightKg: 55,
+      heightCm: 150,
+      age: 60,
+      activityLevel: 'leve',
+    };
+    expect(calculateTargets(small)).toMatchObject({
+      tdee: 1411,
+      calories: 1200,
+      clampedToMinimum: true,
+    });
+    expect(projectWeight({ ...small, targetWeightKg: 50 })).toMatchObject({
+      months: 6,
+      weeklyChangeKg: -0.2,
+    });
+  });
+
+  it('exige o peso meta', () => {
+    expect(projectWeight(ana)).toBe('Informe o peso meta.');
+    expect(projectWeight({ ...ana, goal: 'manter' })).toBe(
+      'Com o objetivo de manter o peso, não há peso meta.',
+    );
+  });
+
+  it('recusa peso meta que não combina com o objetivo', () => {
+    expect(projectWeight({ ...ana, goal: 'manter', targetWeightKg: 60 })).toBe(
+      'Com o objetivo de manter o peso, não há peso meta.',
+    );
+    expect(projectWeight({ ...ana, targetWeightKg: 70 })).toBe(
+      'Para perder peso, o peso meta deve ser menor que o atual.',
+    );
+    expect(
+      projectWeight({ ...ana, goal: 'ganhar', targetWeightKg: 68.5 }),
+    ).toBe('Para ganhar peso, o peso meta deve ser maior que o atual.');
+    const floor: Profile = {
+      ...ana,
+      weightKg: 45,
+      heightCm: 150,
+      age: 60,
+      activityLevel: 'sedentario',
+    };
+    expect(projectWeight({ ...floor, targetWeightKg: 42 })).toMatch(
+      /meta mínima de calorias/,
+    );
+  });
+});
+
+describe('targetWeightError', () => {
+  it('exige meta para perder ou ganhar, e só nesses objetivos', () => {
+    expect(targetWeightError(ana)).toBe('Informe o peso meta.');
+    expect(targetWeightError({ ...ana, goal: 'ganhar' })).toBe(
+      'Informe o peso meta.',
+    );
+    expect(targetWeightError({ ...ana, goal: 'manter' })).toBeNull();
+    expect(targetWeightError({ ...ana, targetWeightKg: 60 })).toBeNull();
+    expect(
+      targetWeightError({ ...ana, goal: 'ganhar', targetWeightKg: 75 }),
+    ).toBeNull();
+  });
+
+  it('recusa meta com manter ou na direção contrária', () => {
+    expect(
+      targetWeightError({ ...ana, goal: 'manter', targetWeightKg: 60 }),
+    ).toBe('Com o objetivo de manter o peso, não há peso meta.');
+    expect(targetWeightError({ ...ana, targetWeightKg: 68.5 })).toBe(
+      'Para perder peso, o peso meta deve ser menor que o atual.',
+    );
+    expect(
+      targetWeightError({ ...ana, goal: 'ganhar', targetWeightKg: 60 }),
+    ).toBe('Para ganhar peso, o peso meta deve ser maior que o atual.');
   });
 });

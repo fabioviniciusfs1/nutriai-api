@@ -1,9 +1,17 @@
-import { Body, Controller, Get, HttpCode, Post, Put } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Post,
+  Put,
+} from '@nestjs/common';
 import { CurrentUser } from '../common/auth.decorators.js';
 import { Clock, type UserClock } from '../common/timezone.js';
-import type { Me, Targets } from '../contract.js';
-import { calculateTargets } from '../targets/targets.js';
-import { ProfileDto, toProfile } from './profile.dto.js';
+import type { Me, Targets, WeightProjection } from '../contract.js';
+import { calculateTargets, projectWeight } from '../targets/targets.js';
+import { ProfileDto, TargetWeightDto, toProfile } from './profile.dto.js';
 import { RoutineDto, toRoutine } from './routine.dto.js';
 import { UsersService } from './users.service.js';
 import { PlanPersonalizerService } from '../plan/personalizer.service.js';
@@ -29,6 +37,20 @@ export class UsersController {
     return this.users.updateProfile(userId, toProfile(body), clock);
   }
 
+  /** O peso meta pode mudar depois do cadastro (o resto do perfil, não). */
+  @Put('me/target-weight')
+  updateTargetWeight(
+    @CurrentUser() userId: string,
+    @Body() body: TargetWeightDto,
+    @Clock() clock: UserClock,
+  ): Promise<Me> {
+    return this.users.updateTargetWeight(
+      userId,
+      body.targetWeightKg ?? null,
+      clock,
+    );
+  }
+
   /** Na primeira vez que a rotina é salva, o assistente começa a montar o plano individual (em segundo plano). */
   @Put('me/routine')
   async updateRoutine(
@@ -47,5 +69,14 @@ export class UsersController {
   @HttpCode(200)
   estimate(@Body() body: ProfileDto): Targets {
     return calculateTargets(toProfile(body));
+  }
+
+  /** Em quanto tempo o perfil chega ao peso meta, sem salvar (o formulário mostra num gráfico). */
+  @Post('profile/projection')
+  @HttpCode(200)
+  projection(@Body() body: ProfileDto): WeightProjection {
+    const result = projectWeight(toProfile(body));
+    if (typeof result === 'string') throw new BadRequestException(result);
+    return result;
   }
 }

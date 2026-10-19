@@ -35,6 +35,8 @@ export type Profile = {
   heightCm: number;
   activityLevel: ActivityLevel;
   goal: Goal;
+  /** Peso meta (30–300 kg, uma casa decimal): obrigatório para perder ou ganhar; `null` com manter. Pode mudar depois do cadastro. */
+  targetWeightKg: number | null;
 };
 
 /** Período do dia: manhã até 10:59, tarde até 16:59, noite depois. */
@@ -96,6 +98,16 @@ export type Me = {
    * `canDisconnect` é `false` quando o Google é o único jeito de entrar (conta criada pelo Google).
    */
   google: { email: string; canDisconnect: boolean } | null;
+};
+
+/** Projeção do peso até `profile.targetWeightKg`, comendo a meta calórica. */
+export type WeightProjection = {
+  /** Meses até a meta, com uma casa decimal. */
+  months: number;
+  /** Variação por semana (kg, uma casa decimal; negativa ao perder). */
+  weeklyChangeKg: number;
+  /** Um ponto por mês desde o mês 0 (peso atual); o último é o peso meta, no mês (fracionário) em que chega. */
+  points: { month: number; weightKg: number }[];
 };
 
 export type AuthResponse = { token: string };

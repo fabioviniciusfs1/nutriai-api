@@ -48,7 +48,10 @@ export function userContext(input: {
   if (profile && targets) {
     lines.push(
       `Perfil: sexo ${SEX[profile.sex]}, ${profile.age} anos, ${profile.weightKg} kg, ${profile.heightCm} cm, ` +
-        `atividade ${profile.activityLevel}, objetivo ${GOAL[profile.goal]}.`,
+        `atividade ${profile.activityLevel}, objetivo ${GOAL[profile.goal]}` +
+        (profile.targetWeightKg
+          ? `, peso meta ${profile.targetWeightKg} kg.`
+          : '.'),
       `Metas: ${targets.calories} kcal por dia (gasto estimado ${targets.tdee} kcal), água ${targets.waterLiters} L.`,
     );
     if (routine) {

@@ -1,7 +1,26 @@
-import { IsIn, IsInt, IsNumber, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsNumber, IsOptional, Max, Min } from 'class-validator';
 import type { ActivityLevel, Goal, Profile, Sex } from '../contract.js';
 
-/** Perfil completo (corpo de `PUT /me/profile` e `POST /profile/estimate`). */
+/** Peso meta: opcional (ausente ou `null` = sem meta). */
+function TargetWeightKg(): PropertyDecorator {
+  return (target, key) => {
+    IsOptional()(target, key);
+    IsNumber(
+      { maxDecimalPlaces: 1 },
+      { message: 'O peso meta deve ter no máximo uma casa decimal.' },
+    )(target, key);
+    Min(30, { message: 'O peso meta deve estar entre 30 e 300 kg.' })(
+      target,
+      key,
+    );
+    Max(300, { message: 'O peso meta deve estar entre 30 e 300 kg.' })(
+      target,
+      key,
+    );
+  };
+}
+
+/** Perfil completo (corpo de `PUT /me/profile`, `POST /profile/estimate` e `POST /profile/projection`). */
 export class ProfileDto implements Profile {
   @IsIn(['feminino', 'masculino'], { message: 'Informe o sexo.' })
   sex: Sex;
@@ -31,6 +50,9 @@ export class ProfileDto implements Profile {
 
   @IsIn(['perder', 'manter', 'ganhar'], { message: 'Informe o objetivo.' })
   goal: Goal;
+
+  @TargetWeightKg()
+  targetWeightKg: number | null;
 }
 
 /** Só os campos do perfil (o DTO validado pode trazer protótipo de classe). */
@@ -43,5 +65,12 @@ export function toProfile(dto: ProfileDto): Profile {
     heightCm,
     activityLevel,
     goal,
+    targetWeightKg: dto.targetWeightKg ?? null,
   };
+}
+
+/** Corpo de `PUT /me/target-weight`. */
+export class TargetWeightDto {
+  @TargetWeightKg()
+  targetWeightKg: number | null;
 }

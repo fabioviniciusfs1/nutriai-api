@@ -214,6 +214,7 @@ describe('personalPlanPrompt e personalPlanRequest', () => {
     heightCm: 165,
     activityLevel: 'moderado',
     goal: 'perder',
+    targetWeightKg: null,
   } as const;
   const routine: Routine = {
     eatingWindows: WINDOWS,

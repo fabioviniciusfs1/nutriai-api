@@ -19,7 +19,7 @@ import {
   UserEntity,
   WeightEntity,
 } from '../database/entities/index.js';
-import { calculateTargets } from '../targets/targets.js';
+import { calculateTargets, targetWeightError } from '../targets/targets.js';
 import { routineError } from './routine.js';
 
 @Injectable()
@@ -45,7 +45,13 @@ export class UsersService {
     const google = await this.googleAccounts.findOneBy({ userId });
     return {
       user: { name: user.name, username: user.username },
-      profile: user.profile,
+      // Perfis salvos antes do peso meta não têm o campo.
+      profile: user.profile
+        ? {
+            ...user.profile,
+            targetWeightKg: user.profile.targetWeightKg ?? null,
+          }
+        : null,
       routine: user.routine,
       targets: user.profile ? calculateTargets(user.profile) : null,
       weighInDue: await this.weighInDue(user, clock),
@@ -61,9 +67,27 @@ export class UsersService {
     profile: Profile,
     clock: UserClock,
   ): Promise<Me> {
+    const error = targetWeightError(profile);
+    if (error) throw new BadRequestException(error);
     const result = await this.users.update({ id: userId }, { profile });
     if (!result.affected)
       throw new NotFoundException('Usuário não encontrado.');
+    return this.me(userId, clock);
+  }
+
+  /** Troca só o peso meta (`null` tira a meta); não muda as metas nem o plano. */
+  async updateTargetWeight(
+    userId: string,
+    targetWeightKg: number | null,
+    clock: UserClock,
+  ): Promise<Me> {
+    const user = await this.get(userId);
+    if (!user.profile)
+      throw new BadRequestException('Preencha o perfil primeiro.');
+    const profile: Profile = { ...user.profile, targetWeightKg };
+    const error = targetWeightError(profile);
+    if (error) throw new BadRequestException(error);
+    await this.users.update({ id: userId }, { profile });
     return this.me(userId, clock);
   }
 

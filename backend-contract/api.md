@@ -156,7 +156,8 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
     "weightKg": 68.5,
     "heightCm": 165,
     "activityLevel": "moderado",
-    "goal": "perder"
+    "goal": "perder",
+    "targetWeightKg": 60
   },
   "routine": {
     "eatingWindows": [
@@ -184,7 +185,8 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
   `PUT /me/profile` (o front leva o usuário para `/perfil`); `routine` é `null` até o primeiro `PUT /me/routine`
   (o front leva para `/rotina`). As outras páginas exigem os dois.
 - `profile.sex`: `feminino | masculino`; `activityLevel`: `sedentario | leve | moderado | intenso | extremo`;
-  `goal`: `perder | manter | ganhar`.
+  `goal`: `perder | manter | ganhar`. `targetWeightKg`: peso meta em kg; `null` com objetivo manter
+  (ou em perfis salvos antes do peso meta). Ver `PUT /me/profile` e `PUT /me/target-weight`.
 - `routine`: ver `PUT /me/routine`. `weighInDay`: 0 = domingo … 6 = sábado.
 - `routine.diet`: `onivora | pescetariana | vegetariana | vegana` ("Escolha o tipo de alimentação."). O backend
   tira do plano individual e dos substitutos o que a dieta exclui (pescetariana: carnes;
@@ -197,6 +199,18 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
 ### `PUT /me/profile` → `Me`
 
 Corpo: o `profile` inteiro. Recalcula `targets`. Não monta o plano individual (isso é da rotina).
+
+- `targetWeightKg` (peso meta): obrigatório com objetivo perder (menor que `weightKg`) ou ganhar (maior)
+  ("Informe o peso meta."); com manter, ausente ou `null` ("Com o objetivo de manter o peso, não há peso meta.").
+  30–300 kg com uma casa decimal ("O peso meta deve estar entre 30 e 300 kg."). Outros erros: "Para perder peso, o peso meta deve ser menor que o
+  atual.", "Para ganhar peso, o peso meta deve ser maior que o atual.". Não muda as metas.
+
+### `PUT /me/target-weight` → `Me`
+
+Corpo: `{ "targetWeightKg": 62.5 }` (`null` só com objetivo manter). O perfil fica fixo depois do cadastro, mas o
+peso meta pode mudar quando quiser (o card "Peso meta" em `/perfil`). Só troca esse campo: não muda as metas
+nem o plano. Sem perfil → `400` "Preencha o perfil primeiro."; as regras e mensagens são as de `PUT /me/profile`,
+contra o perfil salvo.
 
 ### `PUT /me/routine` → `Me`
 
@@ -242,6 +256,36 @@ mostrar a meta antes de salvar.
   piso de 1200 kcal (feminino) / 1500 kcal (masculino). `clampedToMinimum` = ficou abaixo do piso.
 - Água = 35 ml por kg, em litros com uma casa decimal.
 - `bmr` e `tdee` arredondados para inteiro.
+
+### `POST /profile/projection` → `WeightProjection`
+
+Corpo: um `profile` completo com `targetWeightKg`, **sem salvar**. O card "Peso meta" de `/perfil` chama enquanto
+o usuário edita (só com objetivo perder ou ganhar), no cadastro e depois dele, para mostrar em quanto tempo chega
+ao peso meta num gráfico de linha.
+
+```json
+{
+  "months": 4.3,
+  "weeklyChangeKg": -0.5,
+  "points": [
+    { "month": 0, "weightKg": 68.5 },
+    { "month": 1, "weightKg": 66.5 },
+    { "month": 2, "weightKg": 64.5 },
+    { "month": 3, "weightKg": 62.5 },
+    { "month": 4, "weightKg": 60.5 },
+    { "month": 4.3, "weightKg": 60 }
+  ]
+}
+```
+
+- Regra clássica: ~7.700 kcal de sobra (ou de falta) = 1 kg. Diferença diária = `calories − tdee` das metas do
+  perfil (perder ≈ −500, ganhar ≈ +300; menor quando a meta foi elevada ao piso), sempre a mesma: a projeção é
+  uma reta. Mês = 365,25 ÷ 12 dias.
+- `months` e `weeklyChangeKg` com uma casa decimal (`weeklyChangeKg` negativo ao perder). `points`: um ponto por
+  mês desde o mês 0 (peso atual), pesos com uma casa; o último é o peso meta em `months`.
+- O perfil segue as regras de `PUT /me/profile` (com manter não há projeção). Também `400`
+  ao perder com a meta no piso acima do gasto, "Com a meta mínima de calorias, não dá para
+  estimar quando o peso meta chega. Procure um nutricionista.".
 
 ## Pesos 🔒
 

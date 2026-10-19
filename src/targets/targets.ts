@@ -5,6 +5,7 @@ import type {
   Profile,
   Sex,
   Targets,
+  WeightProjection,
 } from '../contract.js';
 
 const ACTIVITY_FACTORS: Record<ActivityLevel, number> = {
@@ -44,6 +45,62 @@ export function calculateTargets(profile: Profile): Targets {
     // 35 ml por kg, em litros com uma casa decimal.
     waterLiters: Math.round((profile.weightKg * 35) / 100) / 10,
     clampedToMinimum: adjusted < minimum,
+  };
+}
+
+/** Regra clássica: ~7.700 kcal de sobra (ou de falta) equivalem a 1 kg corporal. */
+const KCAL_PER_KG = 7700;
+const DAYS_PER_MONTH = 365.25 / 12;
+
+const oneDecimal = (value: number) => Math.round(value * 10) / 10;
+
+/**
+ * Mensagem de erro quando o peso meta do perfil não combina com o objetivo; `null` se está tudo certo.
+ * Obrigatório para perder ou ganhar; com manter, não há peso meta.
+ */
+export function targetWeightError(profile: Profile): string | null {
+  const target = profile.targetWeightKg;
+  if (profile.goal === 'manter')
+    return target === null
+      ? null
+      : 'Com o objetivo de manter o peso, não há peso meta.';
+  if (target === null) return 'Informe o peso meta.';
+  if (profile.goal === 'perder' && target >= profile.weightKg)
+    return 'Para perder peso, o peso meta deve ser menor que o atual.';
+  if (profile.goal === 'ganhar' && target <= profile.weightKg)
+    return 'Para ganhar peso, o peso meta deve ser maior que o atual.';
+  return null;
+}
+
+/**
+ * Em quanto tempo o perfil chega ao peso meta comendo a meta calórica: a diferença diária entre a meta e o
+ * gasto (`calories − tdee`), constante, dividida por 7.700 kcal/kg.
+ * Devolve a mensagem de erro quando o objetivo é manter ou o peso meta falta ou não combina com ele.
+ */
+export function projectWeight(profile: Profile): WeightProjection | string {
+  const error = targetWeightError(profile);
+  if (error) return error;
+  const targetWeightKg = profile.targetWeightKg;
+  if (targetWeightKg === null)
+    return 'Com o objetivo de manter o peso, não há peso meta.';
+
+  const { calories, tdee } = calculateTargets(profile);
+  // Com a meta no piso, o gasto pode ficar abaixo dela: comendo a meta, o peso não cai.
+  if (profile.goal === 'perder' && calories >= tdee)
+    return 'Com a meta mínima de calorias, não dá para estimar quando o peso meta chega. Procure um nutricionista.';
+  const kgPerMonth = ((calories - tdee) / KCAL_PER_KG) * DAYS_PER_MONTH;
+  const exactMonths = (targetWeightKg - profile.weightKg) / kgPerMonth;
+  const points: WeightProjection['points'] = [];
+  for (let month = 0; month < exactMonths; month++)
+    points.push({
+      month,
+      weightKg: oneDecimal(profile.weightKg + kgPerMonth * month),
+    });
+  points.push({ month: oneDecimal(exactMonths), weightKg: targetWeightKg });
+  return {
+    months: oneDecimal(exactMonths),
+    weeklyChangeKg: oneDecimal((kgPerMonth / DAYS_PER_MONTH) * 7),
+    points,
   };
 }
 
