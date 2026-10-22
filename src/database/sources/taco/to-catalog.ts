@@ -73,6 +73,6 @@ export function tacoToCatalog(food: TacoFood): CatalogSourceFood | null {
     animal: animalTags(food.categoria, food.nome),
     microsPer100g,
     source: TACO_SOURCE,
-    sourceId: food.id,
+    sourceId: String(food.id),
   };
 }

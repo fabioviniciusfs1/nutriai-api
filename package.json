@@ -24,6 +24,7 @@
     "db:revert": "nest build && node dist/database/cli.js revert",
     "db:seed": "nest build && node dist/database/cli.js seed",
     "db:import-taco": "nest build && node dist/database/cli.js import-taco",
+    "db:import-tbca": "nest build && node dist/database/cli.js import-tbca",
     "release": "bash scripts/release.sh"
   },
   "dependencies": {

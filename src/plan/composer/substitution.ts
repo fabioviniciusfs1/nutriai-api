@@ -1,14 +1,19 @@
 // Partes puras das sugestões de substituto pelo assistente: prompt, schema da resposta e validação.
 import type { Diet, FoodFeedback } from '../../contract.js';
-import { FoodCatalog, isRaw, normalize } from '../engine/foods.js';
-import { dietLine, PERIOD_NAMES } from './composition.js';
+import { FoodCatalog, isRaw } from '../engine/foods.js';
+import {
+  dietLine,
+  FOOD_NAMING,
+  parseApprox,
+  PER100G_SCHEMA,
+  PERIOD_NAMES,
+} from './composition.js';
 import { mealPeriod, MAX_SUBSTITUTES } from '../engine/planner.js';
 
-/** Instruções fixas (ficam em cache junto com o catálogo). */
+/** Instruções fixas (ficam em cache). */
 export const SUBSTITUTE_INSTRUCTIONS = `Você sugere substitutos de alimentos para o NutriAI, um app brasileiro de plano alimentar.
 
-Use somente alimentos do catálogo abaixo (Tabela TACO), copiando o nome exatamente como está. Cada linha traz
-nome | grupo | kcal, proteína (P), gordura (G) e carboidrato (C) por 100 g.
+${FOOD_NAMING}
 
 Regras:
 - Sugira até ${MAX_SUBSTITUTES} alimentos que possam ocupar o lugar do alimento informado naquela refeição: com a
@@ -25,9 +30,17 @@ Regras:
 export const SUBSTITUTES_SCHEMA = {
   type: 'object',
   properties: {
-    names: { type: 'array', items: { type: 'string' } },
+    foods: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { name: { type: 'string' }, per100g: PER100G_SCHEMA },
+        required: ['name', 'per100g'],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ['names'],
+  required: ['foods'],
   additionalProperties: false,
 } as const;
 
@@ -66,8 +79,8 @@ export function substitutePrompt(request: SubstituteRequest): string {
 }
 
 /**
- * Lê a resposta do assistente e devolve os nomes que existem no catálogo (exatos ou sem diferença de
- * acentos/maiúsculas), na ordem dele, sem o próprio alimento, sem restritos, sem repetidos, sem os que
+ * Lê a resposta do assistente (`foods`, ou `names` só com os nomes) e devolve os alimentos do catálogo que
+ * correspondem aos citados (`FoodCatalog.match`), na ordem dele, sem o próprio alimento, sem restritos, sem repetidos, sem os que
  * não passam em `allowed` (tipo de alimentação) e sem crus quando o alimento original não é cru.
  */
 export function parseSubstitutes(
@@ -83,18 +96,18 @@ export function parseSubstitutes(
   } catch {
     return [];
   }
-  const { names } = (raw ?? {}) as { names?: unknown };
-  if (!Array.isArray(names)) return [];
+  const { foods, names } = (raw ?? {}) as { foods?: unknown; names?: unknown };
+  const items = Array.isArray(foods) ? foods : names;
+  if (!Array.isArray(items)) return [];
 
-  const byNormalizedName = new Map(
-    catalog.foods.map((food) => [normalize(food.name), food.name]),
-  );
   const chosen = new Set<string>();
-  for (const item of names) {
-    if (typeof item !== 'string') continue;
-    const name = catalog.entry(item)
-      ? item
-      : byNormalizedName.get(normalize(item));
+  for (const item of items as unknown[]) {
+    const cited =
+      typeof item === 'string'
+        ? { name: item }
+        : (item as { name?: unknown; per100g?: unknown } | null);
+    if (typeof cited?.name !== 'string') continue;
+    const name = catalog.match(cited.name, parseApprox(cited.per100g));
     if (!name || name === foodName || feedback[name]) continue;
     if (isRaw(name) && !isRaw(foodName)) continue;
     if (!allowed(name)) continue;

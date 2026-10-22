@@ -10,13 +10,18 @@ import type {
 import { MEAL_NAMES, routineLines } from '../../users/routine.js';
 import type { FoodCatalog } from '../engine/foods.js';
 import type { PersonalMeals } from '../engine/types.js';
-import { dietLine, parseFoods, parseTitle } from './composition.js';
+import {
+  dietLine,
+  FOOD_NAMING,
+  parseFoods,
+  parseTitle,
+  PER100G_SCHEMA,
+} from './composition.js';
 
-/** Instruções fixas (ficam em cache junto com o catálogo). */
+/** Instruções fixas (ficam em cache). */
 export const PERSONAL_PLAN_INSTRUCTIONS = `Você monta o plano alimentar diário de um usuário do NutriAI, um app brasileiro de plano alimentar.
 
-Use somente alimentos do catálogo abaixo (Tabela TACO), copiando o nome exatamente como está. Cada linha traz
-nome | grupo | kcal, proteína (P), gordura (G) e carboidrato (C) por 100 g.
+${FOOD_NAMING}
 
 Regras:
 - Monte cada refeição pedida (pelo id), com refeições brasileiras comuns, apetitosas e práticas, adequadas ao
@@ -63,8 +68,9 @@ export const PERSONAL_PLAN_SCHEMA = {
               properties: {
                 name: { type: 'string' },
                 grams: { type: 'integer' },
+                per100g: PER100G_SCHEMA,
               },
-              required: ['name', 'grams'],
+              required: ['name', 'grams', 'per100g'],
               additionalProperties: false,
             },
           },
@@ -223,8 +229,8 @@ export function fitFastingLimit(
 }
 
 /**
- * Lê a resposta do assistente e devolve as refeições pedidas (`ids`), cada uma na porção dele com os nutrientes
- * do catálogo. Alimentos fora do catálogo, restritos ou fora do tipo de alimentação são descartados; `null` se
+ * Lê a resposta do assistente e devolve as refeições pedidas (`ids`), cada uma na porção dele com os alimentos
+ * e os nutrientes do catálogo (`parseFoods`). Alimentos fora do catálogo, restritos ou fora do tipo de alimentação são descartados; `null` se
  * alguma refeição pedida não vier ou ficar sem alimentos. Se algum horário vier inválido, repetido ou fora das
  * `windows`, ou se passar de 6 horas entre uma refeição e a seguinte quando as janelas permitem menos
  * (`withinFastingLimit`), todas ficam com horários espalhados pelas janelas, na ordem de `ids` (a do dia), sem

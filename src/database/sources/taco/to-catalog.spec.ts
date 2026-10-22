@@ -37,7 +37,7 @@ describe('tacoToCatalog', () => {
       animal: [],
       microsPer100g: { fibras: 2.7, riboflavina: 0, 'vitamina-a': 10 },
       source: 'taco',
-      sourceId: 1,
+      sourceId: '1',
     });
   });
 

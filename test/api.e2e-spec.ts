@@ -550,11 +550,11 @@ describe('substitutos do assistente', () => {
         {
           type: 'text',
           text: JSON.stringify({
-            names: [
-              MANDIOCA,
-              'Arroz de couve-flor',
-              ARROZ,
-              'feijao, carioca, cozido',
+            foods: [
+              { name: 'Aipim, cozido', per100g: { kcal: 125 } },
+              { name: 'Whey protein', per100g: { kcal: 400 } },
+              { name: ARROZ, per100g: { kcal: 124 } },
+              { name: 'feijao, carioca, cozido', per100g: { kcal: 76 } },
             ],
           }),
         },
@@ -622,12 +622,13 @@ describe('substitutos do assistente', () => {
     ).expect(200);
     expect(substitutes.body.length).toBeGreaterThan(0);
 
-    // "Ver mais": um `exclude` por nome já mostrado; volta só opções novas, até acabarem.
+    // "Ver mais": um `exclude` por nome já mostrado; volta só opções novas, até acabarem ou chegar aos 64
+    // nomes que o `exclude` aceita (o front para aí).
     const path = `/plan/meals/2/substitutes?food=${encodeURIComponent('Arroz, integral, cozido')}`;
     let shown: string[] = substitutes.body.map(
       (food: { name: string }) => food.name,
     );
-    for (let page = 0; page < 20; page++) {
+    while (shown.length + 8 <= 64) {
       const exclude = shown
         .map((name) => `&exclude=${encodeURIComponent(name)}`)
         .join('');

@@ -1,6 +1,6 @@
 import { FoodCatalog } from '../engine/foods.js';
 import { testFoods } from '../engine/test-catalog.js';
-import { catalogPrompt, parseFoods, parseTitle } from './composition.js';
+import { parseApprox, parseFoods, parseTitle } from './composition.js';
 
 const catalog = new FoodCatalog(testFoods);
 
@@ -39,6 +39,34 @@ describe('parseFoods', () => {
     ]);
   });
 
+  it('acha no catálogo o alimento citado com outro nome, desempatando pelas calorias', () => {
+    const tables = new FoodCatalog([
+      {
+        name: 'Arroz, tipo 1, cru',
+        group: 'carboidratos',
+        per100g: { carbs: 79, protein: 7, fat: 0, kcal: 358 },
+      },
+      {
+        name: 'Arroz, tipo 1, cozido',
+        group: 'carboidratos',
+        per100g: { carbs: 28, protein: 3, fat: 0, kcal: 128 },
+      },
+    ]);
+    expect(
+      parseFoods(
+        [
+          {
+            name: 'Arroz, branco',
+            grams: 150,
+            per100g: { kcal: 130, protein: 2.5, fat: 0.3, carbs: 28 },
+          },
+        ],
+        tables,
+        {},
+      ),
+    ).toEqual([tables.portion('Arroz, tipo 1, cozido', 150)]);
+  });
+
   it('nada aproveitável vira lista vazia', () => {
     expect(parseFoods('não é lista', catalog, {})).toEqual([]);
     expect(parseFoods([{ name: 'Pizza', grams: 100 }], catalog, {})).toEqual(
@@ -55,10 +83,11 @@ describe('parseTitle', () => {
   });
 });
 
-describe('prompts', () => {
-  it('catálogo com uma linha por alimento', () => {
-    expect(catalogPrompt(testFoods).split('\n')[0]).toBe(
-      'Pão integral | carboidratos | 280 kcal, P 12, G 4, C 48',
-    );
+describe('parseApprox', () => {
+  it('fica só com os números válidos', () => {
+    expect(
+      parseApprox({ kcal: 128, protein: 2.5, fat: -1, carbs: 'muito' }),
+    ).toEqual({ kcal: 128, protein: 2.5 });
+    expect(parseApprox(undefined)).toBeUndefined();
   });
 });

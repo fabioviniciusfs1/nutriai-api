@@ -78,6 +78,22 @@ describe('parseSubstitutes', () => {
     ).toEqual(['Maçã, crua']);
   });
 
+  it('lê o formato com os valores por 100 g', () => {
+    expect(
+      parseSubstitutes(
+        JSON.stringify({
+          foods: [
+            { name: 'abacate', per100g: { kcal: 96 } },
+            { name: 'Pizza de calabresa', per100g: { kcal: 280 } },
+          ],
+        }),
+        catalog,
+        {},
+        'Guacamole',
+      ),
+    ).toEqual(['Abacate']);
+  });
+
   it('no máximo 8', () => {
     const names = testFoods
       .map((food) => food.name)

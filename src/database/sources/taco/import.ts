@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { In, Not, type DataSource } from 'typeorm';
-import { FoodEntity, TacoFoodEntity } from '../../entities/index.js';
+import { TacoFoodEntity } from '../../entities/index.js';
 import { seedCatalog } from '../../seed.js';
+import { upsertCatalog } from '../catalog-food.js';
 import { readOds } from '../ods.js';
 import { parseTaco } from './parse.js';
 import { TACO_SOURCE, tacoToCatalog } from './to-catalog.js';
@@ -19,22 +20,7 @@ export async function importTaco(dataSource: DataSource, file: string) {
     await manager.delete(TacoFoodEntity, {
       id: Not(In(foods.map((food) => food.id))),
     });
-
-    // Tira os alimentos da TACO que saíram da planilha ou mudaram de nome, antes de gravar os atuais.
-    const current = new Set(
-      catalog.map((food) => `${food.sourceId}|${food.name}`),
-    );
-    const existing = await manager.find(FoodEntity, {
-      where: { source: TACO_SOURCE },
-    });
-    const stale = existing.filter(
-      (food) => !current.has(`${food.sourceId}|${food.name}`),
-    );
-    if (stale.length > 0)
-      await manager.delete(FoodEntity, {
-        name: In(stale.map((food) => food.name)),
-      });
-    await manager.upsert(FoodEntity, catalog, ['name']);
+    await upsertCatalog(manager, TACO_SOURCE, catalog);
   });
 
   await seedCatalog(dataSource);

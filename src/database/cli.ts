@@ -1,10 +1,12 @@
-// Tarefas de banco: `npm run db:migrate`, `npm run db:revert` e `npm run db:seed` (rodam o build em dist/).
+// Tarefas de banco: `npm run db:migrate`, `db:revert`, `db:seed`, `db:import-taco` e `db:import-tbca` (rodam o
+// build em dist/).
 import 'reflect-metadata';
 import { loadEnvFile } from 'node:process';
 import { DataSource } from 'typeorm';
 import { dataSourceOptions } from './data-source.js';
 import { seedCatalog } from './seed.js';
 import { importTaco } from './sources/taco/import.js';
+import { importTbca } from './sources/tbca/import.js';
 
 try {
   loadEnvFile();
@@ -45,9 +47,20 @@ try {
     console.log(
       `TACO importada: ${result.tacoFoods} alimentos em taco_alimentos, ${result.catalogFoods} no catálogo do app.`,
     );
+  } else if (command === 'import-tbca') {
+    const file = process.argv[3];
+    if (!file)
+      throw new Error(
+        'Informe o arquivo: npm run db:import-tbca -- data/tbca/TBCA_20223103.csv',
+      );
+    const result = await importTbca(dataSource, file);
+    for (const warning of result.warnings) console.warn(`Aviso: ${warning}`);
+    console.log(
+      `TBCA importada: ${result.tbcaFoods} alimentos em tbca_alimentos, ${result.catalogFoods} no catálogo do app.`,
+    );
   } else {
     throw new Error(
-      `Comando desconhecido: ${command ?? '(nenhum)'}. Use migrate, revert, seed ou import-taco.`,
+      `Comando desconhecido: ${command ?? '(nenhum)'}. Use migrate, revert, seed, import-taco ou import-tbca.`,
     );
   }
 } finally {

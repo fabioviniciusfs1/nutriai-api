@@ -25,6 +25,8 @@ export type CatalogFood = {
   per100g: Totals;
   /** Origens animais (para o tipo de alimentação); sem o campo: nenhuma. */
   animal?: AnimalTag[];
+  /** Tabela de origem (`taco`, `tbca`); no empate, a TACO vem antes. */
+  source?: string;
 };
 
 export type BaseMeal = {

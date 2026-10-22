@@ -15,6 +15,7 @@ login com Google (OAuth + Google Health API) e chat com Claude (API da Anthropic
 cp .env.example .env   # e preencha JWT_SECRET, TOKEN_ENCRYPTION_KEY, Google e Anthropic
 docker compose up -d   # Postgres na porta 5433 (bancos nutriai e nutriai_test)
 npm run db:import-taco -- data/taco/tabela-taco.ods   # catálogo (TACO) + semente; reinicie a API depois
+npm run db:import-tbca -- data/tbca/TBCA_20223103.csv # catálogo (TBCA), depois da TACO; reinicie a API
 npm run db:seed        # só a semente (plano base, nutrientes); exige a TACO importada
 npm run start:dev      # servidor em watch mode (porta: env PORT; o .env.example usa 3001)
 npm run build          # nest build → dist/
@@ -40,14 +41,20 @@ npx vitest run -t "não gosto"                     # por nome do teste
 - Migrations são escritas à mão em `src/database/migrations/` e registradas em `MIGRATIONS` (`data-source.ts`);
   `synchronize` fica desligado. As migrations rodam sozinhas ao subir a API.
 
-## Catálogo de alimentos (TACO)
+## Catálogo de alimentos (TACO e TBCA)
 
 - Fonte: `data/taco/tabela-taco.ods` (pag1: energia, macro e micronutrientes; pag2: gorduras; mesmo `id`).
   Vai inteira para `taco_alimentos`, com as colunas da 1ª linha de cada página: `*`, `NA` e vazio → `null`,
   `Tr` → 0; guarda o valor exibido. Leitura em `src/database/sources/` (`ods.ts`, `taco/parse.ts`).
 - O catálogo do app (`foods`, o que o engine usa) é derivado da fonte por `taco/to-catalog.ts`: grupo do app
   pela categoria da TACO (faixa de id), micronutrientes com os ids de `nutrient_defs`. Alimentos sem energia
-  ficam de fora (591 de 597). Nova fonte = nova pasta em `sources/` com tabela própria e `foods.source` próprio.
+  ficam de fora (591 de 597). Nova fonte = nova pasta em `sources/` com tabela própria e `foods.source` próprio;
+  `upsertCatalog` (`sources/catalog-food.ts`) grava os alimentos dela em `foods`.
+- TBCA: `data/tbca/TBCA_20223103.csv` (`;`, vírgula decimal; cabeçalho com acentos quebrados, lido pela posição)
+  vai inteira para `tbca_alimentos` (`NA`, `-` e vazio → `null`, `tr` → 0; id texto, ex. `C0019D`, com a
+  categoria na letra do fim). `tbca/to-catalog.ts` deriva o catálogo (carboidrato total, sem manganês). Nome
+  é a chave de `foods`: repetido na TBCA ou já usado pela TACO fica de fora (a TACO tem os nomes do plano base).
+  Fast food, fins especiais e industrializados ficam sem grupo (busca, mas não substitutos). 5.206 alimentos.
 - O plano base (`src/database/seed-data.ts`) lista só `{ name, grams }` com nomes exatos do
   catálogo; o seed calcula os nutrientes (`seed-plan.ts`). O `CatalogService` guarda o catálogo em memória:
   depois de importar, reinicie a API.
@@ -101,11 +108,15 @@ npx vitest run -t "não gosto"                     # por nome do teste
 - `src/chat/`: Claude (`claude-haiku-5-5`, o mais barato) com o contexto do usuário; sem `ANTHROPIC_API_KEY` o chat responde 503.
   `CHAT_ENABLED=false` não registra o `ChatModule` (rotas `/chat/*` dão 404; o código e a tabela ficam); no front, o
   mesmo papel é do `NEXT_PUBLIC_CHAT_ENABLED` (em produção, `docker-compose.prod.yml` passa o `CHAT_ENABLED` para os dois).
-- `src/plan/composer/`: os pedidos ao Claude com o catálogo no system (`composition.ts`: `catalogPrompt` e
-  `parseFoods`, que descarta nomes fora do catálogo, restritos e fora da dieta). O cliente e o modelo
-  (`CLAUDE_MODEL`) ficam em `src/ai/`. Sugere substitutos ao trocar alimento (`substitution.ts`): o Claude devolve nomes, `parseSubstitutes`
-  fica só com os do catálogo (até 8, sem crus se o original não for cru); sem ele, os do mesmo grupo mais
-  parecidos (`FoodCatalog.substituteOptions`). A troca aceita qualquer alimento do catálogo não restrito.
+- `src/plan/composer/`: os pedidos ao Claude. Ele **não vê o catálogo** (TACO + TBCA não cabem no prompt):
+  cita cada alimento no estilo das tabelas com kcal/macros aproximados por 100 g (`FOOD_NAMING`,
+  `PER100G_SCHEMA` em `composition.ts`), e `FoodCatalog.match` (`src/plan/engine/foods.ts`) acha o do catálogo:
+  palavras pesadas pela raridade, sinônimos (`SYNONYMS`, na forma de `stem`), a família do nome tem de estar no
+  citado, calorias longe demais descartam; sem par → descartado. `parseFoods` e `parseSubstitutes` usam o
+  `match` e depois descartam restritos e fora da dieta. O cliente e o modelo (`CLAUDE_MODEL`) ficam em
+  `src/ai/`. Sugere substitutos ao trocar alimento (`substitution.ts`; até 8, sem crus se o original não for
+  cru); sem o Claude, os do mesmo grupo mais parecidos (`FoodCatalog.substituteOptions`). A troca aceita
+  qualquer alimento do catálogo não restrito.
 - Lacuna conhecida: não há rota para marcar refeição feita (`/history/plans` conta todas como seguidas).
 
 ## Contrato com o front

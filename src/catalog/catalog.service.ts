@@ -35,11 +35,12 @@ export class CatalogService {
       ]);
       return {
         catalog: {
-          foods: foods.map(({ name, group, per100g, animal }) => ({
+          foods: foods.map(({ name, group, per100g, animal, source }) => ({
             name,
             group,
             per100g,
             animal,
+            source,
           })),
           baseMeals: baseMeals.map(
             ({ id, title, time, foods: items, slot }) => ({

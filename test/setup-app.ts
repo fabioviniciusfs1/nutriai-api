@@ -6,6 +6,7 @@ import { AppModule } from '../src/app.module.js';
 import { ANTHROPIC_CLIENT } from '../src/ai/anthropic.provider.js';
 import { configureApp } from '../src/configure-app.js';
 import { importTaco } from '../src/database/sources/taco/import.js';
+import { importTbca } from '../src/database/sources/tbca/import.js';
 
 export const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
@@ -13,7 +14,7 @@ export const TEST_DATABASE_URL =
 
 export const FRONTEND = 'http://localhost:3000';
 
-/** API com banco de teste limpo (migrations + TACO + semente) e o cliente da Anthropic trocado por `anthropic`. */
+/** API com banco de teste limpo (migrations + TACO + TBCA + semente) e o cliente da Anthropic trocado por `anthropic`. */
 export async function createTestApp(
   anthropic: unknown,
 ): Promise<INestApplication> {
@@ -46,5 +47,6 @@ export async function createTestApp(
   );
   await app.init();
   await importTaco(app.get(DataSource), 'data/taco/tabela-taco.ods');
+  await importTbca(app.get(DataSource), 'data/tbca/TBCA_20223103.csv');
   return app;
 }

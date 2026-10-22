@@ -5,7 +5,7 @@ import type { PlanFood } from '../../plan/engine/types.js';
 
 type Per100g = { carbs: number; protein: number; fat: number; kcal: number };
 
-/** Alimento do catálogo do app, com nutrientes por 100 g. Vem de uma fonte (TACO, …). */
+/** Alimento do catálogo do app, com nutrientes por 100 g. Vem de uma fonte (TACO, TBCA). */
 @Entity('foods')
 @Unique(['source', 'sourceId'])
 export class FoodEntity {
@@ -27,12 +27,12 @@ export class FoodEntity {
   @Column('jsonb', { name: 'micros_per100g', default: {} })
   microsPer100g: Record<string, number>;
 
-  /** Fonte do alimento (ex.: `taco`) e o id dele lá. */
+  /** Fonte do alimento (`taco`, `tbca`) e o id dele lá. */
   @Column('text')
   source: string;
 
-  @Column('int', { name: 'source_id' })
-  sourceId: number;
+  @Column('text', { name: 'source_id' })
+  sourceId: string;
 }
 
 /** Refeição do plano base. */

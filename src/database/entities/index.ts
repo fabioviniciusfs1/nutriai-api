@@ -10,6 +10,7 @@ import { GoogleAccountEntity } from './google-account.entity.js';
 import { OAuthCodeEntity } from './oauth-code.entity.js';
 import { PlanStateEntity } from './plan-state.entity.js';
 import { TacoFoodEntity } from './taco-food.entity.js';
+import { TbcaFoodEntity } from './tbca-food.entity.js';
 import { UserEntity } from './user.entity.js';
 import { WeightEntity } from './weight.entity.js';
 
@@ -24,6 +25,7 @@ export {
   OAuthCodeEntity,
   PlanStateEntity,
   TacoFoodEntity,
+  TbcaFoodEntity,
   UserEntity,
   WeightEntity,
 };
@@ -39,6 +41,7 @@ export const ENTITIES = [
   OAuthCodeEntity,
   PlanStateEntity,
   TacoFoodEntity,
+  TbcaFoodEntity,
   UserEntity,
   WeightEntity,
 ];

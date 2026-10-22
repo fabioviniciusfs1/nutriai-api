@@ -10,7 +10,6 @@ import type { Diet, FoodFeedback } from '../../contract.js';
 import { allowedByDiet } from '../engine/diet.js';
 import { FoodCatalog } from '../engine/foods.js';
 import type { PersonalMeals } from '../engine/types.js';
-import { catalogPrompt } from './composition.js';
 import {
   parsePersonalPlan,
   PERSONAL_PLAN_INSTRUCTIONS,
@@ -41,8 +40,8 @@ function dietFilter(catalog: FoodCatalog, diet: Diet) {
 }
 
 /**
- * Monta o plano individual e sugere substitutos de alimentos com o Claude a partir do catálogo (TACO). Sem
- * cliente, ou se a chamada falhar, devolve `null` e o plano usa as refeições padrão / os substitutos do
+ * Monta o plano individual e sugere substitutos de alimentos com o Claude, conferindo no catálogo (TACO e
+ * TBCA) os alimentos que ele cita. Sem cliente, ou se a chamada falhar, devolve `null` e o plano usa as refeições padrão / os substitutos do
  * mesmo grupo.
  */
 @Injectable()
@@ -128,7 +127,7 @@ export class MealComposerService {
   }
 
   /**
-   * Pergunta ao Claude com o catálogo no system (em cache) e resposta em JSON pelo `schema`. Devolve o
+   * Pergunta ao Claude com as instruções no system (em cache) e resposta em JSON pelo `schema`. Devolve o
    * texto da resposta, ou `null` sem cliente, com erro ou resposta incompleta (o erro fica no log).
    */
   private async ask(options: {
@@ -145,14 +144,13 @@ export class MealComposerService {
     plan?: boolean;
   }): Promise<string | null> {
     if (!this.anthropic) return null;
-    const foods = (await this.catalog.catalog()).foods;
     try {
+      // As instruções não mudam entre chamadas: ficam em cache. O catálogo não vai no pedido: o Claude cita
+      // os alimentos e a resposta é conferida nele.
       const system: Anthropic.TextBlockParam[] = [
-        { type: 'text', text: options.instructions },
-        // O catálogo não muda entre chamadas: fica em cache.
         {
           type: 'text',
-          text: `Catálogo:\n${catalogPrompt(foods)}`,
+          text: options.instructions,
           cache_control: { type: 'ephemeral' },
         },
       ];
