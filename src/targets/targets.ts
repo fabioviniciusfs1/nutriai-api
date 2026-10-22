@@ -2,6 +2,7 @@
 import type {
   ActivityLevel,
   Goal,
+  MacroId,
   Profile,
   Sex,
   Targets,
@@ -29,6 +30,9 @@ const MINIMUM_CALORIES: Record<Sex, number> = {
   masculino: 1500,
 };
 
+/** Água: 35 ml por kg de peso. */
+const WATER_ML_PER_KG = 35;
+
 export function calculateTargets(profile: Profile): Targets {
   // Mifflin-St Jeor
   const bmr =
@@ -43,8 +47,9 @@ export function calculateTargets(profile: Profile): Targets {
     calories: Math.max(minimum, Math.round(adjusted / 10) * 10),
     bmr: Math.round(bmr),
     tdee: Math.round(tdee),
-    // 35 ml por kg, em litros com uma casa decimal.
-    waterLiters: Math.round((profile.weightKg * 35) / 100) / 10,
+    // Em litros com uma casa decimal.
+    waterLiters: Math.round((profile.weightKg * WATER_ML_PER_KG) / 100) / 10,
+    waterMlPerKg: WATER_ML_PER_KG,
     clampedToMinimum: adjusted < minimum,
   };
 }
@@ -139,6 +144,35 @@ export function macroTargets(profile: Profile) {
     gorduras: Math.round(fat),
     carboidratos: Math.round(carbs),
   };
+}
+
+const KCAL_PER_GRAM: Record<MacroId, number> = {
+  proteinas: 4,
+  carboidratos: 4,
+  gorduras: 9,
+};
+
+/**
+ * Parte das calorias dos macros que vem de cada um, em % inteiros que somam 100 (os pontos que o
+ * arredondamento perde vão para as maiores sobras); `null` sem nenhuma caloria.
+ */
+export function macroSplit(
+  grams: Record<MacroId, number>,
+): Record<MacroId, number> | null {
+  const ids = Object.keys(KCAL_PER_GRAM) as MacroId[];
+  const kcal = ids.map((id) => grams[id] * KCAL_PER_GRAM[id]);
+  const total = kcal.reduce((sum, value) => sum + value, 0);
+  if (total <= 0) return null;
+  const exact = kcal.map((value) => (value / total) * 100);
+  const percents = exact.map(Math.floor);
+  const missing = 100 - percents.reduce((sum, value) => sum + value, 0);
+  const byRemainder = ids
+    .map((_, index) => index)
+    .sort((a, b) => exact[b] - percents[b] - (exact[a] - percents[a]));
+  for (const index of byRemainder.slice(0, missing)) percents[index]++;
+  return Object.fromEntries(
+    ids.map((id, index) => [id, percents[index]]),
+  ) as Record<MacroId, number>;
 }
 
 /** Gramas por kg de peso corporal, com uma casa decimal. */

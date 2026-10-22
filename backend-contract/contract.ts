@@ -80,6 +80,8 @@ export type Targets = {
   /** Gasto diário estimado (kcal). */
   tdee: number;
   waterLiters: number;
+  /** Regra da água por kg de peso (ml/kg). */
+  waterMlPerKg: number;
   /** A meta foi elevada ao mínimo recomendado. */
   clampedToMinimum: boolean;
 };
@@ -211,6 +213,13 @@ export type NutritionToday = {
   /** Em gramas (e em g/kg em `perKg`). */
   macros: MacroNutrient[];
   fibers: Nutrient[];
+  /** Fibras de hoje em g por kg de peso (uma casa decimal); `null` sem perfil. */
+  fiberPerKg: number | null;
+  /**
+   * Parte das calorias dos macros de hoje que vem de cada um (proteína e carboidrato 4 kcal/g, gordura 9 kcal/g),
+   * em % inteiros que somam 100; `null` quando nada foi consumido.
+   */
+  macroSplit: Record<MacroId, number> | null;
   /** Açúcares, gordura saturada, colesterol… */
   otherMacros: Nutrient[];
   vitamins: Nutrient[];

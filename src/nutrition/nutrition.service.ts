@@ -13,7 +13,7 @@ import { ActivityDayEntity } from '../database/entities/index.js';
 import { HealthService } from '../health/health.service.js';
 import { planNutrients } from '../plan/nutrients.js';
 import { PlanService } from '../plan/plan.service.js';
-import { perKg } from '../targets/targets.js';
+import { macroSplit, perKg } from '../targets/targets.js';
 import { UsersService } from '../users/users.service.js';
 import { displayValue, nutrientGoal } from './nutrient-goals.js';
 
@@ -68,6 +68,14 @@ export class NutritionService {
           : null,
       })),
       fibers: section('fibers'),
+      fiberPerKg: user.profile
+        ? perKg(consumed.fibras ?? 0, user.profile.weightKg)
+        : null,
+      macroSplit: macroSplit({
+        proteinas: consumed.proteinas ?? 0,
+        carboidratos: consumed.carboidratos ?? 0,
+        gorduras: consumed.gorduras ?? 0,
+      }),
       otherMacros: section('otherMacros'),
       vitamins: section('vitamins'),
       minerals: section('minerals'),

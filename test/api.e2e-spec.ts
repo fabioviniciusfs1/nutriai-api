@@ -155,6 +155,7 @@ describe('perfil e pesos', () => {
       bmr: 1395,
       tdee: 2163,
       waterLiters: 2.4,
+      waterMlPerKg: 35,
       clampedToMinimum: false,
     });
 
@@ -864,6 +865,18 @@ describe('nutrientes e histórico', () => {
       [69, 1],
       [124, 1.8],
     ]);
+    // Fibras em g/kg e a distribuição das calorias dos macros (soma 100).
+    const fiber = nutrition.body.fibers.find(
+      (item: { id: string }) => item.id === 'fibras',
+    );
+    expect(nutrition.body.fiberPerKg).toBeCloseTo(fiber.atual / 68.5, 1);
+    const split = nutrition.body.macroSplit as Record<string, number>;
+    expect(Object.keys(split).sort()).toEqual([
+      'carboidratos',
+      'gorduras',
+      'proteinas',
+    ]);
+    expect(split.proteinas + split.gorduras + split.carboidratos).toBe(100);
     const proteinMacro = nutrition.body.macros[0];
     expect(proteinMacro.perKg.atual).toBe(
       Math.round((proteinMacro.atual / 68.5) * 10) / 10,

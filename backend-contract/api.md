@@ -175,7 +175,7 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
     "weighInDay": 1,
     "diet": "vegetariana"
   },
-  "targets": { "calories": 1660, "bmr": 1395, "tdee": 2163, "waterLiters": 2.4, "clampedToMinimum": false },
+  "targets": { "calories": 1660, "bmr": 1395, "tdee": 2163, "waterLiters": 2.4, "waterMlPerKg": 35, "clampedToMinimum": false },
   "weighInDue": true,
   "google": { "email": "ana@gmail.com", "canDisconnect": true }
 }
@@ -254,7 +254,7 @@ mostrar a meta antes de salvar.
 - Gasto diário (`tdee`) = TMB × fator: sedentário 1,2; leve 1,375; moderado 1,55; intenso 1,725; extremo 1,9.
 - Meta = gasto + ajuste do objetivo (perder −500, manter 0, ganhar +300), arredondada para dezenas, com
   piso de 1200 kcal (feminino) / 1500 kcal (masculino). `clampedToMinimum` = ficou abaixo do piso.
-- Água = 35 ml por kg, em litros com uma casa decimal.
+- Água = 35 ml por kg (`waterMlPerKg`), em litros com uma casa decimal (`waterLiters`).
 - `bmr` e `tdee` arredondados para inteiro.
 
 ### `POST /profile/projection` → `WeightProjection`
@@ -492,6 +492,8 @@ alimento volta a poder ser sugerido e oferecido); **as trocas já feitas continu
     { "id": "carboidratos", "name": "Carboidratos", "atual": 140, "meta": 124, "unit": "g", "perKg": { "atual": 2, "meta": 1.8 } }
   ],
   "fibers": [{ "id": "fibras", "name": "Fibras", "atual": 22, "meta": 30, "unit": "g" }],
+  "fiberPerKg": 0.3,
+  "macroSplit": { "proteinas": 25, "gorduras": 25, "carboidratos": 50 },
   "otherMacros": [{ "id": "acucares", "name": "Açúcares", "atual": 38, "meta": 50, "unit": "g", "limit": true }],
   "vitamins": [{ "id": "vitamina-c", "name": "Vitamina C", "atual": 95, "meta": 90, "unit": "mg" }],
   "minerals": [{ "id": "sodio", "name": "Sódio", "atual": 1800, "meta": 2000, "unit": "mg", "limit": true }]
@@ -504,8 +506,12 @@ alimento volta a poder ser sugerido e oferecido); **as trocas já feitas continu
 - `macros` precisa ter os ids `proteinas`, `gorduras` e `carboidratos` (o front usa para as cores).
 - Metas dos macros com perfil: proteína 2 g/kg e gordura 1 g/kg de peso; o carboidrato fica com o restante
   da meta calórica (4/9/4 kcal por grama, nunca negativo). Sem perfil, metas padrão.
-- `perKg`: `atual` e `meta` divididos pelo peso do perfil (g/kg, uma casa decimal); `null` sem perfil. A barra
-  de progresso do card "Meta diária" mostra esses valores.
+- `perKg`: `atual` e `meta` divididos pelo peso do perfil (g/kg, uma casa decimal); `null` sem perfil. O card
+  "Meta diária" mostra o `atual`.
+- `fiberPerKg`: fibras de hoje em g/kg (uma casa decimal); `null` sem perfil. Card "Meta diária".
+- `macroSplit`: parte das calorias dos macros de hoje que vem de cada um (proteína e carboidrato 4 kcal/g,
+  gordura 9 kcal/g), em % inteiros que somam 100 (o que o arredondamento perde vai para as maiores sobras);
+  `null` sem consumo. O gráfico de pizza do card "Meta diária" mostra esses valores.
 
 ### `GET /nutrients/groups` → `NutrientGroup[]`
 

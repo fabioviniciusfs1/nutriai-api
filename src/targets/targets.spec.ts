@@ -1,6 +1,7 @@
 import type { Profile } from '../contract.js';
 import {
   calculateTargets,
+  macroSplit,
   macroTargets,
   perKg,
   projectWeight,
@@ -24,6 +25,7 @@ describe('calculateTargets', () => {
       bmr: 1395,
       tdee: 2163,
       waterLiters: 2.4,
+      waterMlPerKg: 35,
       clampedToMinimum: false,
     });
   });
@@ -197,5 +199,26 @@ describe('targetWeightError', () => {
     expect(
       targetWeightError({ ...ana, goal: 'ganhar', targetWeightKg: 60 }),
     ).toBe('Para ganhar peso, o peso meta deve ser maior que o atual.');
+  });
+});
+
+describe('macroSplit', () => {
+  it('reparte as calorias dos macros em % que somam 100', () => {
+    // 100 g de proteína (400 kcal), 50 g de gordura (450 kcal), 150 g de carboidrato (600 kcal).
+    expect(
+      macroSplit({ proteinas: 100, gorduras: 50, carboidratos: 150 }),
+    ).toEqual({ proteinas: 28, gorduras: 31, carboidratos: 41 });
+  });
+
+  it('dá os pontos perdidos no arredondamento às maiores sobras', () => {
+    // Um terço das calorias para cada: 33,3% → 34 + 33 + 33.
+    const split = macroSplit({ proteinas: 9, gorduras: 4, carboidratos: 9 });
+    expect(split).toEqual({ proteinas: 34, carboidratos: 33, gorduras: 33 });
+  });
+
+  it('sem consumo não há distribuição', () => {
+    expect(macroSplit({ proteinas: 0, gorduras: 0, carboidratos: 0 })).toBe(
+      null,
+    );
   });
 });
