@@ -38,6 +38,17 @@ export function addDays(day: string, delta: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+/** `day` deslocado `delta` meses ("AAAA-MM-DD"); o dia passa para o último do mês quando ele não existe (31/01 + 1 → 28/02). */
+export function addMonths(day: string, delta: number): string {
+  const [year, month, date] = day.split('-').map(Number);
+  const first = new Date(Date.UTC(year, month - 1 + delta, 1, 12));
+  const lastDate = new Date(
+    Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0, 12),
+  ).getUTCDate();
+  first.setUTCDate(Math.min(date, lastDate));
+  return first.toISOString().slice(0, 10);
+}
+
 /** O "hoje" do usuário e o fuso dele, vindos de `X-Timezone`. */
 export type UserClock = { timeZone: string; today: string };
 

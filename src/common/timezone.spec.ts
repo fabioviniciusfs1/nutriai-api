@@ -1,5 +1,6 @@
 import {
   addDays,
+  addMonths,
   localDate,
   resolveTimezone,
   userClock,
@@ -26,5 +27,12 @@ describe('timezone', () => {
   it('dia da semana e soma de dias', () => {
     expect(weekday('2026-09-28')).toBe(1);
     expect(addDays('2026-03-01', -1)).toBe('2026-02-28');
+  });
+
+  it('soma meses no mesmo dia, ou no último dia do mês quando ele não existe', () => {
+    expect(addMonths('2026-10-20', 3)).toBe('2027-01-20');
+    expect(addMonths('2027-01-31', 1)).toBe('2027-02-28');
+    expect(addMonths('2027-01-31', 2)).toBe('2027-03-31');
+    expect(addMonths('2026-10-20', 0)).toBe('2026-10-20');
   });
 });

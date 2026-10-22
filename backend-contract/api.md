@@ -266,14 +266,15 @@ ao peso meta num gráfico de linha.
 ```json
 {
   "months": 4.3,
+  "duration": { "months": 4, "days": 8 },
   "weeklyChangeKg": -0.5,
   "points": [
-    { "month": 0, "weightKg": 68.5 },
-    { "month": 1, "weightKg": 66.5 },
-    { "month": 2, "weightKg": 64.5 },
-    { "month": 3, "weightKg": 62.5 },
-    { "month": 4, "weightKg": 60.5 },
-    { "month": 4.3, "weightKg": 60 }
+    { "month": 0, "date": "2026-10-20", "weightKg": 68.5 },
+    { "month": 1, "date": "2026-11-20", "weightKg": 66.5 },
+    { "month": 2, "date": "2026-12-20", "weightKg": 64.5 },
+    { "month": 3, "date": "2027-01-20", "weightKg": 62.5 },
+    { "month": 4, "date": "2027-02-20", "weightKg": 60.5 },
+    { "month": 4.3, "date": "2027-02-28", "weightKg": 60 }
   ]
 }
 ```
@@ -281,8 +282,13 @@ ao peso meta num gráfico de linha.
 - Regra clássica: ~7.700 kcal de sobra (ou de falta) = 1 kg. Diferença diária = `calories − tdee` das metas do
   perfil (perder ≈ −500, ganhar ≈ +300; menor quando a meta foi elevada ao piso), sempre a mesma: a projeção é
   uma reta. Mês = 365,25 ÷ 12 dias.
-- `months` e `weeklyChangeKg` com uma casa decimal (`weeklyChangeKg` negativo ao perder). `points`: um ponto por
+- `duration`: o mesmo tempo em meses inteiros e dias, do primeiro ao último ponto (o front mostra "em cerca de
+  4 meses e 8 dias"). `months` e `weeklyChangeKg` com uma casa decimal (`weeklyChangeKg` negativo ao perder). `points`: um ponto por
   mês desde o mês 0 (peso atual), pesos com uma casa; o último é o peso meta em `months`.
+- `date` de cada ponto: o mês 0 é o dia em que o peso meta foi salvo (`PUT /me/profile` ou `PUT /me/target-weight`
+  guardam o dia quando ele muda); se o corpo traz outro peso meta que o salvo (ou ainda não há perfil), é hoje
+  (pelo `X-Timezone`). Os meses seguintes caem no mesmo dia do calendário (o último dia do mês quando ele não
+  existe); o último ponto soma os dias da fração do mês. O gráfico mostra o eixo como `DD/MM/AAAA`.
 - O perfil segue as regras de `PUT /me/profile` (com manter não há projeção). Também `400`
   ao perder com a meta no piso acima do gasto, "Com a meta mínima de calorias, não dá para
   estimar quando o peso meta chega. Procure um nutricionista.".

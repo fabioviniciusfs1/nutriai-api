@@ -86,18 +86,21 @@ describe('perKg', () => {
 });
 
 describe('projectWeight', () => {
+  const START = '2026-10-20';
+
   it('perde ~7.700 kcal por kg com o déficit da meta', () => {
     // 1660 − 2163 = −503 kcal/dia
-    expect(projectWeight({ ...ana, targetWeightKg: 60 })).toEqual({
+    expect(projectWeight({ ...ana, targetWeightKg: 60 }, START)).toEqual({
       months: 4.3,
+      duration: { months: 4, days: 8 },
       weeklyChangeKg: -0.5,
       points: [
-        { month: 0, weightKg: 68.5 },
-        { month: 1, weightKg: 66.5 },
-        { month: 2, weightKg: 64.5 },
-        { month: 3, weightKg: 62.5 },
-        { month: 4, weightKg: 60.5 },
-        { month: 4.3, weightKg: 60 },
+        { month: 0, date: '2026-10-20', weightKg: 68.5 },
+        { month: 1, date: '2026-11-20', weightKg: 66.5 },
+        { month: 2, date: '2026-12-20', weightKg: 64.5 },
+        { month: 3, date: '2027-01-20', weightKg: 62.5 },
+        { month: 4, date: '2027-02-20', weightKg: 60.5 },
+        { month: 4.3, date: '2027-02-28', weightKg: 60 },
       ],
     });
   });
@@ -105,15 +108,16 @@ describe('projectWeight', () => {
   it('ganha com o superávit da meta', () => {
     // 2460 − 2163 = +297 kcal/dia
     expect(
-      projectWeight({ ...ana, goal: 'ganhar', targetWeightKg: 72 }),
+      projectWeight({ ...ana, goal: 'ganhar', targetWeightKg: 72 }, START),
     ).toEqual({
       months: 3,
+      duration: { months: 2, days: 30 },
       weeklyChangeKg: 0.3,
       points: [
-        { month: 0, weightKg: 68.5 },
-        { month: 1, weightKg: 69.7 },
-        { month: 2, weightKg: 70.8 },
-        { month: 3, weightKg: 72 },
+        { month: 0, date: '2026-10-20', weightKg: 68.5 },
+        { month: 1, date: '2026-11-20', weightKg: 69.7 },
+        { month: 2, date: '2026-12-20', weightKg: 70.8 },
+        { month: 3, date: '2027-01-19', weightKg: 72 },
       ],
     });
   });
@@ -132,28 +136,30 @@ describe('projectWeight', () => {
       calories: 1200,
       clampedToMinimum: true,
     });
-    expect(projectWeight({ ...small, targetWeightKg: 50 })).toMatchObject({
+    expect(
+      projectWeight({ ...small, targetWeightKg: 50 }, START),
+    ).toMatchObject({
       months: 6,
       weeklyChangeKg: -0.2,
     });
   });
 
   it('exige o peso meta', () => {
-    expect(projectWeight(ana)).toBe('Informe o peso meta.');
-    expect(projectWeight({ ...ana, goal: 'manter' })).toBe(
+    expect(projectWeight(ana, START)).toBe('Informe o peso meta.');
+    expect(projectWeight({ ...ana, goal: 'manter' }, START)).toBe(
       'Com o objetivo de manter o peso, não há peso meta.',
     );
   });
 
   it('recusa peso meta que não combina com o objetivo', () => {
-    expect(projectWeight({ ...ana, goal: 'manter', targetWeightKg: 60 })).toBe(
-      'Com o objetivo de manter o peso, não há peso meta.',
-    );
-    expect(projectWeight({ ...ana, targetWeightKg: 70 })).toBe(
+    expect(
+      projectWeight({ ...ana, goal: 'manter', targetWeightKg: 60 }, START),
+    ).toBe('Com o objetivo de manter o peso, não há peso meta.');
+    expect(projectWeight({ ...ana, targetWeightKg: 70 }, START)).toBe(
       'Para perder peso, o peso meta deve ser menor que o atual.',
     );
     expect(
-      projectWeight({ ...ana, goal: 'ganhar', targetWeightKg: 68.5 }),
+      projectWeight({ ...ana, goal: 'ganhar', targetWeightKg: 68.5 }, START),
     ).toBe('Para ganhar peso, o peso meta deve ser maior que o atual.');
     const floor: Profile = {
       ...ana,
@@ -162,7 +168,7 @@ describe('projectWeight', () => {
       age: 60,
       activityLevel: 'sedentario',
     };
-    expect(projectWeight({ ...floor, targetWeightKg: 42 })).toMatch(
+    expect(projectWeight({ ...floor, targetWeightKg: 42 }, START)).toMatch(
       /meta mínima de calorias/,
     );
   });

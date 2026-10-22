@@ -7,6 +7,7 @@ import type {
   Targets,
   WeightProjection,
 } from '../contract.js';
+import { addDays, addMonths } from '../common/timezone.js';
 
 const ACTIVITY_FACTORS: Record<ActivityLevel, number> = {
   sedentario: 1.2,
@@ -74,10 +75,14 @@ export function targetWeightError(profile: Profile): string | null {
 
 /**
  * Em quanto tempo o perfil chega ao peso meta comendo a meta calórica: a diferença diária entre a meta e o
- * gasto (`calories − tdee`), constante, dividida por 7.700 kcal/kg.
+ * gasto (`calories − tdee`), constante, dividida por 7.700 kcal/kg. A projeção começa em `startDate`
+ * ("AAAA-MM-DD", o dia em que o peso meta foi salvo), e cada mês cai no mesmo dia do calendário.
  * Devolve a mensagem de erro quando o objetivo é manter ou o peso meta falta ou não combina com ele.
  */
-export function projectWeight(profile: Profile): WeightProjection | string {
+export function projectWeight(
+  profile: Profile,
+  startDate: string,
+): WeightProjection | string {
   const error = targetWeightError(profile);
   if (error) return error;
   const targetWeightKg = profile.targetWeightKg;
@@ -94,11 +99,19 @@ export function projectWeight(profile: Profile): WeightProjection | string {
   for (let month = 0; month < exactMonths; month++)
     points.push({
       month,
+      date: addMonths(startDate, month),
       weightKg: oneDecimal(profile.weightKg + kgPerMonth * month),
     });
-  points.push({ month: oneDecimal(exactMonths), weightKg: targetWeightKg });
+  const wholeMonths = Math.floor(exactMonths);
+  const extraDays = Math.round((exactMonths - wholeMonths) * DAYS_PER_MONTH);
+  points.push({
+    month: oneDecimal(exactMonths),
+    date: addDays(addMonths(startDate, wholeMonths), extraDays),
+    weightKg: targetWeightKg,
+  });
   return {
     months: oneDecimal(exactMonths),
+    duration: { months: wholeMonths, days: extraDays },
     weeklyChangeKg: oneDecimal((kgPerMonth / DAYS_PER_MONTH) * 7),
     points,
   };

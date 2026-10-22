@@ -10,6 +10,7 @@ import { Routine1790600000000 } from './migrations/1790600000000-routine.js';
 import { MealSlots1790700000000 } from './migrations/1790700000000-meal-slots.js';
 import { TrainingEnd1790800000000 } from './migrations/1790800000000-training-end.js';
 import { DropMealRemoval1790900000000 } from './migrations/1790900000000-drop-meal-removal.js';
+import { TargetWeightDate1791000000000 } from './migrations/1791000000000-target-weight-date.js';
 
 /** Migrations em ordem; as novas entram no fim da lista. */
 export const MIGRATIONS = [
@@ -23,6 +24,7 @@ export const MIGRATIONS = [
   MealSlots1790700000000,
   TrainingEnd1790800000000,
   DropMealRemoval1790900000000,
+  TargetWeightDate1791000000000,
 ];
 
 export function dataSourceOptions(url: string): DataSourceOptions {

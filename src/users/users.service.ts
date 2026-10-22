@@ -13,13 +13,17 @@ import {
   weekday,
   type UserClock,
 } from '../common/timezone.js';
-import type { Me, Profile, Routine } from '../contract.js';
+import type { Me, Profile, Routine, WeightProjection } from '../contract.js';
 import {
   GoogleAccountEntity,
   UserEntity,
   WeightEntity,
 } from '../database/entities/index.js';
-import { calculateTargets, targetWeightError } from '../targets/targets.js';
+import {
+  calculateTargets,
+  projectWeight,
+  targetWeightError,
+} from '../targets/targets.js';
 import { routineError } from './routine.js';
 
 @Injectable()
@@ -69,7 +73,14 @@ export class UsersService {
   ): Promise<Me> {
     const error = targetWeightError(profile);
     if (error) throw new BadRequestException(error);
-    const result = await this.users.update({ id: userId }, { profile });
+    const user = await this.get(userId);
+    const result = await this.users.update(
+      { id: userId },
+      {
+        profile,
+        targetWeightSetOn: targetWeightSetOn(user, profile, clock),
+      },
+    );
     if (!result.affected)
       throw new NotFoundException('Usuário não encontrado.');
     return this.me(userId, clock);
@@ -87,8 +98,34 @@ export class UsersService {
     const profile: Profile = { ...user.profile, targetWeightKg };
     const error = targetWeightError(profile);
     if (error) throw new BadRequestException(error);
-    await this.users.update({ id: userId }, { profile });
+    await this.users.update(
+      { id: userId },
+      {
+        profile,
+        targetWeightSetOn: targetWeightSetOn(user, profile, clock),
+      },
+    );
     return this.me(userId, clock);
+  }
+
+  /**
+   * Projeção até o peso meta de `profile` (sem salvar). Começa no dia em que o peso meta salvo foi definido;
+   * se ainda não há peso meta salvo ou `profile` traz outro, começa hoje.
+   */
+  async projection(
+    userId: string,
+    profile: Profile,
+    clock: UserClock,
+  ): Promise<WeightProjection> {
+    const user = await this.get(userId);
+    const saved = user.profile?.targetWeightKg ?? null;
+    const startDate =
+      saved !== null && saved === profile.targetWeightKg
+        ? (user.targetWeightSetOn ?? clock.today)
+        : clock.today;
+    const result = projectWeight(profile, startDate);
+    if (typeof result === 'string') throw new BadRequestException(result);
+    return result;
   }
 
   /** Salva a rotina (o perfil vem antes: é o primeiro passo do cadastro). */
@@ -117,4 +154,18 @@ export class UsersService {
     });
     return !recent.some((entry) => localDate(entry.at, timeZone) === today);
   }
+}
+
+/** Dia em que o peso meta foi salvo: hoje se mudou, o mesmo de antes se não mudou, `null` sem peso meta. */
+function targetWeightSetOn(
+  user: UserEntity,
+  profile: Profile,
+  clock: UserClock,
+): string | null {
+  if (profile.targetWeightKg === null) return null;
+  const unchanged =
+    (user.profile?.targetWeightKg ?? null) === profile.targetWeightKg;
+  return unchanged && user.targetWeightSetOn
+    ? user.targetWeightSetOn
+    : clock.today;
 }

@@ -2,7 +2,12 @@ import type { INestApplication } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
-import type { Me, PlanMeal, TodayPlan } from '../src/contract.js';
+import type {
+  Me,
+  PlanMeal,
+  TodayPlan,
+  WeightProjection,
+} from '../src/contract.js';
 import { addDays, userClock } from '../src/common/timezone.js';
 import { PlanPersonalizerService } from '../src/plan/personalizer.service.js';
 import { createTestApp, FRONTEND } from './setup-app.js';
@@ -205,10 +210,29 @@ describe('perfil e pesos', () => {
     await http('put', '/me/routine').send(ROUTINE).expect(200);
     await personalizationIdle();
 
+    // A projeção começa no dia em que o peso meta foi salvo; com outro peso meta (ainda não salvo), hoje.
+    const today = userClock('America/Sao_Paulo').today;
+    const startDate = async (targetWeightKg: number) => {
+      const projection = await http('post', '/profile/projection')
+        .send({ ...PROFILE, targetWeightKg })
+        .expect(200);
+      return (projection.body as WeightProjection).points[0].date;
+    };
+    expect(await startDate(60)).toBe(today);
+    await app
+      .get(DataSource)
+      .query(
+        `UPDATE users SET target_weight_set_on = '2026-01-15' WHERE username = $1`,
+        [username],
+      );
+    expect(await startDate(60)).toBe('2026-01-15');
+    expect(await startDate(62.5)).toBe(today);
+
     const changed = await http('put', '/me/target-weight')
       .send({ targetWeightKg: 62.5 })
       .expect(200);
     expect((changed.body as Me).profile?.targetWeightKg).toBe(62.5);
+    expect(await startDate(62.5)).toBe(today);
     // As metas continuam as do perfil.
     expect((changed.body as Me).targets?.calories).toBe(1660);
     await http('put', '/me/target-weight')

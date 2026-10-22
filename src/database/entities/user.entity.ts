@@ -29,6 +29,10 @@ export class UserEntity {
   @Column('jsonb', { nullable: true })
   routine: Routine | null;
 
+  /** Dia em que o peso meta foi salvo ("AAAA-MM-DD"), começo da projeção; `null` sem peso meta. */
+  @Column('date', { name: 'target_weight_set_on', nullable: true })
+  targetWeightSetOn: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }

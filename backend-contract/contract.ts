@@ -104,10 +104,16 @@ export type Me = {
 export type WeightProjection = {
   /** Meses até a meta, com uma casa decimal. */
   months: number;
+  /** O mesmo tempo em meses inteiros e dias: do primeiro ao último ponto de `points`. */
+  duration: { months: number; days: number };
   /** Variação por semana (kg, uma casa decimal; negativa ao perder). */
   weeklyChangeKg: number;
-  /** Um ponto por mês desde o mês 0 (peso atual); o último é o peso meta, no mês (fracionário) em que chega. */
-  points: { month: number; weightKg: number }[];
+  /**
+   * Um ponto por mês desde o mês 0 (peso atual, no dia em que o peso meta foi salvo — ou hoje, se ainda não foi);
+   * o último é o peso meta, no mês (fracionário) em que chega. `date` ("AAAA-MM-DD"): o mês 0 mais `month` meses
+   * (mesmo dia do calendário).
+   */
+  points: { month: number; date: string; weightKg: number }[];
 };
 
 export type AuthResponse = { token: string };

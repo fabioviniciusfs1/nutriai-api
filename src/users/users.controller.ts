@@ -1,16 +1,8 @@
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  Post,
-  Put,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Put } from '@nestjs/common';
 import { CurrentUser } from '../common/auth.decorators.js';
 import { Clock, type UserClock } from '../common/timezone.js';
 import type { Me, Targets, WeightProjection } from '../contract.js';
-import { calculateTargets, projectWeight } from '../targets/targets.js';
+import { calculateTargets } from '../targets/targets.js';
 import { ProfileDto, TargetWeightDto, toProfile } from './profile.dto.js';
 import { RoutineDto, toRoutine } from './routine.dto.js';
 import { UsersService } from './users.service.js';
@@ -74,9 +66,11 @@ export class UsersController {
   /** Em quanto tempo o perfil chega ao peso meta, sem salvar (o formulário mostra num gráfico). */
   @Post('profile/projection')
   @HttpCode(200)
-  projection(@Body() body: ProfileDto): WeightProjection {
-    const result = projectWeight(toProfile(body));
-    if (typeof result === 'string') throw new BadRequestException(result);
-    return result;
+  projection(
+    @CurrentUser() userId: string,
+    @Body() body: ProfileDto,
+    @Clock() clock: UserClock,
+  ): Promise<WeightProjection> {
+    return this.users.projection(userId, toProfile(body), clock);
   }
 }
