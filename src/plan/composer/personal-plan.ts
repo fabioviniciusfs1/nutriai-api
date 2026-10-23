@@ -148,8 +148,11 @@ const timeOf = (total: number) =>
   `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 
 /**
- * `count` horários espalhados por igual pelo tempo das janelas (em ordem), arredondados para 5 minutos sem sair
- * da janela. Usado quando os horários do assistente não servem.
+ * `count` horários espalhados pelas janelas, em ordem, arredondados para 5 minutos sem sair da janela. Usado
+ * quando os horários do assistente não servem. Cada janela é um momento diferente em que dá para comer: com
+ * janelas suficientes, uma refeição em cada (as escolhidas espalhadas pelo dia, a refeição no meio da janela);
+ * com mais refeições que janelas, cada janela recebe uma e as que sobram vão para as mais longas, espalhadas por
+ * igual dentro dela.
  */
 export function spreadMealTimes(
   windows: EatingWindow[],
@@ -159,18 +162,35 @@ export function spreadMealTimes(
     start: minutes(start),
     end: minutes(end),
   }));
-  const total = spans.reduce((sum, span) => sum + span.end - span.start, 0);
-  return Array.from({ length: count }, (_, index) => {
-    let offset = ((index + 0.5) / count) * total;
-    const span =
-      spans.find((item) => {
-        if (offset <= item.end - item.start) return true;
-        offset -= item.end - item.start;
-        return false;
-      }) ?? spans[spans.length - 1];
-    const rounded = Math.round((span.start + offset) / 5) * 5;
-    return timeOf(Math.min(span.end, Math.max(span.start, rounded)));
-  });
+  const perWindow = spans.map(() => 0);
+  if (count <= spans.length) {
+    for (let index = 0; index < count; index++) {
+      const chosen =
+        count === 1
+          ? Math.floor((spans.length - 1) / 2)
+          : Math.round((index * (spans.length - 1)) / (count - 1));
+      perWindow[chosen] = 1;
+    }
+  } else {
+    perWindow.fill(1);
+    for (let extra = count - spans.length; extra > 0; extra--) {
+      const share = (index: number) =>
+        (spans[index].end - spans[index].start) / (perWindow[index] + 1);
+      const longest = spans.reduce(
+        (best, _, index) => (share(index) > share(best) ? index : best),
+        0,
+      );
+      perWindow[longest]++;
+    }
+  }
+  return spans.flatMap((span, index) =>
+    Array.from({ length: perWindow[index] }, (_, k) => {
+      const at =
+        span.start + ((k + 0.5) / perWindow[index]) * (span.end - span.start);
+      const rounded = Math.round(at / 5) * 5;
+      return timeOf(Math.min(span.end, Math.max(span.start, rounded)));
+    }),
+  );
 }
 
 /** No máximo 6 horas entre uma refeição e a seguinte (o sono da noite não conta). */
@@ -198,19 +218,6 @@ export function nextMealDeadline(
   return later.length > 0 ? Math.min(...later) : null;
 }
 
-/** Cada refeição (na ordem dos horários) fica até o prazo da anterior (`nextMealDeadline`). */
-export function withinFastingLimit(
-  times: string[],
-  windows: EatingWindow[],
-): boolean {
-  const sorted = [...times].sort();
-  return sorted.every((time, index) => {
-    if (index === 0) return true;
-    const deadline = nextMealDeadline(sorted[index - 1], windows);
-    return deadline === null || minutes(time) <= deadline;
-  });
-}
-
 /**
  * Puxa para mais cedo, na ordem, cada horário que passa do prazo da refeição anterior (o prazo sempre cai numa
  * janela). Só adianta horários e nunca para antes do anterior: a ordem e os horários distintos se mantêm.
@@ -230,11 +237,13 @@ export function fitFastingLimit(
 
 /**
  * Lê a resposta do assistente e devolve as refeições pedidas (`ids`), cada uma na porção dele com os alimentos
- * e os nutrientes do catálogo (`parseFoods`). Alimentos fora do catálogo, restritos ou fora do tipo de alimentação são descartados; `null` se
- * alguma refeição pedida não vier ou ficar sem alimentos. Se algum horário vier inválido, repetido ou fora das
- * `windows`, ou se passar de 6 horas entre uma refeição e a seguinte quando as janelas permitem menos
- * (`withinFastingLimit`), todas ficam com horários espalhados pelas janelas, na ordem de `ids` (a do dia), sem
- * passar desse limite.
+ * e os nutrientes do catálogo (`parseFoods`). Alimentos fora do catálogo, restritos ou fora do tipo de alimentação
+ * são descartados; `null` se alguma refeição pedida não vier ou ficar sem alimentos.
+ *
+ * Horários: se todos vêm legíveis, dentro das `windows` e na ordem de `ids` (a do dia), ficam os do assistente,
+ * só adiantando os que passam de 6 horas depois da refeição anterior (`fitFastingLimit`). Senão (algum inválido,
+ * repetido, fora das janelas ou fora de ordem), todos são espalhados pelas janelas (`spreadMealTimes`), com o
+ * mesmo limite. `onTimesChanged` recebe os horários do assistente e os que ficaram, quando mudam.
  */
 export function parsePersonalPlan(
   text: string,
@@ -243,6 +252,7 @@ export function parsePersonalPlan(
   allowed: (name: string) => boolean,
   ids: number[],
   windows: EatingWindow[],
+  onTimesChanged?: (from: string[], to: string[]) => void,
 ): PersonalMeals | null {
   let raw: unknown;
   try {
@@ -270,21 +280,19 @@ export function parsePersonalPlan(
   }
   if (!ids.every((id) => result[id])) return null;
 
-  const valid =
-    new Set(Object.values(times)).size === ids.length &&
-    Object.values(times).every(
+  const given = ids.map((id) => times[id]);
+  const usable =
+    given.every(
       (time) =>
         TIME.test(time) &&
         windows.some(({ start, end }) => start <= time && time <= end),
-    ) &&
-    withinFastingLimit(Object.values(times), windows);
-  if (!valid) {
-    const spread = fitFastingLimit(
-      spreadMealTimes(windows, ids.length),
-      windows,
-    );
-    ids.forEach((id, index) => (times[id] = spread[index]));
-  }
-  for (const id of ids) result[id].time = times[id];
+    ) && given.every((time, index) => index === 0 || given[index - 1] < time);
+  const final = fitFastingLimit(
+    usable ? given : spreadMealTimes(windows, ids.length),
+    windows,
+  );
+  if (final.some((time, index) => time !== given[index]))
+    onTimesChanged?.(given, final);
+  ids.forEach((id, index) => (result[id].time = final[index]));
   return result;
 }

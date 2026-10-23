@@ -120,6 +120,10 @@ export class MealComposerService {
       dietFilter(catalog, request.routine.diet),
       request.meals.map((meal) => meal.id),
       request.routine.eatingWindows,
+      (from, to) =>
+        this.logger.log(
+          `Horários do plano individual ajustados: ${from.join(', ')} → ${to.join(', ')}.`,
+        ),
     );
     if (!meals)
       this.logger.warn('Plano individual sem todas as refeições válidas.');

@@ -132,7 +132,7 @@ describe('horários das refeições', () => {
     });
   });
 
-  it('fora das janelas, repetido ou ilegível: espalha pelas janelas na ordem pedida', () => {
+  it('fora das janelas, repetido, ilegível ou fora de ordem: espalha pelas janelas na ordem pedida', () => {
     // 12:30 + 6 h = 18:30, fora das janelas: o jantar vem no início da próxima (19:00).
     const spread = { 1: '07:30', 2: '12:30', 3: '19:00' };
     expect(
@@ -144,6 +144,33 @@ describe('horários das refeições', () => {
     expect(
       times([meal(2, '07:30'), meal(1, '07:30'), meal(3)], [1, 2, 3]),
     ).toEqual(spread);
+    // Café da manhã depois do almoço: fora da ordem do dia.
+    expect(times([meal(1, '12:30'), meal(2, '07:30')], [1, 2])).toEqual({
+      1: '07:30',
+      2: '19:00',
+    });
+  });
+
+  it('janelas de tamanhos diferentes: uma refeição em cada, e só adianta o que passou de 6 horas', () => {
+    // Marcou 07, 12 e das 18 às 21; mais fome à noite, o assistente pôs o jantar às 19:30.
+    const hours = [
+      { start: '07:00', end: '07:59' },
+      { start: '12:00', end: '12:59' },
+      { start: '18:00', end: '21:59' },
+    ];
+    expect(
+      times(
+        [meal(1, '07:30'), meal(2, '12:30'), meal(3, '19:30')],
+        [1, 2, 3],
+        hours,
+      ),
+    ).toEqual({ 1: '07:30', 2: '12:30', 3: '18:30' });
+    // Sem horários que sirvam: o café não vai para o meio-dia.
+    expect(times([meal(1), meal(2), meal(3)], [1, 2, 3], hours)).toEqual({
+      1: '07:30',
+      2: '12:30',
+      3: '18:30',
+    });
   });
 
   describe('no máximo 6 horas entre uma refeição e a seguinte', () => {
@@ -169,15 +196,33 @@ describe('horários das refeições', () => {
       });
     });
 
-    it('passou do prazo: espalha e puxa para dentro do limite', () => {
+    it('passou do prazo: fica com os horários do assistente e adianta só o que passou', () => {
       expect(
         times([meal(1, '12:00'), meal(2, '19:30')], [1, 2], SPLIT),
-      ).toEqual({ 1: '12:30', 2: '19:00' });
-      // Espalhadas por igual, 10:45 e 18:15 ficariam 7h30 sem comer.
+      ).toEqual({ 1: '12:00', 2: '19:00' });
       expect(times([meal(1, '07:00'), meal(2, '14:00')], [1, 2], DAY)).toEqual({
-        1: '10:45',
-        2: '16:45',
+        1: '07:00',
+        2: '13:00',
       });
+    });
+
+    it('avisa quando os horários mudam', () => {
+      const changed = vi.fn();
+      parsePersonalPlan(
+        JSON.stringify({
+          meals: [meal(1, '07:00'), meal(2, '14:00')],
+        }),
+        catalog,
+        {},
+        vegetarian,
+        [1, 2],
+        DAY,
+        changed,
+      );
+      expect(changed).toHaveBeenCalledWith(
+        ['07:00', '14:00'],
+        ['07:00', '13:00'],
+      );
     });
 
     it('fitFastingLimit só adianta, na ordem', () => {
@@ -189,7 +234,7 @@ describe('horários das refeições', () => {
     });
   });
 
-  it('spreadMealTimes divide o tempo das janelas por igual, em passos de 5 minutos', () => {
+  it('spreadMealTimes: uma refeição por janela; as que sobram, nas mais longas; passos de 5 minutos', () => {
     expect(spreadMealTimes(WINDOWS, 3)).toEqual(['07:30', '12:30', '19:30']);
     expect(spreadMealTimes(WINDOWS, 6)).toEqual([
       '07:15',
@@ -202,6 +247,21 @@ describe('horários das refeições', () => {
     expect(spreadMealTimes([{ start: '12:00', end: '12:07' }], 2)).toEqual([
       '12:00',
       '12:05',
+    ]);
+    const uneven = [
+      { start: '07:00', end: '07:59' },
+      { start: '12:00', end: '12:59' },
+      { start: '18:00', end: '21:59' },
+    ];
+    expect(spreadMealTimes(uneven, 3)).toEqual(['07:30', '12:30', '20:00']);
+    // Menos refeições que janelas: as escolhidas ficam espalhadas pelo dia.
+    expect(spreadMealTimes(uneven, 2)).toEqual(['07:30', '20:00']);
+    expect(spreadMealTimes(uneven, 5)).toEqual([
+      '07:30',
+      '12:30',
+      '18:40',
+      '20:00',
+      '21:20',
     ]);
   });
 });

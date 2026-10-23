@@ -319,6 +319,16 @@ describe('perfil e pesos', () => {
       { meals: ['almoco', 'almoco'] },
       'Escolha as refeições que você faz no dia.',
     );
+    // Como o front manda: cada hora marcada até o minuto 59 dela (07, 08 e 12 → 07:00–08:59 e 12:00–12:59).
+    const hours = [
+      { start: '07:00', end: '08:59' },
+      { start: '12:00', end: '12:59' },
+    ];
+    const byHour = await http('put', '/me/routine')
+      .send({ ...ROUTINE, eatingWindows: hours })
+      .expect(200);
+    expect((byHour.body as Me).routine?.eatingWindows).toEqual(hours);
+    await personalizationIdle();
     // Qualquer combinação vale, e o plano tem só as refeições marcadas (guardadas na ordem do dia).
     const few = await http('put', '/me/routine')
       .send({ ...ROUTINE, meals: ['ceia', 'almoco'] })
@@ -780,7 +790,7 @@ describe('plano individual do assistente', () => {
     await personalizationIdle();
     expect(create).toHaveBeenCalledTimes(1);
 
-    // "Refazer meu plano": monta de novo; horário fora das janelas → espalhados pelas janelas.
+    // "Refazer meu plano": monta de novo; horário fora das janelas → um em cada janela, no meio dela.
     await http('put', '/plan/meals/1/time').send({ time: '09:00' }).expect(200);
     create.mockResolvedValueOnce(
       reply({
@@ -799,8 +809,8 @@ describe('plano individual do assistente', () => {
     expect(redone.meals.map((meal) => [meal.id, meal.time])).toEqual([
       [1, '07:45'],
       [2, '12:45'],
-      [4, '16:15'],
-      [3, '20:15'],
+      [4, '16:00'],
+      [3, '20:00'],
     ]);
     create.mockReset();
   });
