@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
@@ -85,6 +86,8 @@ export function asHttpError(error: unknown): unknown {
 
 @Injectable()
 export class PlanService {
+  private readonly logger = new Logger(PlanService.name);
+
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly catalog: CatalogService,
@@ -140,9 +143,13 @@ export class PlanService {
       const suggested = names
         ? planner.substitutes(mealId, foodName, names, exclude)
         : [];
-      return suggested.length > 0
-        ? suggested
-        : planner.substitutes(mealId, foodName, undefined, exclude);
+      if (suggested.length > 0) return suggested;
+      // A falha do assistente (erro, demora, nenhum nome no catálogo) já vai para o log dele.
+      if (names)
+        this.logger.warn(
+          `Substitutos do assistente para "${foodName}" descartados (${names.join('; ')}); usando os do mesmo grupo.`,
+        );
+      return planner.substitutes(mealId, foodName, undefined, exclude);
     });
   }
 

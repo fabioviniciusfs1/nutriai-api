@@ -119,7 +119,9 @@ npx vitest run -t "não gosto"                     # por nome do teste
   citado, calorias longe demais descartam; sem par → descartado. `parseFoods` e `parseSubstitutes` usam o
   `match` e depois descartam restritos e fora da dieta. O cliente e o modelo (`CLAUDE_MODEL`) ficam em
   `src/ai/`. Sugere substitutos ao trocar alimento (`substitution.ts`; até 8, sem crus se o original não for
-  cru); sem o Claude, os do mesmo grupo mais parecidos (`FoodCatalog.substituteOptions`). A troca aceita
+  cru e nunca o próprio alimento em outro preparo, `isSameFood`); sem o Claude, os do mesmo grupo mais parecidos
+  em macros e em kcal/100 g (`FoodCatalog.substituteOptions`), no máximo 2 por família do nome e sem duas
+  versões do mesmo alimento. A troca aceita
   qualquer alimento do catálogo não restrito.
 - Lacuna conhecida: não há rota para marcar refeição feita (`/history/plans` conta todas como seguidas).
 

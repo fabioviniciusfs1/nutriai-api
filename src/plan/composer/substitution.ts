@@ -1,6 +1,6 @@
 // Partes puras das sugestões de substituto pelo assistente: prompt, schema da resposta e validação.
 import type { Diet, FoodFeedback } from '../../contract.js';
-import { FoodCatalog, isRaw } from '../engine/foods.js';
+import { FoodCatalog, isRaw, isSameFood } from '../engine/foods.js';
 import {
   dietLine,
   FOOD_NAMING,
@@ -24,7 +24,8 @@ Regras:
 - Sugira alimentos na forma em que são comidos: se o alimento a substituir não é cru, nunca sugira um com
   "cru" ou "crua" no nome (ex.: troque frango grelhado por peixe grelhado ou assado, não por peixe cru).
   Frutas e verduras cruas só no lugar de outro alimento cru.
-- Nunca sugira o próprio alimento nem os alimentos que o usuário marcou como restritos.`;
+- Nunca sugira o próprio alimento, nem ele em outro preparo (para batata-doce cozida, nada de batata-doce
+  assada ou frita), nem os alimentos que o usuário marcou como restritos.`;
 
 /** Schema da resposta (saída estruturada). */
 export const SUBSTITUTES_SCHEMA = {
@@ -80,8 +81,9 @@ export function substitutePrompt(request: SubstituteRequest): string {
 
 /**
  * Lê a resposta do assistente (`foods`, ou `names` só com os nomes) e devolve os alimentos do catálogo que
- * correspondem aos citados (`FoodCatalog.match`), na ordem dele, sem o próprio alimento, sem restritos, sem repetidos, sem os que
- * não passam em `allowed` (tipo de alimentação) e sem crus quando o alimento original não é cru.
+ * correspondem aos citados (`FoodCatalog.match`), na ordem dele, sem o próprio alimento (nem ele em outro preparo,
+ * `isSameFood`), sem restritos, sem repetidos, sem os que não passam em `allowed` (tipo de alimentação) e sem
+ * crus quando o alimento original não é cru.
  */
 export function parseSubstitutes(
   text: string,
@@ -109,6 +111,8 @@ export function parseSubstitutes(
     if (typeof cited?.name !== 'string') continue;
     const name = catalog.match(cited.name, parseApprox(cited.per100g));
     if (!name || name === foodName || feedback[name]) continue;
+    // O mesmo alimento em outro preparo não é substituto.
+    if (isSameFood(foodName, name)) continue;
     if (isRaw(name) && !isRaw(foodName)) continue;
     if (!allowed(name)) continue;
     chosen.add(name);

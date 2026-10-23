@@ -94,6 +94,34 @@ describe('parseSubstitutes', () => {
     ).toEqual(['Abacate']);
   });
 
+  it('descarta o próprio alimento em outro preparo', () => {
+    const roots = new FoodCatalog([
+      {
+        name: 'Batata, doce, cozida',
+        group: 'vegetais',
+        per100g: { carbs: 18, protein: 1, fat: 0, kcal: 77 },
+      },
+      {
+        name: 'Batata, doce, assada',
+        group: 'vegetais',
+        per100g: { carbs: 21, protein: 1, fat: 0, kcal: 90 },
+      },
+      {
+        name: 'Mandioca, cozida',
+        group: 'vegetais',
+        per100g: { carbs: 30, protein: 1, fat: 0, kcal: 125 },
+      },
+    ]);
+    expect(
+      parseSubstitutes(
+        JSON.stringify({ names: ['Batata, doce, assada', 'Mandioca, cozida'] }),
+        roots,
+        {},
+        'Batata, doce, cozida',
+      ),
+    ).toEqual(['Mandioca, cozida']);
+  });
+
   it('no máximo 8', () => {
     const names = testFoods
       .map((food) => food.name)

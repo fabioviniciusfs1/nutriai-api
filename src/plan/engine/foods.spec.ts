@@ -1,4 +1,4 @@
-import { FoodCatalog } from './foods.js';
+import { FoodCatalog, isSameFood } from './foods.js';
 import type { CatalogFood } from './types.js';
 
 const food = (
@@ -124,5 +124,89 @@ describe('FoodCatalog.search', () => {
     expect(
       catalog.search('banana', {}).candidates.map((food) => food.name),
     ).toEqual(['Banana, prata, crua', 'Bolo, banana, caseiro']);
+  });
+});
+
+describe('isSameFood', () => {
+  it('o mesmo alimento em outro preparo', () => {
+    expect(
+      isSameFood(
+        'Batata, doce, cozida',
+        'Batata, doce, s/ casca, assada, s/ óleo, c/ sal',
+      ),
+    ).toBe(true);
+    expect(
+      isSameFood(
+        'Ovo, de galinha, inteiro, cozido/10minutos',
+        'Ovo, galinha, inteiro, cozido, c/ sal',
+      ),
+    ).toBe(true);
+    expect(
+      isSameFood(
+        'Carne, bovina, patinho, grelhado',
+        'Carne, boi, patinho, assado',
+      ),
+    ).toBe(true);
+  });
+
+  it('outro alimento da mesma família não é o mesmo', () => {
+    expect(isSameFood('Batata, doce, cozida', 'Batata, inglesa, cozida')).toBe(
+      false,
+    );
+    expect(isSameFood('Arroz, tipo 1, cozido', 'Arroz, tipo 2, cozido')).toBe(
+      false,
+    );
+    expect(
+      isSameFood('Pão, trigo, francês', 'Pão, trigo, forma, integral'),
+    ).toBe(false);
+  });
+});
+
+describe('FoodCatalog.substituteOptions', () => {
+  const root = (name: string, kcal: number, carbs: number) => ({
+    name,
+    group: 'vegetais' as const,
+    per100g: { kcal, protein: 1, fat: 0, carbs },
+  });
+  const roots = new FoodCatalog([
+    root('Batata, doce, cozida', 77, 18),
+    root('Batata, doce, assada, s/ sal', 90, 21),
+    root('Batata, doce, assada, c/ sal', 90, 21),
+    root('Batata, doce, frita', 150, 25),
+    root('Batata, baroa, cozida', 80, 19),
+    root('Batata, inglesa, cozida', 52, 12),
+    root('Batata, inglesa, assada', 85, 19),
+    root('Batata, yacon, crua', 40, 9),
+    root('Mandioca, cozida, s/ sal', 125, 30),
+    root('Mandioca, cozida, c/ sal', 125, 30),
+    root('Cará, cozido', 78, 19),
+    root('Farinha, de mandioca', 361, 89),
+  ]);
+
+  it('sem o mesmo alimento em outro preparo, no máximo 2 da família, sem versões repetidas', () => {
+    expect(
+      roots
+        .substituteOptions('Batata, doce, cozida', 100, {}, 5)
+        .map((food) => food.name),
+    ).toEqual([
+      'Batata, baroa, cozida',
+      // Uma batata-inglesa só (assada e cozida são o mesmo alimento).
+      'Batata, inglesa, assada',
+      'Cará, cozido',
+      'Mandioca, cozida, s/ sal',
+      'Farinha, de mandioca',
+    ]);
+  });
+
+  it('as calorias por 100 g contam: farinha depois de raiz cozida', () => {
+    const names = roots
+      .substituteOptions('Batata, doce, cozida', 100, {}, 8)
+      .map((food) => food.name);
+    expect(names.indexOf('Farinha, de mandioca')).toBeGreaterThan(
+      names.indexOf('Mandioca, cozida, s/ sal'),
+    );
+    // Faltando opção, vêm mais da família (mas nunca a própria batata-doce).
+    expect(names).toContain('Batata, yacon, crua');
+    expect(names.some((name) => name.startsWith('Batata, doce'))).toBe(false);
   });
 });

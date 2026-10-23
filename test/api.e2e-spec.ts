@@ -463,10 +463,15 @@ describe('plano alimentar', () => {
       `/plan/meals/2/substitutes?food=${encodeURIComponent(ARROZ)}`,
     ).expect(200);
     const names = substitutes.body.map((food: { name: string }) => food.name);
-    // Sem resposta do Claude: até 8 do mesmo grupo (Cereais → carboidratos), sem o próprio alimento.
+    // Sem resposta do Claude: até 8 do mesmo grupo (Cereais → carboidratos), sem o próprio alimento (nem em outro
+    // preparo) e no máximo 2 da mesma família.
     expect(names.length).toBeLessThanOrEqual(8);
-    expect(names).toContain(ARROZ_BRANCO);
-    expect(names).not.toContain(ARROZ);
+    const rice = names.filter((name: string) => name.startsWith('Arroz, '));
+    expect(rice.length).toBeGreaterThan(0);
+    expect(rice.length).toBeLessThanOrEqual(2);
+    expect(
+      names.some((name: string) => name.startsWith('Arroz, integral')),
+    ).toBe(false);
     expect(names).not.toContain('Feijão, carioca, cozido');
 
     const swapped = (

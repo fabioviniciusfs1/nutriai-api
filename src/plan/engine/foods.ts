@@ -8,6 +8,12 @@ import type { CatalogFood, PlanFood, Totals } from './types.js';
 /** Evita laço se as trocas formarem um ciclo (A → B → A). */
 const MAX_CHAIN = 5;
 
+/** Nos substitutos sem o assistente, quantos da mesma família (ex.: "Batata, …") antes de variar. */
+const MAX_PER_FAMILY = 2;
+
+/** Peso da diferença de calorias por 100 g (em log) no ranking dos substitutos sem o assistente. */
+const DENSITY_WEIGHT = 0.3;
+
 /** Quantas sugestões devolver quando o texto não bate com nenhum alimento. */
 const MAX_SUGGESTIONS = 5;
 
@@ -135,6 +141,46 @@ function words(text: string) {
     .split(' ')
     .filter((word) => word && !STOPWORDS.has(word))
     .map(stem);
+}
+
+/** Palavras de preparo e de apresentação: não mudam qual é o alimento ("Batata, doce, s/ casca, assada"). */
+const PREPARATION = new Set(
+  [
+    'cozido',
+    'assado',
+    'grelhado',
+    'frito',
+    'cru',
+    'refogado',
+    'drenado',
+    'ensopado',
+    'empanado',
+    'vapor',
+    'casca',
+    'pele',
+    'sal',
+    'oleo',
+    'natura',
+    'temperado',
+    'tempero',
+  ].map(stem),
+);
+
+/**
+ * `candidate` é o mesmo alimento que `original`, em outro preparo: tem todas as palavras que identificam o
+ * original (sem as de preparo), aceitando os sinônimos. "Batata, doce, s/ casca, assada" é o mesmo que
+ * "Batata, doce, cozida"; "Batata, inglesa, cozida" não é.
+ */
+export function isSameFood(original: string, candidate: string) {
+  // Tempo de preparo ("cozido/10minutos") também é preparo; número sozinho ("tipo 1") identifica.
+  const key = words(original).filter(
+    (word) => !PREPARATION.has(word) && !/\d[a-z]|[a-z]\d/.test(word),
+  );
+  if (key.length === 0) return false;
+  const candidateWords = new Set(words(candidate));
+  return key.every((word) =>
+    [word, ...(SYNONYMS[word] ?? [])].some((item) => candidateWords.has(item)),
+  );
 }
 
 /** Valores aproximados por 100 g que o assistente informa junto com o nome, para desempatar. */
@@ -324,9 +370,12 @@ export class FoodCatalog {
   }
 
   /**
-   * Substitutos do mesmo grupo, sem o próprio alimento e sem os restritos, com as mesmas calorias (usado
-   * sem o assistente): os `limit` mais parecidos — primeiro os da mesma família (mesmo começo do nome, ex.
-   * "Arroz, …"), depois evitando os crus se o original não for cru, e pela proporção de macronutrientes.
+   * Substitutos do mesmo grupo, sem o próprio alimento (nem ele em outro preparo, `isSameFood`) e sem os
+   * restritos, com as mesmas calorias (usado sem o assistente): os `limit` mais parecidos — primeiro os da
+   * mesma família (mesmo começo do nome, ex. "Arroz, …"), depois evitando os crus se o original não for cru, e
+   * pela proporção de macronutrientes e pelas calorias por 100 g (farinha não substitui batata cozida). No máximo
+   * `MAX_PER_FAMILY` de cada família e nunca duas versões do mesmo alimento (com e sem sal), para a lista
+   * variar; só se faltar opção vêm mais da mesma família.
    */
   substituteOptions(
     foodName: string,
@@ -345,13 +394,16 @@ export class FoodCatalog {
       !originalRaw && isRaw(food.name) ? 1 : 0,
       // Receitas com a lista de ingredientes (TBCA) depois dos alimentos simples.
       food.name.includes('(') ? 1 : 0,
-      distance(food),
+      distance(food) +
+        Math.abs(Math.log(food.per100g.kcal / original.per100g.kcal)) *
+          DENSITY_WEIGHT,
     ];
-    return this.foods
+    const ranked = this.foods
       .filter(
         (food) =>
           food.group === original.group &&
           food.name !== foodName &&
+          !isSameFood(foodName, food.name) &&
           !feedback[food.name] &&
           food.per100g.kcal > 0 &&
           allowed(food.name),
@@ -363,9 +415,35 @@ export class FoodCatalog {
           a.rank[1] - b.rank[1] ||
           a.rank[2] - b.rank[2] ||
           a.rank[3] - b.rank[3],
-      )
-      .slice(0, limit)
-      .flatMap(({ food }) => this.convert(food.name, kcal) ?? []);
+      );
+    const chosen: CatalogFood[] = [];
+    const pick = (familyCap: number) => {
+      for (const { food } of ranked) {
+        if (chosen.length === limit) return;
+        if (chosen.includes(food)) continue;
+        const family = foodFamily(food.name);
+        if (
+          chosen.filter((item) => foodFamily(item.name) === family).length >=
+          familyCap
+        )
+          continue;
+        // Duas versões do mesmo alimento (com e sem sal, com o nome científico ou sem): da mesma família e uma
+        // com tudo o que identifica a outra. A família evita que "Mandioca, cozida" barre "Farinha, de mandioca".
+        if (
+          chosen.some(
+            (item) =>
+              foodFamily(item.name) === family &&
+              (isSameFood(item.name, food.name) ||
+                isSameFood(food.name, item.name)),
+          )
+        )
+          continue;
+        chosen.push(food);
+      }
+    };
+    pick(MAX_PER_FAMILY);
+    pick(Infinity);
+    return chosen.flatMap((food) => this.convert(food.name, kcal) ?? []);
   }
 
   /**
