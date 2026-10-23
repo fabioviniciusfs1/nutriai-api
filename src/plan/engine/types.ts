@@ -13,8 +13,11 @@ export type { Totals };
 /** Alimento numa porção: gramas e nutrientes já calculados (inteiros). */
 export type PlanFood = Totals & { name: string; grams: number };
 
-/** Alimento acrescentado pelo usuário, guardado na porção "fator 1" da refeição. */
-export type ExtraFood = PlanFood & { id: string };
+/**
+ * Alimento acrescentado pelo usuário. `fixed`: nas gramas que ele escolheu, fora dos fatores de porção (soma às
+ * calorias do dia). Sem `fixed` (extras antigos): na porção "fator 1" da refeição, escalado com ela.
+ */
+export type ExtraFood = PlanFood & { id: string; fixed?: true };
 
 export type MealPeriod = 'manha' | 'tarde' | 'noite';
 

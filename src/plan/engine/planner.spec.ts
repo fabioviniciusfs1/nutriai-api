@@ -66,7 +66,7 @@ describe('Planner', () => {
   });
 
   describe('acrescentar alimento', () => {
-    it('busca sem diferenciar acentos e calcula a porção e a redução', () => {
+    it('busca sem diferenciar acentos e sugere a porção', () => {
       const result = planner().searchFoods(1, 'pao integral');
       expect(result.found).toBe(true);
       expect(result.options.map((option) => option.food.name)).toEqual([
@@ -74,7 +74,6 @@ describe('Planner', () => {
       ]);
       // kcal da refeição ÷ (nº de alimentos + 1) = 350 / 5 = 70.
       expect(result.options[0].food.kcal).toBe(70);
-      expect(result.options[0].reductionPercent).toBeGreaterThan(0);
     });
 
     it('ignora pontuação na busca', () => {
@@ -106,31 +105,63 @@ describe('Planner', () => {
       );
     });
 
-    it('acrescenta sem aumentar o dia e remove devolvendo as calorias', () => {
+    it('acrescenta o extra nas gramas do usuário, somando ao dia, e remove sem mexer no resto', () => {
       const before = planner();
-      const added = planner(before.addFood(1, 'Banana-prata'));
-      expect(added.dayKcal()).toBeLessThanOrEqual(before.dayKcal());
+      const added = planner(before.addFood(1, 'Banana-prata', 150));
 
       const extra = added.meal(1).foods.find((food) => food.extraId !== null)!;
-      expect(extra).toMatchObject({ name: 'Banana-prata', extraId: 'x-1' });
+      expect(extra).toEqual({
+        ...before.foodPortion(1, 'Banana-prata', 150),
+        extraId: 'x-1',
+      });
+      expect(extra.grams).toBe(150);
       expect(added.state.nextExtraId).toBe(2);
+      // As outras porções não mudam; o dia ganha as calorias do extra.
+      expect(added.dayKcal()).toBe(before.dayKcal() + extra.kcal);
+      for (const meal of before.plan)
+        expect(
+          added.meal(meal.id).foods.filter((food) => food.extraId === null),
+        ).toEqual(meal.foods);
 
       const removed = planner(added.removeExtraFood(1, 'x-1'));
-      expect(removed.meal(1).foods.some((food) => food.extraId !== null)).toBe(
-        false,
-      );
-      expect(removed.dayKcal()).toBeLessThanOrEqual(added.dayKcal());
-      expect(removed.dayKcal()).toBeGreaterThan(
-        added.dayKcal() - extra.kcal - 10,
-      );
+      expect(removed.todayPlan()).toEqual(before.todayPlan());
+    });
+
+    it('extra antigo (sem gramas fixas) continua escalado com a refeição', () => {
+      const base = planner();
+      const legacy = {
+        ...base.state,
+        planChanges: {
+          ...base.state.planChanges,
+          extraFoods: {
+            1: [{ ...base.foodPortion(1, 'Banana-prata', 100), id: 'x-1' }],
+          },
+          scales: { 1: 0.5 },
+        },
+        nextExtraId: 2,
+      };
+      const extra = planner(legacy)
+        .meal(1)
+        .foods.find((food) => food.extraId === 'x-1')!;
+      expect(extra.grams).toBe(50);
+    });
+
+    it('prévia: as gramas pedidas com os nutrientes do catálogo', () => {
+      expect(planner().foodPortion(1, 'Banana-prata', 200)).toMatchObject({
+        name: 'Banana-prata',
+        grams: 200,
+      });
     });
 
     it('recusa alimento restrito ou desconhecido', () => {
       const state = planner().swapFood(2, 'Guacamole', 'nao-gosto', null);
-      expect(() => planner(state).addFood(1, 'Guacamole')).toThrow(
+      expect(() => planner(state).addFood(1, 'Guacamole', 50)).toThrow(
         PlanRuleError,
       );
-      expect(() => planner().addFood(1, 'Pizza')).toThrow(
+      expect(() => planner(state).foodPortion(1, 'Guacamole', 50)).toThrow(
+        PlanRuleError,
+      );
+      expect(() => planner().addFood(1, 'Pizza', 50)).toThrow(
         'Alimento não encontrado.',
       );
       expect(() => planner().removeExtraFood(1, 'x-9')).toThrow(
@@ -449,28 +480,27 @@ describe('meta calórica e refeições da rotina', () => {
     expect(factor).toBeLessThan(2 * 1.05);
   });
 
-  it('acrescentar e remover alimento não aumentam o dia', () => {
+  it('o extra soma ao dia, na meta, e remover volta ao total de antes', () => {
     const start = withGoal(2290);
-    const search = start.searchFoods(1, 'banana');
-    const added = withGoal(2290, 3, start.addFood(1, 'Banana-prata'));
+    const added = withGoal(2290, 3, start.addFood(1, 'Banana-prata', 120));
     const banana = added.meal(1).foods.find((food) => food.extraId !== null)!;
-    // Aparece com a porção da busca (na escala da meta).
-    expect(
-      Math.abs(banana.kcal - search.options[0].food.kcal),
-    ).toBeLessThanOrEqual(2);
-    expect(added.dayKcal()).toBeLessThanOrEqual(start.dayKcal());
+    expect(banana.grams).toBe(120);
+    expect(added.dayKcal()).toBe(start.dayKcal() + banana.kcal);
 
     const removed = withGoal(2290, 3, added.removeExtraFood(1, 'x-1'));
-    expect(removed.dayKcal()).toBeLessThanOrEqual(added.dayKcal());
+    expect(removed.dayKcal()).toBe(start.dayKcal());
   });
 
-  it('mudar a meta escala o plano todo, inclusive o que o usuário acrescentou', () => {
-    const state = withGoal(1660).addFood(1, 'Banana-prata');
+  it('mudar a meta escala o plano, mas não as gramas do extra', () => {
+    const state = withGoal(1660).addFood(1, 'Banana-prata', 120);
     const low = withGoal(1660, 3, state);
     const high = withGoal(2290, 3, state);
     const banana = (p: Planner) =>
-      p.meal(1).foods.find((food) => food.extraId !== null)!.kcal;
-    expect(high.dayKcal() / low.dayKcal()).toBeCloseTo(2290 / 1660, 1);
-    expect(banana(high) / banana(low)).toBeCloseTo(2290 / 1660, 1);
+      p.meal(1).foods.find((food) => food.extraId !== null)!;
+    expect(banana(high)).toEqual(banana(low));
+    expect(banana(high).grams).toBe(120);
+    expect(high.dayKcal() - banana(high).kcal).toBeGreaterThan(
+      low.dayKcal() - banana(low).kcal,
+    );
   });
 });

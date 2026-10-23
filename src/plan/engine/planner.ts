@@ -141,15 +141,25 @@ export class Planner {
         const swaps = { ...foodSubstitutes, ...mealFoodSwaps[meal.id] };
         const planFoods = this.foods
           .resolve(meal.foods, swaps)
-          .map((food) => ({ ...food, extraId: null as string | null }));
+          .map((food) => ({
+            ...food,
+            extraId: null as string | null,
+            fixed: false,
+          }));
         const extras = (changes.extraFoods[meal.id] ?? []).flatMap((extra) =>
-          this.foods
-            .resolve([extra], swaps)
-            .map((resolved) => ({ ...plain(resolved), extraId: extra.id })),
+          this.foods.resolve([extra], swaps).map((resolved) => ({
+            ...plain(resolved),
+            extraId: extra.id,
+            fixed: extra.fixed === true,
+          })),
         );
         const baseFoods = [...planFoods, ...extras];
-        // Porções ajustadas: menores quando um alimento acrescentado abriu espaço.
-        const foods = scaleFoods(baseFoods, this.goalFactor * scale);
+        // Porções ajustadas pelos fatores; os extras nas gramas do usuário (`fixed`) ficam como estão.
+        const scaled = (factor: number) =>
+          baseFoods.map(({ fixed, ...food }) =>
+            fixed ? food : scaleFoods([food], factor)[0],
+          );
+        const foods = scaled(this.goalFactor * scale);
         return {
           id: meal.id,
           title: meal.title,
@@ -157,7 +167,7 @@ export class Planner {
           totals: sumTotals(foods),
           foods,
           totalsAt: (nextScale: number) =>
-            sumTotals(scaleFoods(baseFoods, this.goalFactor * nextScale)),
+            sumTotals(scaled(this.goalFactor * nextScale)),
         };
       })
       .sort((a, b) => a.time.localeCompare(b.time));
@@ -205,30 +215,6 @@ export class Planner {
   // ---------------------------------------------------------------------------------------------
   // Porções
 
-  /**
-   * Fator que todas as refeições do plano recebem para o total do dia passar a ser
-   * `targetKcal` (abrir espaço para calorias novas sem passar do total atual).
-   */
-  private shareFactor(meals: BuiltMeal[], targetKcal: number) {
-    const currentKcal = sumTotals(meals.map((meal) => meal.totals)).kcal;
-    if (currentKcal === 0) return 1;
-    return fitFactor(
-      meals,
-      this.state.planChanges.scales,
-      targetKcal / currentKcal,
-      targetKcal,
-    );
-  }
-
-  /** Todas as refeições do plano permanente com as porções multiplicadas por `factor`. */
-  private scaleAll(factor: number) {
-    const { scales } = this.state.planChanges;
-    const nextScales = { ...scales };
-    for (const meal of this.plan)
-      nextScales[meal.id] = (scales[meal.id] ?? 1) * factor;
-    return nextScales;
-  }
-
   /** Total de calorias do plano de hoje. */
   dayKcal() {
     return sumTotals(this.plan.map((meal) => meal.totals)).kcal;
@@ -237,20 +223,12 @@ export class Planner {
   // ---------------------------------------------------------------------------------------------
   // Acrescentar e remover alimento
 
-  /**
-   * Porção que o assistente escolhe para `foodName` na refeição — a média dos alimentos dela em kcal —
-   * e o fator que todas as refeições recebem para o total do dia não aumentar.
-   */
-  private planFood(mealId: number, foodName: string) {
-    const meal = this.plan.find((item) => item.id === mealId);
-    if (!meal) return null;
-    const dayKcal = sumTotals(this.plan.map((item) => item.totals)).kcal;
+  /** Porção sugerida de `foodName` na refeição (valor inicial das gramas): a média dos alimentos dela em kcal. */
+  private suggestedPortion(mealId: number, foodName: string) {
+    const meal = this.meal(mealId);
     const portionKcal =
       Math.round(meal.totals.kcal / (meal.foods.length + 1)) || 100;
-    const food = this.foods.convert(foodName, portionKcal);
-    if (!food) return null;
-    const factor = this.shareFactor(this.plan, dayKcal - food.kcal);
-    return { food, reductionPercent: Math.round((1 - factor) * 100), factor };
+    return this.foods.convert(foodName, portionKcal);
   }
 
   searchFoods(mealId: number, query: string): FoodSearchResult {
@@ -263,15 +241,14 @@ export class Planner {
       found,
       restricted,
       options: candidates.flatMap((food) => {
-        const planned = this.planFood(mealId, food.name);
-        return planned
-          ? [{ food: planned.food, reductionPercent: planned.reductionPercent }]
-          : [];
+        const suggested = this.suggestedPortion(mealId, food.name);
+        return suggested ? [{ food: suggested }] : [];
       }),
     };
   }
 
-  addFood(mealId: number, foodName: string): PlanState {
+  /** `grams` gramas de `foodName` (prévia do alimento extra); erro se restrito ou fora do catálogo. */
+  foodPortion(mealId: number, foodName: string, grams: number): PlanFood {
     this.meal(mealId);
     if (this.state.foodFeedback[foodName]) {
       throw new PlanRuleError(
@@ -279,58 +256,52 @@ export class Planner {
         'Esse alimento está restrito. Libere-o na página Alimentos para usá-lo.',
       );
     }
-    const planned = this.planFood(mealId, foodName);
-    if (!planned) throw new PlanRuleError('not-found', FOOD_NOT_FOUND);
-    // Guardado na porção "fator 1" da refeição (sem o fator da meta), para acompanhar as mudanças de
-    // porção dela.
-    const base = this.foods.convert(
-      planned.food.name,
-      planned.food.kcal /
-        ((this.scaleAll(planned.factor)[mealId] ?? 1) * this.goalFactor),
-    );
-    if (!base) throw new PlanRuleError('not-found', FOOD_NOT_FOUND);
+    const food = this.foods.portion(foodName, grams);
+    if (!food) throw new PlanRuleError('not-found', FOOD_NOT_FOUND);
+    return food;
+  }
+
+  /**
+   * Acrescenta `grams` gramas de `foodName` à refeição, como alimento extra: as gramas ficam fixas (fora dos
+   * fatores de porção) e as calorias somam às do dia; as outras refeições não mudam.
+   */
+  addFood(mealId: number, foodName: string, grams: number): PlanState {
+    const food = this.foodPortion(mealId, foodName, grams);
     const { extraFoods } = this.state.planChanges;
-    const extra = { ...base, id: `x-${this.state.nextExtraId}` };
-    const withFactor = (factor: number): PlanState => ({
+    const extra = {
+      ...food,
+      id: `x-${this.state.nextExtraId}`,
+      fixed: true as const,
+    };
+    return {
       ...this.withPlanChanges({
-        scales: this.scaleAll(factor),
         extraFoods: {
           ...extraFoods,
           [mealId]: [...(extraFoods[mealId] ?? []), extra],
         },
       }),
       nextExtraId: this.state.nextExtraId + 1,
-    });
-    // As gramas do alimento guardado são inteiras: com as porções escaladas, o total arredondado pode
-    // passar do anterior por pouco. Aperta o fator (×0,999) até o dia não ganhar calorias.
-    const limit = this.dayKcal();
-    let factor = planned.factor;
-    let next = withFactor(factor);
-    for (
-      let i = 0;
-      i < 200 &&
-      new Planner(this.catalog, next, this.options).dayKcal() > limit;
-      i++
-    ) {
-      factor *= 0.999;
-      next = withFactor(factor);
-    }
-    return next;
+    };
   }
 
-  /** Tira um alimento acrescentado; as calorias dele voltam para as refeições do dia. */
+  /**
+   * Tira um alimento acrescentado. O extra nas gramas do usuário só sai (as outras refeições não mudam); nos
+   * extras antigos, as calorias dele voltam para as refeições do dia.
+   */
   removeExtraFood(mealId: number, extraId: string): PlanState {
     this.meal(mealId);
     const { planChanges } = this.state;
     const current = planChanges.extraFoods[mealId] ?? [];
-    if (!current.some((food) => food.id === extraId))
-      throw new PlanRuleError('not-found', FOOD_NOT_FOUND);
+    const removed = current.find((food) => food.id === extraId);
+    if (!removed) throw new PlanRuleError('not-found', FOOD_NOT_FOUND);
 
-    const dayKcal = sumTotals(this.plan.map((meal) => meal.totals)).kcal;
     const extraFoods = {
       ...planChanges.extraFoods,
       [mealId]: current.filter((food) => food.id !== extraId),
     };
+    if (removed.fixed) return this.withPlanChanges({ extraFoods });
+
+    const dayKcal = sumTotals(this.plan.map((meal) => meal.totals)).kcal;
     const nextPlan = this.buildPlan({ ...planChanges, extraFoods });
     const currentKcal = sumTotals(nextPlan.map((meal) => meal.totals)).kcal;
     const factor =

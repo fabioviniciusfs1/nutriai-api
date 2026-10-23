@@ -15,7 +15,13 @@ import { CurrentUser } from '../common/auth.decorators.js';
 import { Clock, type UserClock } from '../common/timezone.js';
 import type { FoodSearchResult, PlanFood, TodayPlan } from '../contract.js';
 import { MEAL_NOT_FOUND } from './engine/planner.js';
-import { AddFoodDto, MealTimeDto, SwapDto } from './plan.dto.js';
+import {
+  AddFoodDto,
+  GRAMS_MESSAGE,
+  MAX_EXTRA_GRAMS,
+  MealTimeDto,
+  SwapDto,
+} from './plan.dto.js';
 import { PlanService } from './plan.service.js';
 import { PlanPersonalizerService } from './personalizer.service.js';
 
@@ -31,6 +37,14 @@ const MAX_EXCLUDED = 64;
 function requiredQuery(value: string | undefined, message: string) {
   if (!value?.trim()) throw new BadRequestException(message);
   return value.trim();
+}
+
+/** Gramas na query: inteiro de 1 a `MAX_EXTRA_GRAMS`. */
+function gramsQuery(value: string | undefined) {
+  const grams = Number(value);
+  if (!Number.isInteger(grams) || grams < 1 || grams > MAX_EXTRA_GRAMS)
+    throw new BadRequestException(GRAMS_MESSAGE);
+  return grams;
 }
 
 @Controller('plan')
@@ -93,7 +107,23 @@ export class PlanController {
     @Body() body: AddFoodDto,
   ): Promise<TodayPlan> {
     return this.plan.update(userId, clock, (planner) =>
-      planner.addFood(id, body.foodName),
+      planner.addFood(id, body.foodName, body.grams),
+    );
+  }
+
+  /** Prévia do alimento extra: `grams` gramas de `food`, com os nutrientes calculados. */
+  @Get('meals/:id/food-portion')
+  foodPortion(
+    @CurrentUser() userId: string,
+    @Clock() clock: UserClock,
+    @Param('id', MealId()) id: number,
+    @Query('food') food: string | undefined,
+    @Query('grams') grams: string | undefined,
+  ): Promise<PlanFood> {
+    const foodName = requiredQuery(food, 'Informe o alimento.');
+    const amount = gramsQuery(grams);
+    return this.plan.read(userId, clock, (planner) =>
+      planner.foodPortion(id, foodName, amount),
     );
   }
 

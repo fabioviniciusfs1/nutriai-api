@@ -167,8 +167,8 @@ export type FoodSearchResult = {
   found: boolean;
   /** O alimento digitado existe, mas está restrito pelo usuário. */
   restricted: { name: string; feedback: FoodFeedback } | null;
-  /** Cada opção na porção escolhida pelo assistente e quanto as porções do dia diminuem com ela (%). */
-  options: { food: PlanFood; reductionPercent: number }[];
+  /** Cada opção na porção sugerida para a refeição (o valor inicial das gramas do alimento extra). */
+  options: { food: PlanFood }[];
 };
 
 /** Alimento marcado pelo usuário, listado na página Alimentos. */

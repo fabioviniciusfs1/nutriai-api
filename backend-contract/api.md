@@ -368,16 +368,17 @@ instantes.".
   remover refeição avulsa.
 - As porções de todas as refeições são escaladas na mesma proporção para o total do dia ficar o mais perto
   possível de `targets.calories`. Sem perfil, ficam as porções de referência. Se a meta mudar, o plano todo
-  acompanha (inclusive o que o usuário acrescentou).
+  acompanha, menos os alimentos extras (ficam nas gramas que o usuário escolheu).
 
 **Como o plano de hoje é montado** (o que o usuário muda é permanente, até ele desfazer: horários escolhidos,
 alimentos acrescentados por refeição, trocas de alimentos e um fator de porção por refeição):
 
-- Para cada refeição: aplica as trocas de alimentos (ver "Trocas"), junta os alimentos acrescentados e
-  multiplica as porções pelo fator dela (gramas e nutrientes, arredondando; gramas no mínimo 1).
+- Para cada refeição: aplica as trocas de alimentos (ver "Trocas"), multiplica as porções pelo fator dela
+  (gramas e nutrientes, arredondando; gramas no mínimo 1) e junta os alimentos extras, nas gramas do usuário
+  (sem o fator).
 - Sempre que um fator sobe para compensar calorias, confira os valores **já arredondados**: se o total do dia
-  passar do total anterior, reduza o fator aos poucos (×0,999) até caber. O dia nunca ganha calorias com uma
-  ação do usuário.
+  passar do total anterior, reduza o fator aos poucos (×0,999) até caber. Só o alimento extra aumenta as
+  calorias do dia.
 
 ### `PUT /plan/meals/{id}/time`
 
@@ -389,7 +390,7 @@ Não há rota para criar nem remover uma refeição avulsa: as refeições do di
 incluir ou tirar uma, o usuário muda a rotina (`PUT /me/routine`). Uma refeição incluída entra com a versão
 padrão do plano base (ou a do assistente, se ele refizer o plano com `POST /plan/personalize`).
 
-### Acrescentar alimento
+### Acrescentar alimento extra
 
 `GET /plan/meals/{id}/food-search?q=banana` → `FoodSearchResult`
 
@@ -399,8 +400,7 @@ padrão do plano base (ou a do assistente, se ele refizer o plano com `POST /pla
   "restricted": null,
   "options": [
     {
-      "food": { "name": "Banana-prata", "grams": 60, "carbs": 16, "protein": 1, "fat": 0, "kcal": 60 },
-      "reductionPercent": 4
+      "food": { "name": "Banana-prata", "grams": 60, "carbs": 16, "protein": 1, "fat": 0, "kcal": 60 }
     }
   ]
 }
@@ -411,16 +411,19 @@ padrão do plano base (ou a do assistente, se ele refizer o plano com `POST /pla
   semelhança por pares de letras (coeficiente de Dice sobre bigramas).
 - Alimentos restritos pelo usuário nunca aparecem. Se o texto é exatamente um alimento restrito,
   `restricted` traz o nome e a marcação dele.
-- Porção de cada opção: as calorias médias por alimento da refeição (`kcal da refeição ÷ (nº de alimentos + 1)`,
-  ou 100 kcal se der 0), convertidas em gramas pelo catálogo.
-- `reductionPercent`: quanto as porções de **todas** as refeições diminuem para o dia não ganhar calorias.
+- Porção sugerida de cada opção (o valor inicial das gramas no diálogo): as calorias médias por alimento da
+  refeição (`kcal da refeição ÷ (nº de alimentos + 1)`, ou 100 kcal se der 0), convertidas em gramas pelo
+  catálogo.
 
-`POST /plan/meals/{id}/foods` com `{ "foodName": "Banana-prata" }` acrescenta (permanente), com a porção e a
-redução da busca. Guarde o alimento na porção "fator 1" da refeição, para ele acompanhar as mudanças de
-porção dela.
+`GET /plan/meals/{id}/food-portion?food=Banana-prata&grams=150` → `PlanFood`: prévia da quantidade que o
+usuário digitou (gramas e nutrientes calculados). `grams`: inteiro de 1 a 2000; fora disso, `400`
+"Informe a quantidade em gramas (1 a 2000).". Alimento restrito ou fora do catálogo: o mesmo erro do `POST`.
 
-`DELETE /plan/meals/{id}/foods/{extraId}` remove um alimento acrescentado; as calorias dele voltam para
-todas as refeições (porções aumentam pelo mesmo fator, sem passar do total que o dia tinha).
+`POST /plan/meals/{id}/foods` com `{ "foodName": "Banana-prata", "grams": 150 }` acrescenta o alimento extra
+(permanente) nas gramas do usuário. `grams` como na prévia. As gramas ficam **fixas** (não acompanham o fator
+da refeição nem a meta), as outras refeições não mudam e as calorias do extra **somam** às do dia.
+
+`DELETE /plan/meals/{id}/foods/{extraId}` remove um alimento extra; as outras refeições não mudam.
 
 ### Trocar alimento ("Substituir alimento")
 

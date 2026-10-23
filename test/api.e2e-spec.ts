@@ -371,7 +371,7 @@ describe('perfil e pesos', () => {
 });
 
 describe('plano alimentar', () => {
-  it('mantém o total do dia ao acrescentar alimento', async () => {
+  it('acrescenta o alimento extra nas gramas do usuário, somando ao dia', async () => {
     const { http } = await newUser();
     const today = (await http('get', '/plan/today').expect(200))
       .body as TodayPlan;
@@ -384,14 +384,35 @@ describe('plano alimentar', () => {
       '/plan/meals/1/food-search?q=banana prata',
     ).expect(200);
     expect(search.body.found).toBe(true);
+    expect(search.body.options[0]).not.toHaveProperty('reductionPercent');
+
+    const preview = (
+      await http(
+        'get',
+        `/plan/meals/1/food-portion?food=${encodeURIComponent('Banana, prata, crua')}&grams=150`,
+      ).expect(200)
+    ).body as { name: string; grams: number; kcal: number };
+    expect(preview).toMatchObject({ name: 'Banana, prata, crua', grams: 150 });
+    await http(
+      'get',
+      `/plan/meals/1/food-portion?food=${encodeURIComponent('Banana, prata, crua')}&grams=0`,
+    ).expect(400, { error: 'Informe a quantidade em gramas (1 a 2000).' });
+
+    await http('post', '/plan/meals/1/foods')
+      .send({ foodName: 'Banana, prata, crua' })
+      .expect(400, { error: 'Informe a quantidade em gramas (1 a 2000).' });
+    await http('post', '/plan/meals/1/foods')
+      .send({ foodName: 'Banana, prata, crua', grams: 2.5 })
+      .expect(400, { error: 'Informe a quantidade em gramas (1 a 2000).' });
     const added = (
       await http('post', '/plan/meals/1/foods')
-        .send({ foodName: 'Banana, prata, crua' })
+        .send({ foodName: 'Banana, prata, crua', grams: 150 })
         .expect(200)
     ).body as TodayPlan;
-    expect(kcal(added)).toBeLessThanOrEqual(kcal(today));
     const extra = added.meals[0].foods.find((food) => food.extraId !== null)!;
-    expect(extra.name).toBe('Banana, prata, crua');
+    expect(extra).toMatchObject({ ...preview, extraId: expect.any(String) });
+    // As outras porções não mudam: o dia ganha as calorias do extra.
+    expect(kcal(added)).toBe(kcal(today) + extra.kcal);
 
     const removed = (
       await http('delete', `/plan/meals/1/foods/${extra.extraId}`).expect(200)
@@ -399,6 +420,7 @@ describe('plano alimentar', () => {
     expect(removed.meals[0].foods.every((food) => food.extraId === null)).toBe(
       true,
     );
+    expect(kcal(removed)).toBe(kcal(today));
 
     await http('put', '/plan/meals/1/time').send({ time: '09:30' }).expect(200);
     await http('put', '/plan/meals/1/time')

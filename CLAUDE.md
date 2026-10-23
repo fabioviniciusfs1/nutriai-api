@@ -80,9 +80,10 @@ npx vitest run -t "não gosto"                     # por nome do teste
 - Plano inicial: as refeições base cujo `slot` (`base_meals.slot`, uma por refeição do dia) está em
   `routine.meals`, e todas as
   porções multiplicadas pelo `goalFactor` do `Planner` (meta calórica ÷ kcal do plano inicial, ajustado para o
-  total arredondado ficar o mais perto da meta). Alimentos acrescentados são guardados sem esse fator; ele é
-  recalculado a cada requisição pelo perfil e pela rotina (`PlanService.plannerOptions`). Nenhuma ação aumenta
-  o total do dia.
+  total arredondado ficar o mais perto da meta); ele é recalculado a cada requisição pelo perfil e pela rotina
+  (`PlanService.plannerOptions`). O alimento extra (`POST /plan/meals/{id}/foods` com `grams`) fica nas gramas
+  do usuário, fora desse fator e dos fatores de porção (`ExtraFood.fixed`), e soma às calorias do dia; é a
+  única ação que aumenta o total. Extras antigos, sem `fixed`, seguem escalados com a refeição.
 - Não há rota para criar nem remover refeição: as refeições do dia são as de `routine.meals`. O que o usuário
   muda no plano é permanente (`plan_states`): horários, alimentos acrescentados, trocas e fatores de porção.
 - Plano individual (`src/plan/personalizer.service.ts`): no primeiro `PUT /me/routine`, o Claude monta as refeições
