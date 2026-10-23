@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { parseTbca } from './parse.js';
-import { tbcaToCatalog } from './to-catalog.js';
+import { isTbcaRecipe, tbcaToCatalog } from './to-catalog.js';
 
 /** Confere o CSV versionado em `data/tbca/`. */
 describe('data/tbca/TBCA_20223103.csv', () => {
@@ -8,13 +8,14 @@ describe('data/tbca/TBCA_20223103.csv', () => {
     readFileSync('data/tbca/TBCA_20223103.csv', 'utf8'),
   );
 
-  it('tem os 5.268 alimentos, sem avisos; 5.267 com energia (sem: C0262C)', () => {
+  it('tem os 5.268 alimentos, sem avisos; 3.817 no catálogo (sem energia: C0262C; 1.450 receitas)', () => {
     expect(foods).toHaveLength(5268);
     expect(warnings).toEqual([]);
     expect(foods.filter((food) => food.energia_kcal === null)).toMatchObject([
       { id: 'C0262C' },
     ]);
-    expect(foods.map(tbcaToCatalog).filter(Boolean)).toHaveLength(5267);
+    expect(foods.map(tbcaToCatalog).filter(Boolean)).toHaveLength(3817);
+    expect(foods.filter((food) => isTbcaRecipe(food.nome))).toHaveLength(1450);
   });
 
   it('lê os valores exibidos e os marcadores', () => {

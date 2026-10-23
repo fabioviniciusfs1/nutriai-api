@@ -54,7 +54,9 @@ npx vitest run -t "não gosto"                     # por nome do teste
   vai inteira para `tbca_alimentos` (`NA`, `-` e vazio → `null`, `tr` → 0; id texto, ex. `C0019D`, com a
   categoria na letra do fim). `tbca/to-catalog.ts` deriva o catálogo (carboidrato total, sem manganês). Nome
   é a chave de `foods`: repetido na TBCA ou já usado pela TACO fica de fora (a TACO tem os nomes do plano base).
-  Fast food, fins especiais e industrializados ficam sem grupo (busca, mas não substitutos). 5.206 alimentos.
+  Receitas com a lista de ingredientes no nome (`isTbcaRecipe`: parêntese com 3+ itens) ficam só em
+  `tbca_alimentos`, fora do catálogo. Fast food, fins especiais e industrializados ficam sem grupo (busca, mas
+  não substitutos). 3.762 alimentos no catálogo.
 - O plano base (`src/database/seed-data.ts`) lista só `{ name, grams }` com nomes exatos do
   catálogo; o seed calcula os nutrientes (`seed-plan.ts`). O `CatalogService` guarda o catálogo em memória:
   depois de importar, reinicie a API.

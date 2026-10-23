@@ -1,5 +1,5 @@
 import { TBCA_COLUMNS, type TbcaFood } from './parse.js';
-import { tbcaToCatalog } from './to-catalog.js';
+import { isTbcaRecipe, tbcaToCatalog } from './to-catalog.js';
 
 function food(
   id: string,
@@ -59,5 +59,54 @@ describe('tbcaToCatalog', () => {
         food('C0001T', 'Leguminosas e derivados', { energia_kcal: 76 }),
       )?.group,
     ).toBe('proteinas');
+  });
+});
+
+describe('isTbcaRecipe', () => {
+  it('receita: parêntese com a lista de ingredientes (3 ou mais), inclusive com parênteses dentro', () => {
+    expect(
+      isTbcaRecipe(
+        'Iogurte, natural, c/ granola, caseira (aveia em flocos, flocos de milho, semente de chia e linhaça, coco, mel)',
+      ),
+    ).toBe(true);
+    expect(
+      isTbcaRecipe(
+        'Escondidinho de carne bovina, s/ sal, (mandioca (aipim, macaxeira), carne bovina - patinho moído, tomate, salsa)',
+      ),
+    ).toBe(true);
+    // Nome cortado no meio da lista.
+    expect(
+      isTbcaRecipe(
+        'Waffle, (farinha de trigo, amido de milho, leite, manteiga',
+      ),
+    ).toBe(true);
+  });
+
+  it('não é receita: sinônimo, preparo ou média entre parênteses', () => {
+    expect(
+      isTbcaRecipe(
+        'Batata, baroa (mandioquinha, batata salsa), s/ casca, crua',
+      ),
+    ).toBe(false);
+    expect(
+      isTbcaRecipe('Carne, boi, alcatra, frita (c/ óleo de soja), s/ sal'),
+    ).toBe(false);
+    expect(
+      isTbcaRecipe('Acelga, refogada, (c/ óleo, cebola e alho), s/ sal'),
+    ).toBe(false);
+    expect(
+      isTbcaRecipe('Arroz, polido, cru (média de diferentes cultivares)'),
+    ).toBe(false);
+  });
+
+  it('receita fica fora do catálogo', () => {
+    expect(
+      tbcaToCatalog(
+        food('C0001A', 'Cereais e derivados', {
+          energia_kcal: 150,
+          nome: 'Arroz à grega, c/ sal, (arroz integral, c/ cenoura, vagem, uva passa)',
+        }),
+      ),
+    ).toBeNull();
   });
 });

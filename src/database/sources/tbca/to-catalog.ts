@@ -48,11 +48,33 @@ const MICROS: Record<string, TbcaColumn> = {
 };
 
 /**
- * O alimento no formato do catálogo; `null` se a TBCA não tem a energia dele. Macronutriente sem valor vale 0;
- * o carboidrato é o total (como na TACO).
+ * Receita com a lista de ingredientes no nome: algum parêntese (contando os de dentro) com 3 ou mais itens, como
+ * "Arroz à grega, c/ sal, (arroz integral, c/ cenoura, vagem, …)". Parêntese com sinônimo ("Batata, baroa
+ * (mandioquinha, batata salsa)") ou com o preparo ("frita (c/ óleo de soja)") não conta.
+ */
+export function isTbcaRecipe(name: string) {
+  let depth = 0;
+  let commas = 0;
+  for (const char of name) {
+    if (char === '(') {
+      if (depth === 0) commas = 0;
+      depth++;
+    } else if (char === ')') {
+      depth = Math.max(0, depth - 1);
+      if (depth === 0 && commas >= 2) return true;
+    } else if (char === ',' && depth > 0) commas++;
+  }
+  // Lista cortada no fim do nome, sem fechar o parêntese.
+  return depth > 0 && commas >= 2;
+}
+
+/**
+ * O alimento no formato do catálogo; `null` se a TBCA não tem a energia dele ou se é uma receita com a lista de
+ * ingredientes (`isTbcaRecipe`; fica só em `tbca_alimentos`). Macronutriente sem valor vale 0; o carboidrato é
+ * o total (como na TACO).
  */
 export function tbcaToCatalog(food: TbcaFood): CatalogSourceFood | null {
-  if (food.energia_kcal === null) return null;
+  if (food.energia_kcal === null || isTbcaRecipe(food.nome)) return null;
   const microsPer100g: Record<string, number> = {};
   for (const [id, column] of Object.entries(MICROS)) {
     const value = food[column];
