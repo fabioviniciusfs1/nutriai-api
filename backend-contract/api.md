@@ -218,8 +218,9 @@ Corpo: a `routine` inteira. Sem perfil → `400` "Preencha o perfil primeiro.".
 
 - `eatingWindows`: de 1 a 12 janelas `{ "start": "HH:MM", "end": "HH:MM" }` em que a pessoa pode comer, iguais
   todos os dias: início antes do fim, em ordem e sem sobreposição (uma pode começar quando a outra termina).
-  O front mostra as 24 horas do dia para marcar; cada hora marcada vale até o minuto 59 dela (sem encostar na
-  hora seguinte) e as vizinhas viram uma janela só (07, 08 e 12 marcadas → `07:00–08:59` e `12:00–12:59`).
+  O front mostra as horas do dia todas disponíveis e a pessoa desmarca as que não pode; cada hora disponível vale
+  até o minuto 59 dela (sem encostar na hora seguinte) e as vizinhas viram uma janela só (07, 08 e 12
+  disponíveis → `07:00–08:59` e `12:00–12:59`).
   Erros: "Informe pelo menos um horário disponível para comer.", "Em cada horário disponível, o início deve ser
   antes do fim.", "Os horários disponíveis para comer devem estar em ordem e não podem se sobrepor.".
 - `wakeTime`, `sleepTime`: `"HH:MM"` (dormir pode ser antes de acordar: depois da meia-noite).
@@ -341,7 +342,9 @@ O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por h
 `routine.meals` (mesmos ids; cada uma no seu papel: café da manhã, lanche, almoço…), com o perfil, as metas do dia, o tipo de alimentação, os restritos e a
 rotina. Ele escolhe o **horário** de cada refeição dentro de `eatingWindows` e distribui as calorias pela rotina
 (refeições maiores no período de mais fome, menores no de menos, uma refeição perto do treino, leve perto de
-dormir). Entre uma refeição e a seguinte, **no máximo 6 horas** (o sono da noite não conta), salvo quando as
+dormir). A refeição dura até 30 minutos e termina pelo menos 30 minutos antes do fim da janela: o horário vai
+do início da janela até 1 hora antes da hora cheia em que ela acaba (janela `12:00–13:59` → de 12:00 a 13:00;
+`07:00–07:59` → só 07:00); os limites abaixo usam esses horários. Entre uma refeição e a seguinte, **no máximo 6 horas** (o sono da noite não conta), salvo quando as
 janelas não permitem: se 6 horas depois de uma refeição o usuário não pode comer, a próxima vem no início da
 próxima janela (ex.: janelas 12:00–13:00 e 19:00–20:00, almoço às 12:00 → jantar até as 19:00). Horário do
 assistente que passa desse limite é adiantado até ele; os outros ficam. Se algum horário vier fora das janelas,

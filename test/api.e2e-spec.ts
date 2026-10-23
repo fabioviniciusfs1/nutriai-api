@@ -715,7 +715,7 @@ describe('plano individual do assistente', () => {
       {
         id: 4,
         title: 'Iogurte com Banana e Aveia',
-        time: '16:00',
+        time: '15:30',
         foods: [
           { name: 'Iogurte, natural', grams: 170 },
           { name: 'Banana, prata, crua', grams: 100 },
@@ -725,7 +725,7 @@ describe('plano individual do assistente', () => {
       {
         id: 3,
         title: 'Omelete com Batata-Doce e Brócolis',
-        time: '20:15',
+        time: '19:30',
         foods: [
           { name: 'Ovo, de galinha, inteiro, cozido/10minutos', grams: 100 },
           { name: 'Batata, doce, cozida', grams: 150 },
@@ -773,12 +773,12 @@ describe('plano individual do assistente', () => {
       'Iogurte com Banana e Aveia',
       'Omelete com Batata-Doce e Brócolis',
     ]);
-    // Os horários são os do assistente (dentro das janelas da rotina).
+    // Os horários são os do assistente (dentro dos inícios possíveis: até 1 hora antes do fim da janela).
     expect(ready.meals.map((meal) => meal.time)).toEqual([
       '07:30',
       '12:15',
-      '16:00',
-      '20:15',
+      '15:30',
+      '19:30',
     ]);
     const lunch = ready.meals.find((meal) => meal.id === 2)!;
     // Frango fica de fora (vegetariana).
@@ -795,7 +795,7 @@ describe('plano individual do assistente', () => {
     await personalizationIdle();
     expect(create).toHaveBeenCalledTimes(1);
 
-    // "Refazer meu plano": monta de novo; horário fora das janelas → um em cada janela, no meio dela.
+    // "Refazer meu plano": monta de novo; horário fora das janelas → um em cada janela, no meio dos inícios possíveis.
     await http('put', '/plan/meals/1/time').send({ time: '09:00' }).expect(200);
     create.mockResolvedValueOnce(
       reply({
@@ -812,10 +812,10 @@ describe('plano individual do assistente', () => {
       .body as TodayPlan;
     expect(redone.personalization).toBe('ready');
     expect(redone.meals.map((meal) => [meal.id, meal.time])).toEqual([
-      [1, '07:45'],
-      [2, '12:45'],
-      [4, '16:00'],
-      [3, '20:00'],
+      [1, '07:15'],
+      [2, '12:15'],
+      [4, '15:30'],
+      [3, '19:30'],
     ]);
     create.mockReset();
   });

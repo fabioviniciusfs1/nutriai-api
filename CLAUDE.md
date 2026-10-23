@@ -91,7 +91,9 @@ npx vitest run -t "não gosto"                     # por nome do teste
 - Plano individual (`src/plan/personalizer.service.ts`): no primeiro `PUT /me/routine`, o Claude monta as refeições
   do plano base para o usuário em segundo plano (`composer/personal-plan.ts`, com o `CLAUDE_PLAN_MODEL`, Sonnet, e
   `fallbacks: 'default'` no endpoint beta), escolhendo o horário de cada uma dentro das janelas da rotina e
-  distribuindo as calorias por ela; ficam em `plan_states.personal_meals` (id da refeição base → título,
+  distribuindo as calorias por ela. A refeição dura até 30 min e acaba 30 min antes do fim da janela: só começa
+  até 1 h antes da hora cheia em que a janela acaba (`mealStartWindows`; `12:00–13:59` → 12:00 a 13:00), e é
+  nesses inícios que valem as regras abaixo. Ficam em `plan_states.personal_meals` (id da refeição base → título,
   alimentos e horário) e o `Planner` usa no lugar das padrão. No máximo 6 h entre uma refeição e a seguinte, ou até o
   início da próxima janela se 6 h depois não pode comer (`nextMealDeadline`): `fitFastingLimit` adianta só as
   que passam do limite, mantendo os outros horários do Claude. Horário fora das janelas, repetido, ilegível ou

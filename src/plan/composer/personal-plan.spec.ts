@@ -5,16 +5,18 @@ import { testCatalog, testFoods } from '../engine/test-catalog.js';
 import { personalPlanRequest } from '../personalizer.service.js';
 import {
   fitFastingLimit,
+  mealStartWindows,
   nextMealDeadline,
   parsePersonalPlan,
   personalPlanPrompt,
   spreadMealTimes,
 } from './personal-plan.js';
 
+// Como o front manda: 07, 08, 12, 13, 19 e 20 disponíveis. Dá para começar a refeição até 1 hora antes do fim.
 const WINDOWS = [
-  { start: '07:00', end: '08:00' },
-  { start: '12:00', end: '13:00' },
-  { start: '19:00', end: '20:00' },
+  { start: '07:00', end: '08:59' },
+  { start: '12:00', end: '13:59' },
+  { start: '19:00', end: '20:59' },
 ];
 
 const catalog = new FoodCatalog(testFoods);
@@ -152,7 +154,7 @@ describe('horários das refeições', () => {
   });
 
   it('janelas de tamanhos diferentes: uma refeição em cada, e só adianta o que passou de 6 horas', () => {
-    // Marcou 07, 12 e das 18 às 21; mais fome à noite, o assistente pôs o jantar às 19:30.
+    // Pode comer às 07, 12 e das 18 às 21; mais fome à noite, o assistente pôs o jantar às 19:30.
     const hours = [
       { start: '07:00', end: '07:59' },
       { start: '12:00', end: '12:59' },
@@ -160,16 +162,40 @@ describe('horários das refeições', () => {
     ];
     expect(
       times(
-        [meal(1, '07:30'), meal(2, '12:30'), meal(3, '19:30')],
+        [meal(1, '07:00'), meal(2, '12:00'), meal(3, '19:30')],
         [1, 2, 3],
         hours,
       ),
-    ).toEqual({ 1: '07:30', 2: '12:30', 3: '18:30' });
+    ).toEqual({ 1: '07:00', 2: '12:00', 3: '18:00' });
     // Sem horários que sirvam: o café não vai para o meio-dia.
     expect(times([meal(1), meal(2), meal(3)], [1, 2, 3], hours)).toEqual({
-      1: '07:30',
+      1: '07:00',
+      2: '12:00',
+      3: '18:00',
+    });
+  });
+
+  it('a refeição (até 30 min) termina pelo menos 30 min antes do fim da janela', () => {
+    // Não pode comer às 05, 06, 08, 09, 10, 11 e 14: pode às 07, 12 e 13.
+    const hours = [
+      { start: '07:00', end: '07:59' },
+      { start: '12:00', end: '13:59' },
+    ];
+    expect(mealStartWindows(hours)).toEqual([
+      { start: '07:00', end: '07:00' },
+      { start: '12:00', end: '13:00' },
+    ]);
+    expect(mealStartWindows([{ start: '07:00', end: '08:30' }])).toEqual([
+      { start: '07:00', end: '07:30' },
+    ]);
+    expect(times([meal(1, '07:00'), meal(2, '13:00')], [1, 2], hours)).toEqual({
+      1: '07:00',
+      2: '13:00',
+    });
+    // 13:30 acabaria às 14:00: os horários são espalhados (12:30, no meio do almoço possível).
+    expect(times([meal(1, '07:00'), meal(2, '13:30')], [1, 2], hours)).toEqual({
+      1: '07:00',
       2: '12:30',
-      3: '18:30',
     });
   });
 
@@ -235,8 +261,9 @@ describe('horários das refeições', () => {
   });
 
   it('spreadMealTimes: uma refeição por janela; as que sobram, nas mais longas; passos de 5 minutos', () => {
-    expect(spreadMealTimes(WINDOWS, 3)).toEqual(['07:30', '12:30', '19:30']);
-    expect(spreadMealTimes(WINDOWS, 6)).toEqual([
+    const starts = mealStartWindows(WINDOWS);
+    expect(spreadMealTimes(starts, 3)).toEqual(['07:30', '12:30', '19:30']);
+    expect(spreadMealTimes(starts, 6)).toEqual([
       '07:15',
       '07:45',
       '12:15',
@@ -306,7 +333,10 @@ describe('personalPlanPrompt e personalPlanRequest', () => {
       'Rotina: acorda às 06:30 e dorme às 23:00; treina das 18:00 às 19:00.',
     );
     expect(prompt).toContain(
-      'Horários em que pode comer: 07:00–08:00, 12:00–13:00, 19:00–20:00.',
+      'Horários em que pode comer: 07:00–08:59, 12:00–13:59, 19:00–20:59.',
+    );
+    expect(prompt).toContain(
+      'Horários em que pode começar uma refeição: 07:00–08:00, 12:00–13:00, 19:00–20:00.',
     );
     expect(prompt).toContain('Sente mais fome de noite e menos fome de manhã.');
     expect(prompt).toContain(

@@ -27,10 +27,11 @@ Regras:
 - Monte cada refeição pedida (pelo id), com refeições brasileiras comuns, apetitosas e práticas, adequadas ao
   horário e ao objetivo do usuário. O dia deve ser variado: não repita o alimento principal entre refeições.
 - Escolha o horário de cada refeição ("time", no formato HH:MM, com minutos múltiplos de 5) dentro dos horários
-  em que o usuário pode comer, em ordem ao longo do dia, sem repetir horário e, quando esses horários
+  em que o usuário pode começar uma refeição (ela dura até 30 minutos e termina pelo menos 30 minutos antes do
+  fim do horário em que ele pode comer), em ordem ao longo do dia, sem repetir horário e, quando esses horários
   permitirem, com pelo menos 2 horas entre uma refeição e outra. Entre uma refeição e a seguinte, no máximo 6
   horas; se 6 horas depois de uma refeição o usuário não puder comer, a próxima fica no início do próximo horário
-  em que ele pode comer. Cada id é a refeição indicada no pedido (café
+  em que ele pode começar uma refeição. Cada id é a refeição indicada no pedido (café
   da manhã, lanche, almoço, jantar, ceia): monte um prato próprio dela, no horário que combine com ela.
 - Distribua as calorias do dia pela rotina: refeições maiores no período em que o usuário disse sentir mais fome
   e menores no período em que disse sentir menos. Se ele não tem um período com mais ou menos fome, mantenha
@@ -130,6 +131,11 @@ export function personalPlanPrompt(request: PersonalPlanRequest): string {
     `Meta do dia: ${day.kcal} kcal (${macrosText(day)}).`,
     dietLine(request.routine.diet),
     ...routineLines(request.routine),
+    `Horários em que pode começar uma refeição: ${mealStartWindows(
+      request.routine.eatingWindows,
+    )
+      .map(({ start, end }) => `${start}–${end}`)
+      .join(', ')}.`,
     request.restricted.length > 0
       ? `Alimentos restritos (não use): ${request.restricted.join('; ')}.`
       : 'Alimentos restritos: nenhum.',
@@ -146,6 +152,26 @@ const minutes = (time: string) =>
   Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
 const timeOf = (total: number) =>
   `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+
+/** Uma refeição dura até 30 minutos... */
+export const MEAL_MINUTES = 30;
+/** ...e termina pelo menos 30 minutos antes do fim da janela (antes de uma hora em que não pode comer, do sono
+ * ou do treino). */
+export const MEAL_MARGIN_MINUTES = 30;
+
+/**
+ * Os horários em que dá para começar uma refeição em cada janela: do início até 1 hora antes do fim (o front
+ * manda o fim no minuto 59 da hora, então conta até a hora cheia seguinte), em passos de 5 minutos e nunca antes
+ * do início. Janelas 07:00–07:59 e 12:00–13:59 → 07:00–07:00 e 12:00–13:00.
+ */
+export function mealStartWindows(windows: EatingWindow[]): EatingWindow[] {
+  return windows.map(({ start, end }) => {
+    const last =
+      Math.floor((minutes(end) + 1 - MEAL_MINUTES - MEAL_MARGIN_MINUTES) / 5) *
+      5;
+    return { start, end: timeOf(Math.max(minutes(start), last)) };
+  });
+}
 
 /**
  * `count` horários espalhados pelas janelas, em ordem, arredondados para 5 minutos sem sair da janela. Usado
@@ -240,7 +266,8 @@ export function fitFastingLimit(
  * e os nutrientes do catálogo (`parseFoods`). Alimentos fora do catálogo, restritos ou fora do tipo de alimentação
  * são descartados; `null` se alguma refeição pedida não vier ou ficar sem alimentos.
  *
- * Horários: se todos vêm legíveis, dentro das `windows` e na ordem de `ids` (a do dia), ficam os do assistente,
+ * Horários: valem os de começar uma refeição em cada uma das `windows` (`mealStartWindows`). Se todos vêm
+ * legíveis, dentro deles e na ordem de `ids` (a do dia), ficam os do assistente,
  * só adiantando os que passam de 6 horas depois da refeição anterior (`fitFastingLimit`). Senão (algum inválido,
  * repetido, fora das janelas ou fora de ordem), todos são espalhados pelas janelas (`spreadMealTimes`), com o
  * mesmo limite. `onTimesChanged` recebe os horários do assistente e os que ficaram, quando mudam.
@@ -280,16 +307,17 @@ export function parsePersonalPlan(
   }
   if (!ids.every((id) => result[id])) return null;
 
+  const starts = mealStartWindows(windows);
   const given = ids.map((id) => times[id]);
   const usable =
     given.every(
       (time) =>
         TIME.test(time) &&
-        windows.some(({ start, end }) => start <= time && time <= end),
+        starts.some(({ start, end }) => start <= time && time <= end),
     ) && given.every((time, index) => index === 0 || given[index - 1] < time);
   const final = fitFastingLimit(
-    usable ? given : spreadMealTimes(windows, ids.length),
-    windows,
+    usable ? given : spreadMealTimes(starts, ids.length),
+    starts,
   );
   if (final.some((time, index) => time !== given[index]))
     onTimesChanged?.(given, final);
