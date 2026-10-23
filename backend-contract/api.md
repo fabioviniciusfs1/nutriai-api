@@ -496,6 +496,7 @@ alimento volta a poder ser sugerido e oferecido); **as trocas já feitas continu
   ],
   "fibers": [{ "id": "fibras", "name": "Fibras", "atual": 22, "meta": 30, "unit": "g" }],
   "fiberPerKg": 0.3,
+  "kcalPerKg": 26.2,
   "macroSplit": { "proteinas": 25, "gorduras": 25, "carboidratos": 50 },
   "otherMacros": [{ "id": "acucares", "name": "Açúcares", "atual": 38, "meta": 50, "unit": "g", "limit": true }],
   "vitamins": [{ "id": "vitamina-c", "name": "Vitamina C", "atual": 95, "meta": 90, "unit": "mg" }],
@@ -512,6 +513,8 @@ alimento volta a poder ser sugerido e oferecido); **as trocas já feitas continu
 - `perKg`: `atual` e `meta` divididos pelo peso do perfil (g/kg, uma casa decimal); `null` sem perfil. O card
   "Meta diária" mostra o `atual`.
 - `fiberPerKg`: fibras de hoje em g/kg (uma casa decimal); `null` sem perfil. Card "Meta diária".
+- `kcalPerKg`: calorias consumidas hoje (`consumedKcal`) por kg de peso (uma casa decimal); `null` sem perfil.
+  Card "Calorias" da "Meta diária".
 - `macroSplit`: parte das calorias dos macros de hoje que vem de cada um (proteína e carboidrato 4 kcal/g,
   gordura 9 kcal/g), em % inteiros que somam 100 (o que o arredondamento perde vai para as maiores sobras);
   `null` sem consumo. O gráfico de pizza do card "Meta diária" mostra esses valores.

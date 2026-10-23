@@ -215,6 +215,8 @@ export type NutritionToday = {
   fibers: Nutrient[];
   /** Fibras de hoje em g por kg de peso (uma casa decimal); `null` sem perfil. */
   fiberPerKg: number | null;
+  /** Calorias consumidas hoje por kg de peso (uma casa decimal); `null` sem perfil. */
+  kcalPerKg: number | null;
   /**
    * Parte das calorias dos macros de hoje que vem de cada um (proteína e carboidrato 4 kcal/g, gordura 9 kcal/g),
    * em % inteiros que somam 100; `null` quando nada foi consumido.

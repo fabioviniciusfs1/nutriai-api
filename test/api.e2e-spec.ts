@@ -893,6 +893,10 @@ describe('nutrientes e histórico', () => {
       (item: { id: string }) => item.id === 'fibras',
     );
     expect(nutrition.body.fiberPerKg).toBeCloseTo(fiber.atual / 68.5, 1);
+    expect(nutrition.body.kcalPerKg).toBeCloseTo(
+      nutrition.body.consumedKcal / 68.5,
+      1,
+    );
     const split = nutrition.body.macroSplit as Record<string, number>;
     expect(Object.keys(split).sort()).toEqual([
       'carboidratos',

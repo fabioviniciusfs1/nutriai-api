@@ -55,8 +55,9 @@ export class NutritionService {
           };
         });
 
+    const consumedKcal = meals.reduce((sum, meal) => sum + meal.totals.kcal, 0);
     return {
-      consumedKcal: meals.reduce((sum, meal) => sum + meal.totals.kcal, 0),
+      consumedKcal,
       burnedKcal: activity?.burned ?? null,
       macros: section('macros').map((macro) => ({
         ...(macro as Nutrient & { id: MacroId }),
@@ -70,6 +71,9 @@ export class NutritionService {
       fibers: section('fibers'),
       fiberPerKg: user.profile
         ? perKg(consumed.fibras ?? 0, user.profile.weightKg)
+        : null,
+      kcalPerKg: user.profile
+        ? perKg(consumedKcal, user.profile.weightKg)
         : null,
       macroSplit: macroSplit({
         proteinas: consumed.proteinas ?? 0,
