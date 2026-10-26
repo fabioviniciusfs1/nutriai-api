@@ -10,8 +10,8 @@ import type { AnimalTag } from './diet.js';
 
 export type { Totals };
 
-/** Alimento numa porção: gramas e nutrientes já calculados (inteiros). */
-export type PlanFood = Totals & { name: string; grams: number };
+/** Alimento numa porção: gramas e nutrientes já calculados (inteiros); `units` só nos ovos (unidades). */
+export type PlanFood = Totals & { name: string; grams: number; units?: number };
 
 /**
  * Alimento acrescentado pelo usuário. `fixed`: nas gramas que ele escolheu, fora dos fatores de porção (soma às
@@ -93,6 +93,8 @@ export type PlannerOptions = {
   calorieGoal: number | null;
   /** Metas de macronutrientes do dia; sem elas, todas as porções crescem na mesma proporção. */
   macroGoals?: MacroGoals | null;
+  /** Peso da unidade do ovo (g): os ovos do plano vão em unidades dele (padrão: `DEFAULT_EGG_UNIT_GRAMS`). */
+  eggUnitGrams?: number;
   /** Refeições do plano inicial: as que o usuário marcou na rotina. */
   meals: MealSlot[];
   /** Tipo de alimentação do perfil: substitutos fora dela ficam de fora (padrão: onívora). */

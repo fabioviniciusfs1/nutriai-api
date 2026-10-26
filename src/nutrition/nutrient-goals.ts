@@ -1,14 +1,22 @@
-import type { Profile } from '../contract.js';
+import type { DietSettings, Profile } from '../contract.js';
 import type { NutrientDefEntity } from '../database/entities/index.js';
+import { dietSettingsOf } from '../targets/diet.js';
 import { macroTargets } from '../targets/targets.js';
 
-/** Meta diária de cada nutriente: a dos macronutrientes sai do peso e da meta calórica do usuário, se houver perfil. */
+/**
+ * Meta diária de cada nutriente: a dos macronutrientes sai do peso, da meta calórica e do ajuste da dieta do
+ * usuário, se houver perfil.
+ */
 export function nutrientGoal(
   def: NutrientDefEntity,
   profile: Profile | null,
+  dietSettings: DietSettings | null,
 ): number {
   if (profile && def.section === 'macros') {
-    const goals = macroTargets(profile) as Record<string, number>;
+    const goals = macroTargets(profile, dietSettingsOf(dietSettings)) as Record<
+      string,
+      number
+    >;
     if (goals[def.id] !== undefined) return goals[def.id];
   }
   return def.meta;

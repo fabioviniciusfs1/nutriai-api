@@ -45,6 +45,37 @@ export function scaleFoods<T extends PlanFood>(
   }));
 }
 
+/** Peso de uma unidade de ovo sem ajuste da dieta (g). */
+export const DEFAULT_EGG_UNIT_GRAMS = 55;
+
+/**
+ * Ovo de galinha inteiro, que vai no plano em unidades ("Ovo, de galinha, inteiro, cozido", "Ovo poché"): não
+ * conta ovo de codorna ou de pata, clara, gema, ovo em pó nem mexido (que leva gordura).
+ */
+export function isEggUnit(name: string) {
+  const text = normalize(name);
+  return (
+    /^ovos?\b/.test(text) &&
+    !/\b(codorna|pata|clara|gema|desidratad[ao]|mexido|po)\b/.test(text)
+  );
+}
+
+/**
+ * Porção do alimento multiplicada por `factor`; ovo inteiro em unidades de `eggUnitGrams` (pelo menos uma), com
+ * os nutrientes na proporção das gramas e `units` preenchido.
+ */
+export function portionFood<T extends PlanFood>(
+  food: T,
+  factor: number,
+  eggUnitGrams: number,
+): T {
+  if (!isEggUnit(food.name) || food.grams <= 0)
+    return scaleFoods([food], factor)[0];
+  const units = Math.max(1, Math.round((food.grams * factor) / eggUnitGrams));
+  const grams = units * eggUnitGrams;
+  return { ...scaleFoods([food], grams / food.grams)[0], grams, units };
+}
+
 /** Fração das calorias que vem de proteína, gordura e carboidrato. */
 function macroShares({ per100g }: CatalogFood) {
   const kcal = per100g.kcal || 1;

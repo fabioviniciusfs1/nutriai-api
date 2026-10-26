@@ -1,6 +1,7 @@
 // Metas a partir do perfil (porte de `reference/calorie-target.ts`).
 import type {
   ActivityLevel,
+  DietSettings,
   Goal,
   MacroId,
   Profile,
@@ -125,19 +126,25 @@ export function projectWeight(
 /** Meta calórica usada quando o usuário ainda não tem perfil. */
 export const DEFAULT_CALORIE_GOAL = 2000;
 
-/** Proteína e gordura por kg de peso corporal, por dia. */
+/** Proteína e gordura por kg de peso corporal, por dia, sem ajuste da dieta (`/me/diet`). */
 export const PROTEIN_G_PER_KG = 2;
 export const FAT_G_PER_KG = 1;
 
 /**
- * Metas de macronutrientes (g) do perfil: 2 g/kg de proteína, 1 g/kg de gordura e o restante da meta
- * calórica em carboidratos (4/9/4 kcal por grama). Se proteína e gordura já passam da meta calórica, o
- * carboidrato fica em 0.
+ * Metas de macronutrientes (g) do perfil: proteína e gordura pelos g/kg do ajuste da dieta (padrão 2 g/kg e
+ * 1 g/kg) e o restante da meta calórica em carboidratos (4/9/4 kcal por grama). Se proteína e gordura já passam
+ * da meta calórica, o carboidrato fica em 0.
  */
-export function macroTargets(profile: Profile) {
+export function macroTargets(
+  profile: Profile,
+  perKg: Pick<DietSettings, 'proteinPerKg' | 'fatPerKg'> = {
+    proteinPerKg: PROTEIN_G_PER_KG,
+    fatPerKg: FAT_G_PER_KG,
+  },
+) {
   const { calories } = calculateTargets(profile);
-  const protein = profile.weightKg * PROTEIN_G_PER_KG;
-  const fat = profile.weightKg * FAT_G_PER_KG;
+  const protein = profile.weightKg * perKg.proteinPerKg;
+  const fat = profile.weightKg * perKg.fatPerKg;
   const carbs = Math.max(0, (calories - protein * 4 - fat * 9) / 4);
   return {
     proteinas: Math.round(protein),

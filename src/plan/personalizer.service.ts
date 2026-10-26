@@ -8,8 +8,9 @@ import {
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource } from 'typeorm';
 import { CatalogService } from '../catalog/catalog.service.js';
-import type { Profile, Routine } from '../contract.js';
+import type { DietSettings, Profile, Routine } from '../contract.js';
 import { PlanStateEntity } from '../database/entities/index.js';
+import { dietSettingsOf } from '../targets/diet.js';
 import { calculateTargets, macroTargets } from '../targets/targets.js';
 import { MEAL_SLOTS } from '../users/routine.js';
 import { UsersService } from '../users/users.service.js';
@@ -81,13 +82,14 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
   private async run(userId: string): Promise<void> {
     let meals = null;
     try {
-      const [{ profile, routine }, catalog, state] = await Promise.all([
-        this.users.get(userId),
-        this.catalog.catalog(),
-        this.dataSource
-          .getRepository(PlanStateEntity)
-          .findOneByOrFail({ userId }),
-      ]);
+      const [{ profile, routine, dietSettings }, catalog, state] =
+        await Promise.all([
+          this.users.get(userId),
+          this.catalog.catalog(),
+          this.dataSource
+            .getRepository(PlanStateEntity)
+            .findOneByOrFail({ userId }),
+        ]);
       if (profile && routine) {
         meals = await this.composer.composePersonalPlan(
           personalPlanRequest(
@@ -95,6 +97,7 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
             routine,
             catalog,
             Object.keys(state.foodFeedback),
+            dietSettings,
           ),
           state.foodFeedback,
         );
@@ -132,7 +135,7 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
 }
 
 /**
- * O que o assistente precisa para montar o plano: perfil, metas do dia, a rotina (com o tipo de alimentação),
+ * O que o assistente precisa para montar o plano: perfil, metas do dia (com o ajuste da dieta), a rotina (com o tipo de alimentação),
  * as refeições do plano base que o usuário faz (na ordem do dia) e os alimentos restritos.
  */
 export function personalPlanRequest(
@@ -140,9 +143,10 @@ export function personalPlanRequest(
   routine: Routine,
   catalog: Catalog,
   restricted: string[],
+  dietSettings: DietSettings | null = null,
 ): PersonalPlanRequest {
   const { calories } = calculateTargets(profile);
-  const goals = macroTargets(profile);
+  const goals = macroTargets(profile, dietSettingsOf(dietSettings));
   return {
     profile: {
       sex: profile.sex,

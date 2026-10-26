@@ -1,10 +1,20 @@
 import { Body, Controller, Get, HttpCode, Post, Put } from '@nestjs/common';
 import { CurrentUser } from '../common/auth.decorators.js';
 import { Clock, type UserClock } from '../common/timezone.js';
-import type { Me, Targets, WeightProjection } from '../contract.js';
+import type {
+  DietAdjustment,
+  Me,
+  Targets,
+  WeightProjection,
+} from '../contract.js';
 import { calculateTargets } from '../targets/targets.js';
 import { ProfileDto, TargetWeightDto, toProfile } from './profile.dto.js';
 import { RoutineDto, toRoutine } from './routine.dto.js';
+import {
+  DietEstimateDto,
+  DietSettingsDto,
+  toDietSettings,
+} from './diet.dto.js';
 import { UsersService } from './users.service.js';
 import { PlanPersonalizerService } from '../plan/personalizer.service.js';
 
@@ -54,6 +64,30 @@ export class UsersController {
     const me = await this.users.updateRoutine(userId, toRoutine(body), clock);
     if (first) await this.personalizer.start(userId);
     return me;
+  }
+
+  /** Ajuste da dieta: proteína e gordura por kg e o peso da unidade do ovo. */
+  @Get('me/diet')
+  diet(@CurrentUser() userId: string): Promise<DietAdjustment> {
+    return this.users.diet(userId);
+  }
+
+  /** O ajuste com a mudança de um macro, sem salvar (a página chama a cada − / +). */
+  @Post('me/diet/estimate')
+  @HttpCode(200)
+  estimateDiet(
+    @CurrentUser() userId: string,
+    @Body() body: DietEstimateDto,
+  ): Promise<DietAdjustment> {
+    return this.users.estimateDiet(userId, body);
+  }
+
+  @Put('me/diet')
+  updateDiet(
+    @CurrentUser() userId: string,
+    @Body() body: DietSettingsDto,
+  ): Promise<DietAdjustment> {
+    return this.users.updateDiet(userId, toDietSettings(body));
   }
 
   /** Metas de um perfil, sem salvar (o formulário mostra enquanto o usuário edita). */

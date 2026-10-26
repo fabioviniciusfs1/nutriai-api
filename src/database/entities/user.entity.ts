@@ -4,7 +4,7 @@ import {
   Entity,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import type { Profile, Routine } from '../../contract.js';
+import type { DietSettings, Profile, Routine } from '../../contract.js';
 
 @Entity('users')
 export class UserEntity {
@@ -28,6 +28,10 @@ export class UserEntity {
   /** `null` até o primeiro `PUT /me/routine`. */
   @Column('jsonb', { nullable: true })
   routine: Routine | null;
+
+  /** Ajuste da dieta (`PUT /me/diet`); `null` = os padrões. */
+  @Column('jsonb', { name: 'diet_settings', nullable: true })
+  dietSettings: DietSettings | null;
 
   /** Dia em que o peso meta foi salvo ("AAAA-MM-DD"), começo da projeção; `null` sem peso meta. */
   @Column('date', { name: 'target_weight_set_on', nullable: true })

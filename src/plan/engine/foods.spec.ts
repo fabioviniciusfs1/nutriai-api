@@ -1,4 +1,4 @@
-import { FoodCatalog, isSameFood } from './foods.js';
+import { FoodCatalog, isEggUnit, isSameFood } from './foods.js';
 import type { CatalogFood } from './types.js';
 
 const food = (
@@ -208,5 +208,28 @@ describe('FoodCatalog.substituteOptions', () => {
     // Faltando opção, vêm mais da família (mas nunca a própria batata-doce).
     expect(names).toContain('Batata, yacon, crua');
     expect(names.some((name) => name.startsWith('Batata, doce'))).toBe(false);
+  });
+});
+
+describe('isEggUnit', () => {
+  it.each([
+    'Ovo, de galinha, inteiro, cozido/10minutos',
+    'Ovo, galinha, inteiro, frito (c/ óleo de soja), s/ sal',
+    'Ovo poché',
+    'Ovos',
+  ])('%s vai em unidades', (name) => {
+    expect(isEggUnit(name)).toBe(true);
+  });
+
+  it.each([
+    'Ovo, de codorna, inteiro, cru',
+    'Ovo, pata, inteiro, cru',
+    'Ovo, de galinha, clara, cozida/10minutos',
+    'Ovo, galinha, gema, crua (média de várias amostras)',
+    'Ovo, galinha, integral, desidratada, pasteurizada',
+    'Ovo, galinha, mexido, c/ margarina, s/ sal',
+    'Omelete',
+  ])('%s não', (name) => {
+    expect(isEggUnit(name)).toBe(false);
   });
 });

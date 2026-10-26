@@ -62,7 +62,8 @@ describe('Planner', () => {
       'Tacos de Camarão Grelhado com Salsa de Manga',
       'Bowl de Salmão com Quinoa e Legumes',
     ]);
-    expect(kcalOf(p)).toEqual([350, 375, 435]);
+    // O ovo poché de 50 g vai como 1 unidade de 55 g.
+    expect(kcalOf(p)).toEqual([357, 375, 435]);
     expect(p.plan[0].foods.every((food) => food.extraId === null)).toBe(true);
   });
 
@@ -460,7 +461,10 @@ describe('metas de macronutrientes', () => {
     const even = withMacros(null);
     const weighted = withMacros(goals);
     expect(distance(weighted)).toBeLessThan(distance(even) / 2);
-    expect(dayTotals(weighted).protein).toBe(goals.protein);
+    // O ovo em unidades inteiras tira o ajuste fino de alguns gramas.
+    expect(
+      Math.abs(dayTotals(weighted).protein - goals.protein),
+    ).toBeLessThanOrEqual(3);
     expect(Math.abs(weighted.dayKcal() - 2290)).toBeLessThanOrEqual(23);
   });
 
@@ -494,6 +498,43 @@ describe('metas de macronutrientes', () => {
   });
 });
 
+describe('ovo em unidades', () => {
+  const egg = (p: Planner) =>
+    p.meal(1).foods.find((food) => food.name === 'Ovo poché')!;
+  const withEgg = (options: Partial<PlannerOptions> = {}) =>
+    new Planner(catalog, EMPTY_STATE, {
+      calorieGoal: null,
+      meals: mealsFor(3),
+      ...options,
+    });
+
+  it('o ovo vai em unidades inteiras de 55 g, com os nutrientes na proporção', () => {
+    expect(egg(withEgg())).toMatchObject({ grams: 55, units: 1, kcal: 77 });
+  });
+
+  it('usa o peso da unidade do ajuste da dieta', () => {
+    expect(egg(withEgg({ eggUnitGrams: 60 }))).toMatchObject({
+      grams: 60,
+      units: 1,
+    });
+  });
+
+  it('com a meta, as porções crescem em unidades e as calorias seguem perto da meta', () => {
+    const p = withEgg({ calorieGoal: 2290 });
+    const food = egg(p);
+    expect(food.units).toBeGreaterThan(1);
+    expect(food.grams).toBe(food.units! * 55);
+    expect(Math.abs(p.dayKcal() - 2290)).toBeLessThanOrEqual(23);
+  });
+
+  it('só os ovos têm unidades', () => {
+    const others = withEgg()
+      .plan.flatMap((meal) => meal.foods)
+      .filter((food) => food.name !== 'Ovo poché');
+    expect(others.every((food) => food.units === undefined)).toBe(true);
+  });
+});
+
 describe('meta calórica e refeições da rotina', () => {
   const withGoal = (
     calorieGoal: number | null,
@@ -520,7 +561,7 @@ describe('meta calórica e refeições da rotina', () => {
   });
 
   it('sem meta, as porções originais', () => {
-    expect(kcalOf(withGoal(null))).toEqual([350, 375, 435]);
+    expect(kcalOf(withGoal(null))).toEqual([357, 375, 435]);
     expect(withGoal(null).goalFactor).toBe(1);
   });
 

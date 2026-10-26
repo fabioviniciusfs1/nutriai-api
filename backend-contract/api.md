@@ -294,6 +294,45 @@ ao peso meta num gráfico de linha.
   ao perder com a meta no piso acima do gasto, "Com a meta mínima de calorias, não dá para
   estimar quando o peso meta chega. Procure um nutricionista.".
 
+### Ajuste da dieta — `/me/diet`
+
+Página "Ajuste da dieta" (card "Minha conta"). Exemplo: 80 kg, meta de 2260 kcal. Todas as rotas exigem o perfil (`400` "Preencha o perfil
+primeiro." sem ele) e respondem `DietAdjustment`:
+
+```json
+{
+  "settings": { "proteinPerKg": 1.8, "fatPerKg": 1, "eggUnitGrams": 55 },
+  "calories": 2260,
+  "perKg": { "proteinas": 1.8, "gorduras": 1, "carboidratos": 3.01 },
+  "grams": { "proteinas": 144, "gorduras": 80, "carboidratos": 241 },
+  "split": { "proteinas": 25, "gorduras": 32, "carboidratos": 43 },
+  "minPerKg": { "proteinas": 1.6, "gorduras": 0.5, "carboidratos": 0 },
+  "maxPerKg": { "proteinas": 4.81, "gorduras": 2.33, "carboidratos": 4.13 }
+}
+```
+
+- `GET /me/diet`: o ajuste salvo; sem ajuste, os padrões (proteína 2 g/kg, gordura 1 g/kg, ovo de 55 g).
+- `POST /me/diet/estimate` (`DietEstimateRequest`), **sem salvar**: aplica a mudança de um macro com a
+  compensação. O front chama a cada − / + (passo de 0,1 g/kg) e mostra a resposta.
+- `PUT /me/diet` (`DietSettings`): salva. Vale na hora para as metas de `/nutrition/today` e do histórico, para
+  as porções de `/plan/today` e para o próximo plano individual.
+
+**Regras**
+
+- A meta calórica do dia não muda: `calories` = meta do perfil (`Targets.calories`). Proteína e gordura em g/kg do
+  peso do perfil; carboidrato = o restante das calorias (4/9/4 kcal por grama).
+- Mínimos: proteína **1,6 g/kg**, gordura **0,5 g/kg**, carboidrato 0.
+- Mudar a proteína ou a gordura compensa no carboidrato (o carboidrato sobe quando elas descem, e desce quando
+  elas sobem). Mudar o carboidrato compensa na gordura.
+- Valor abaixo do mínimo vira o mínimo; acima do máximo (o que deixaria o macro compensado abaixo do mínimo dele)
+  vira o máximo. `minPerKg` e `maxPerKg` dizem os limites com o ajuste atual.
+- `perKg` com duas casas decimais (o front mostra uma), `grams` inteiros, `split` como `macroSplit` de
+  `/nutrition/today`.
+- `eggUnitGrams`: inteiro de 30 a 90 g. Os ovos do plano (de galinha, inteiros) vão em unidades inteiras desse
+  peso (ver `units` em `GET /plan/today`).
+- `PUT` valida: `400` com "A proteína deve ser de pelo menos 1,6 g/kg.", "A gordura deve ser de pelo menos
+  0,5 g/kg.", "Proteína e gordura passam da meta de calorias." ou "O peso do ovo deve estar entre 30 e 90 g.".
+
 ## Pesos 🔒
 
 ### `GET /weights` → `WeightEntry[]`
@@ -332,6 +371,9 @@ O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por h
 
 - `totals` = soma dos alimentos já arredondados, como aparecem.
 - `extraId` ≠ `null`: alimento acrescentado pelo usuário (tem botão de remover).
+- `units`: só nos ovos de galinha inteiros (cozido, frito, poché…), quantas unidades; `grams` = `units` ×
+  `eggUnitGrams` do ajuste da dieta (55 g por padrão). As porções desses ovos sempre ficam em unidades inteiras
+  (pelo menos 1), menos no alimento extra com as gramas do usuário. O front mostra "2 unidades · 110 g".
 - `personalization`: montagem do plano individual — `pending` (montando; `meals` traz o plano atual, mas o front
   mostra só um card "Montando seu plano personalizado…" e pergunta de novo a cada poucos segundos), `ready` (aplicado), `failed` (não deu certo; o plano não muda) ou `null`
   (nunca pedido: sem assistente).
@@ -513,8 +555,9 @@ alimento volta a poder ser sugerido e oferecido); **as trocas já feitas continu
 - `burnedKcal`: gasto de hoje do Google Fit / Apple Saúde; `null` sem dados.
 - `limit: true` quando `meta` é um máximo (açúcares, gordura saturada, colesterol, sódio).
 - `macros` precisa ter os ids `proteinas`, `gorduras` e `carboidratos` (o front usa para as cores).
-- Metas dos macros com perfil: proteína 2 g/kg e gordura 1 g/kg de peso; o carboidrato fica com o restante
-  da meta calórica (4/9/4 kcal por grama, nunca negativo). Sem perfil, metas padrão.
+- Metas dos macros com perfil: proteína e gordura em g/kg do ajuste da dieta (`/me/diet`; padrão 2 g/kg e
+  1 g/kg); o carboidrato fica com o restante da meta calórica (4/9/4 kcal por grama, nunca negativo). Sem
+  perfil, metas padrão.
 - `perKg`: `atual` e `meta` divididos pelo peso do perfil (g/kg, uma casa decimal); `null` sem perfil. O card
   "Meta diária" mostra o `atual`.
 - `fiberPerKg`: fibras de hoje em g/kg (uma casa decimal); `null` sem perfil. Card "Meta diária".

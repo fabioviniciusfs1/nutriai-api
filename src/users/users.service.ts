@@ -13,7 +13,15 @@ import {
   weekday,
   type UserClock,
 } from '../common/timezone.js';
-import type { Me, Profile, Routine, WeightProjection } from '../contract.js';
+import type {
+  DietAdjustment,
+  DietEstimateRequest,
+  DietSettings,
+  Me,
+  Profile,
+  Routine,
+  WeightProjection,
+} from '../contract.js';
 import {
   GoogleAccountEntity,
   UserEntity,
@@ -24,6 +32,14 @@ import {
   projectWeight,
   targetWeightError,
 } from '../targets/targets.js';
+import {
+  adjustMacro,
+  dietAdjustment,
+  dietSettingsError,
+  dietSettingsOf,
+  MIN_FAT_PER_KG,
+  MIN_PROTEIN_PER_KG,
+} from '../targets/diet.js';
 import { routineError } from './routine.js';
 
 @Injectable()
@@ -141,6 +157,49 @@ export class UsersService {
       throw new BadRequestException('Preencha o perfil primeiro.');
     await this.users.update({ id: userId }, { routine });
     return this.me(userId, clock);
+  }
+
+  /** Perfil do usuário; o ajuste da dieta depende dele. */
+  private async profileOf(userId: string) {
+    const user = await this.get(userId);
+    if (!user.profile)
+      throw new BadRequestException('Preencha o perfil primeiro.');
+    return { user, profile: user.profile };
+  }
+
+  /** Ajuste da dieta salvo, com as contas feitas. */
+  async diet(userId: string): Promise<DietAdjustment> {
+    const { user, profile } = await this.profileOf(userId);
+    return dietAdjustment(profile, dietSettingsOf(user.dietSettings));
+  }
+
+  /** O ajuste com a mudança de um macro (e a compensação), sem salvar. */
+  async estimateDiet(
+    userId: string,
+    request: DietEstimateRequest,
+  ): Promise<DietAdjustment> {
+    const { user, profile } = await this.profileOf(userId);
+    const current: DietSettings = {
+      proteinPerKg: Math.max(MIN_PROTEIN_PER_KG, request.proteinPerKg),
+      fatPerKg: Math.max(MIN_FAT_PER_KG, request.fatPerKg),
+      eggUnitGrams: dietSettingsOf(user.dietSettings).eggUnitGrams,
+    };
+    return dietAdjustment(
+      profile,
+      adjustMacro(profile, current, request.macro, request.perKg),
+    );
+  }
+
+  /** Salva o ajuste da dieta: vale na hora para as metas e as porções do plano. */
+  async updateDiet(
+    userId: string,
+    settings: DietSettings,
+  ): Promise<DietAdjustment> {
+    const { profile } = await this.profileOf(userId);
+    const error = dietSettingsError(profile, settings);
+    if (error) throw new BadRequestException(error);
+    await this.users.update({ id: userId }, { dietSettings: settings });
+    return dietAdjustment(profile, settings);
   }
 
   /** Hoje é o dia de pesagem da rotina e ainda não há peso registrado hoje (no fuso do usuário). */

@@ -44,7 +44,7 @@ export class NutritionService {
       defs
         .filter((def) => def.section === name)
         .map((def) => {
-          const meta = nutrientGoal(def, user.profile);
+          const meta = nutrientGoal(def, user.profile, user.dietSettings);
           return {
             id: def.id,
             name: def.name,

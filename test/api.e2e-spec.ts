@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 import type {
+  DietAdjustment,
   Me,
   PlanMeal,
   TodayPlan,
@@ -380,13 +381,97 @@ describe('perfil e pesos', () => {
   });
 });
 
+describe('ajuste da dieta', () => {
+  it('ajusta os macros com compensação, valida os mínimos e vale para metas e plano', async () => {
+    const { http } = await newUser();
+    await http('get', '/me/diet').expect(400, {
+      error: 'Preencha o perfil primeiro.',
+    });
+    await http('put', '/me/profile').send(PROFILE).expect(200);
+    await http('put', '/me/routine').send(ROUTINE).expect(200);
+    await personalizationIdle();
+
+    // 68,5 kg e 1660 kcal: 2 g/kg de proteína, 1 g/kg de gordura, o resto em carboidrato.
+    const initial = (await http('get', '/me/diet').expect(200))
+      .body as DietAdjustment;
+    expect(initial).toMatchObject({
+      settings: { proteinPerKg: 2, fatPerKg: 1, eggUnitGrams: 55 },
+      calories: 1660,
+      grams: { proteinas: 137, gorduras: 69, carboidratos: 124 },
+      perKg: { proteinas: 2, gorduras: 1, carboidratos: 1.81 },
+      minPerKg: { proteinas: 1.6, gorduras: 0.5, carboidratos: 0 },
+    });
+
+    const estimate = (body: object) =>
+      http('post', '/me/diet/estimate')
+        .send({ proteinPerKg: 2, fatPerKg: 1, ...body })
+        .expect(200)
+        .then((response) => response.body as DietAdjustment);
+    // Abaixo do mínimo fica no mínimo; o carboidrato sobe.
+    const lessProtein = await estimate({ macro: 'proteinas', perKg: 1.2 });
+    expect(lessProtein.perKg.proteinas).toBe(1.6);
+    expect(lessProtein.perKg.carboidratos).toBe(2.21);
+    // Menos carboidrato, mais gordura.
+    const lessCarbs = await estimate({ macro: 'carboidratos', perKg: 1.2 });
+    expect(lessCarbs.perKg.gorduras).toBeGreaterThan(1);
+    // A estimativa não salva.
+    expect(
+      ((await http('get', '/me/diet').expect(200)).body as DietAdjustment)
+        .settings.proteinPerKg,
+    ).toBe(2);
+
+    await http('put', '/me/diet')
+      .send({ proteinPerKg: 1.5, fatPerKg: 1, eggUnitGrams: 55 })
+      .expect(400, { error: 'A proteína deve ser de pelo menos 1,6 g/kg.' });
+    await http('put', '/me/diet')
+      .send({ proteinPerKg: 2, fatPerKg: 0.4, eggUnitGrams: 55 })
+      .expect(400, { error: 'A gordura deve ser de pelo menos 0,5 g/kg.' });
+    await http('put', '/me/diet')
+      .send({ proteinPerKg: 2, fatPerKg: 1, eggUnitGrams: 100 })
+      .expect(400, { error: 'O peso do ovo deve estar entre 30 e 90 g.' });
+    const saved = (
+      await http('put', '/me/diet')
+        .send({ proteinPerKg: 1.8, fatPerKg: 0.8, eggUnitGrams: 60 })
+        .expect(200)
+    ).body as DietAdjustment;
+    expect(saved.grams).toEqual({
+      proteinas: 123,
+      gorduras: 55,
+      carboidratos: 168,
+    });
+
+    const nutrition = await http('get', '/nutrition/today').expect(200);
+    expect(
+      nutrition.body.macros.map(
+        (macro: { meta: number; perKg: { meta: number } }) => [
+          macro.meta,
+          macro.perKg.meta,
+        ],
+      ),
+    ).toEqual([
+      [123, 1.8],
+      [55, 0.8],
+      [168, 2.5],
+    ]);
+
+    // O ovo do café da manhã vai em unidades de 60 g.
+    const plan = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+    const egg = plan.meals
+      .flatMap((meal) => meal.foods)
+      .find((food) => food.units !== undefined)!;
+    expect(egg.name).toMatch(/^Ovo/);
+    expect(egg.grams).toBe(egg.units! * 60);
+  });
+});
+
 describe('plano alimentar', () => {
   it('acrescenta o alimento extra nas gramas do usuário, somando ao dia', async () => {
     const { http } = await newUser();
     const today = (await http('get', '/plan/today').expect(200))
       .body as TodayPlan;
     expect(today.meals.map((meal) => meal.totals.kcal)).toEqual([
-      348, 399, 399,
+      355, 399, 399,
     ]);
 
     const search = await http(
@@ -1058,7 +1143,7 @@ describe('chat', () => {
       { role: 'user', content: 'Quantas calorias hoje?' },
     ]);
     expect(params.system[1].text).toContain(
-      'Plano de hoje (1146 kcal no total)',
+      'Plano de hoje (1153 kcal no total)',
     );
 
     create.mockRejectedValueOnce(new Error('falhou'));

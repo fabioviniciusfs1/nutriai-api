@@ -8,7 +8,12 @@ import type {
   TodayPlan,
   Totals,
 } from '../../contract.js';
-import { FoodCatalog, scaleFoods, sumTotals } from './foods.js';
+import {
+  DEFAULT_EGG_UNIT_GRAMS,
+  FoodCatalog,
+  portionFood,
+  sumTotals,
+} from './foods.js';
 import type {
   Catalog,
   MacroGoals,
@@ -95,14 +100,15 @@ export function foodWeight(food: Totals, weights: number[]) {
     : 1;
 }
 
-/** Porções de `foods` multiplicadas por `factor` e pelo fator de cada alimento em `weights`. */
+/** Porções de `foods` multiplicadas por `factor` e pelo fator de cada alimento em `weights` (ovos em unidades). */
 function scaleWeighted<T extends PlanFood>(
   foods: T[],
   weights: number[],
   factor: number,
+  eggUnitGrams: number,
 ): T[] {
-  return foods.map(
-    (food) => scaleFoods([food], foodWeight(food, weights) * factor)[0],
+  return foods.map((food) =>
+    portionFood(food, foodWeight(food, weights) * factor, eggUnitGrams),
   );
 }
 
@@ -213,18 +219,20 @@ export function macroWeights(
 
 /**
  * Fator que leva as refeições `meals` (porções originais, com o fator de cada alimento pelos `weights` dos
- * macros) para perto de `goal` kcal: a proporção direta, ajustada em passos de 0,1% (até ±5%) para o total já
- * arredondado ficar o mais perto da meta.
+ * macros e os ovos em unidades de `eggUnitGrams`) para perto de `goal` kcal: a proporção direta, ajustada em
+ * passos de 0,1% (até ±5%) para o total já arredondado ficar o mais perto da meta.
  */
 export function goalFactor(
   meals: PlanFood[][],
   goal: number | null,
   weights: number[] = EVEN_WEIGHTS,
+  eggUnitGrams = DEFAULT_EGG_UNIT_GRAMS,
 ): number {
   const kcalAt = (factor: number) =>
     meals.reduce(
       (sum, foods) =>
-        sum + sumTotals(scaleWeighted(foods, weights, factor)).kcal,
+        sum +
+        sumTotals(scaleWeighted(foods, weights, factor, eggUnitGrams)).kcal,
       0,
     );
   const baseKcal = kcalAt(1);
@@ -266,6 +274,8 @@ export class Planner {
    * perto da meta calórica. As ações do usuário mudam os fatores de porção por cima dele.
    */
   readonly goalFactor: number;
+  /** Peso da unidade do ovo (g). */
+  private readonly eggUnitGrams: number;
 
   constructor(
     private readonly catalog: Catalog,
@@ -285,10 +295,12 @@ export class Planner {
       options.calorieGoal === null
         ? EVEN_WEIGHTS
         : macroWeights(baseFoods, options.macroGoals);
+    this.eggUnitGrams = options.eggUnitGrams ?? DEFAULT_EGG_UNIT_GRAMS;
     this.goalFactor = goalFactor(
       baseFoods,
       options.calorieGoal,
       this.macroWeights,
+      this.eggUnitGrams,
     );
     this.plan = this.buildPlan(state.planChanges);
   }
@@ -314,16 +326,17 @@ export class Planner {
           })),
         );
         const baseFoods = [...planFoods, ...extras];
-        // Porções ajustadas pelos fatores e pelos pesos dos macros; os extras nas gramas do usuário (`fixed`)
+        // Porções ajustadas pelos fatores e pelos pesos dos macros (ovos em unidades); os extras nas gramas do usuário (`fixed`)
         // ficam como estão.
         const scaled = (factor: number) =>
           baseFoods.map(({ fixed, ...food }) =>
             fixed
               ? food
-              : scaleFoods(
-                  [food],
+              : portionFood(
+                  food,
                   foodWeight(food, this.macroWeights) * factor,
-                )[0],
+                  this.eggUnitGrams,
+                ),
           );
         const foods = scaled(this.goalFactor * scale);
         return {

@@ -118,6 +118,39 @@ export type WeightProjection = {
   points: { month: number; date: string; weightKg: number }[];
 };
 
+/** Ajuste da dieta salvo (`PUT /me/diet`). Sem ajuste salvo: proteína 2 g/kg, gordura 1 g/kg e ovo de 55 g. */
+export type DietSettings = {
+  /** Proteína e gordura em g por kg de peso; o carboidrato fica com o restante da meta calórica. */
+  proteinPerKg: number;
+  fatPerKg: number;
+  /** Peso de uma unidade de ovo (g): os ovos do plano vão em unidades inteiras dele. */
+  eggUnitGrams: number;
+};
+
+/** Ajuste da dieta com as contas feitas (página "Ajuste da dieta"). */
+export type DietAdjustment = {
+  settings: DietSettings;
+  /** Meta calórica do dia (não muda com o ajuste). */
+  calories: number;
+  /** Cada macro em g por kg de peso (duas casas decimais). */
+  perKg: Record<MacroId, number>;
+  /** Cada macro em gramas por dia. */
+  grams: Record<MacroId, number>;
+  /** Parte das calorias dos macros que vem de cada um, em % inteiros que somam 100. */
+  split: Record<MacroId, number> | null;
+  /** Até onde cada macro pode ir (g/kg): o front desabilita − e + nos limites. */
+  minPerKg: Record<MacroId, number>;
+  maxPerKg: Record<MacroId, number>;
+};
+
+/** Corpo de `POST /me/diet/estimate`: o ajuste atual e o novo valor (g/kg) do macro que o usuário mudou. */
+export type DietEstimateRequest = {
+  proteinPerKg: number;
+  fatPerKg: number;
+  macro: MacroId;
+  perKg: number;
+};
+
 export type AuthResponse = { token: string };
 
 /** URL de consentimento do Google para conectar a conta já logada. */
@@ -136,8 +169,11 @@ export type WeightEntry = {
 
 export type Totals = { carbs: number; protein: number; fat: number; kcal: number };
 
-/** Alimento numa porção: quantidade sempre em gramas, nutrientes já calculados para ela. */
-export type PlanFood = Totals & { name: string; grams: number };
+/**
+ * Alimento numa porção: quantidade sempre em gramas, nutrientes já calculados para ela. `units`: só nos ovos do
+ * plano, quantas unidades (`grams` = unidades × `DietSettings.eggUnitGrams`).
+ */
+export type PlanFood = Totals & { name: string; grams: number; units?: number };
 
 export type PlanMeal = {
   id: number;
@@ -199,7 +235,7 @@ export type Nutrient = {
 
 export type MacroId = "proteinas" | "gorduras" | "carboidratos";
 
-/** Macronutriente do dia, também em g por kg de peso corporal (as metas são 2 g/kg de proteína e 1 g/kg de gordura). */
+/** Macronutriente do dia, também em g por kg de peso corporal (metas do ajuste da dieta, `/me/diet`). */
 export type MacroNutrient = Nutrient & {
   id: MacroId;
   /** `atual` e `meta` em g/kg de peso, com uma casa decimal; `null` sem perfil. */

@@ -79,6 +79,13 @@ npx vitest run -t "não gosto"                     # por nome do teste
   manhã, lanche da manhã, almoço, lanche da tarde, jantar, ceia; pelo menos uma), dia da pesagem e tipo de
   alimentação. As regras entre os campos e as linhas de prompt ficam em `routine.ts` (`routineError`,
   `routineLines`, `MEAL_SLOTS`). Sem rotina: café da manhã, almoço e jantar, sem restrição.
+- Ajuste da dieta (`src/targets/diet.ts`; `GET`/`PUT /me/diet` e `POST /me/diet/estimate`, que não salva):
+  `users.diet_settings` tem proteína e gordura em g/kg e o peso da unidade do ovo (`null` = 2, 1 e 55 g). Mínimos
+  de 1,6 g/kg de proteína e 0,5 g/kg de gordura; a meta calórica não muda: proteína e gordura compensam no
+  carboidrato, o carboidrato compensa na gordura (`adjustMacro`, que prende nos limites). `macroTargets(profile,
+  settings)` vale para `/nutrition/today`, o histórico, o `macroWeights` do plano e o prompt do plano individual.
+  Ovos de galinha inteiros (`isEggUnit` em `foods.ts`) vão no plano em unidades inteiras desse peso (`portionFood`,
+  `PlanFood.units`), menos o extra com as gramas do usuário.
 - Plano inicial: as refeições base cujo `slot` (`base_meals.slot`, uma por refeição do dia) está em
   `routine.meals`, e todas as
   porções multiplicadas pelo `goalFactor` do `Planner` (meta calórica ÷ kcal do plano inicial, ajustado para o

@@ -124,7 +124,7 @@ export class HistoryService {
       id: def.id,
       name: def.name,
       unit: def.unit,
-      meta: nutrientGoal(def, data.user.profile),
+      meta: nutrientGoal(def, data.user.profile, data.user.dietSettings),
       ...(def.limit ? { limit: true } : {}),
     });
   }

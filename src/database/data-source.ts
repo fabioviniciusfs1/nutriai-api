@@ -12,6 +12,7 @@ import { TrainingEnd1790800000000 } from './migrations/1790800000000-training-en
 import { DropMealRemoval1790900000000 } from './migrations/1790900000000-drop-meal-removal.js';
 import { TargetWeightDate1791000000000 } from './migrations/1791000000000-target-weight-date.js';
 import { Tbca1791100000000 } from './migrations/1791100000000-tbca.js';
+import { DietSettings1791200000000 } from './migrations/1791200000000-diet-settings.js';
 
 /** Migrations em ordem; as novas entram no fim da lista. */
 export const MIGRATIONS = [
@@ -27,6 +28,7 @@ export const MIGRATIONS = [
   DropMealRemoval1790900000000,
   TargetWeightDate1791000000000,
   Tbca1791100000000,
+  DietSettings1791200000000,
 ];
 
 export function dataSourceOptions(url: string): DataSourceOptions {
