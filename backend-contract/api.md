@@ -486,9 +486,13 @@ padrão do plano base (ou a do assistente, se ele refizer o plano com `POST /pla
 }
 ```
 
-- Procura no catálogo, sem diferenciar maiúsculas nem acentos, os alimentos cujo nome **contém** o texto
-  (`found: true`). Se nenhum, devolve os 5 mais parecidos (`found: false`); o front antigo usava
-  semelhança por pares de letras (coeficiente de Dice sobre bigramas).
+- Procura no catálogo os alimentos cujo nome tem **todas as palavras** do texto, em qualquer ordem
+  (`found: true`), sem diferenciar maiúsculas, acentos e pontuação. Cada palavra vale pelo começo de uma
+  palavra do nome ("guaca" → "Guacamole"), sem plural nem gênero ("ovos" → "Ovo, de galinha…") ou por um
+  sinônimo ("aipim" → "Mandioca"); "de", "com" e afins não contam ("peito de frango" → "Frango, peito…").
+  Ordem: primeiro os nomes que começam por uma palavra do texto, depois os com menos palavras além das do
+  texto, depois a TACO e o nome mais curto. Se nenhum, devolve os 5 mais parecidos (`found: false`), por
+  semelhança de pares de letras (coeficiente de Dice sobre bigramas).
 - Alimentos restritos pelo usuário nunca aparecem. Se o texto é exatamente um alimento restrito,
   `restricted` traz o nome e a marcação dele.
 - Porção sugerida de cada opção (o valor inicial das gramas no diálogo): as calorias médias por alimento da
@@ -524,8 +528,8 @@ com as **mesmas calorias** do alimento como aparece na refeição, sem o própri
   no máximo 64 nomes em `exclude` (o resto é ignorado), então o front para de oferecer o "Ver mais" com 64
   opções na tela.
 - **Pesquisa** (quem já sabe o que quer comer): `?food=Guacamole&q=banana` devolve, sem chamar o assistente, até
-  **20** alimentos do catálogo cujo nome contém o texto (sem diferenciar maiúsculas, acentos e pontuação; se
-  nenhum bate, os mais parecidos), de **qualquer grupo**, com as mesmas calorias, sem o próprio, sem os
+  **20** alimentos do catálogo achados como na busca do "Acrescentar alimento extra" (todas as palavras, em
+  qualquer ordem; se nenhum bate, os mais parecidos), de **qualquer grupo**, com as mesmas calorias, sem o próprio, sem os
   restritos e sem os de fora do tipo de alimentação. O diálogo de troca abre só com a pesquisa e o card "Sem
   substituto"; as sugestões vêm quando o usuário clica em "Sugerir".
 
