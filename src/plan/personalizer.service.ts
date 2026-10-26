@@ -92,6 +92,7 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
         ]);
       if (profile && routine) {
         meals = await this.composer.composePersonalPlan(
+          userId,
           personalPlanRequest(
             profile,
             routine,

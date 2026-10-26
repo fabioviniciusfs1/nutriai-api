@@ -5,8 +5,10 @@ import {
   CLAUDE_MODEL,
   CLAUDE_PLAN_MODEL,
 } from '../../ai/anthropic.provider.js';
+import { LlmLogService } from '../../ai/llm-log.service.js';
 import { CatalogService } from '../../catalog/catalog.service.js';
 import type { Diet, FoodFeedback } from '../../contract.js';
+import type { LlmTask } from '../../database/entities/index.js';
 import { allowedByDiet } from '../engine/diet.js';
 import { FoodCatalog } from '../engine/foods.js';
 import type { PersonalMeals } from '../engine/types.js';
@@ -51,6 +53,7 @@ export class MealComposerService {
   constructor(
     @Inject(ANTHROPIC_CLIENT) private readonly anthropic: Anthropic | null,
     private readonly catalog: CatalogService,
+    private readonly llmLog: LlmLogService,
   ) {}
 
   get available() {
@@ -62,15 +65,19 @@ export class MealComposerService {
    * dele). `null` sem cliente, se a chamada falhar ou se nenhum nome existir no catálogo.
    */
   async suggestSubstitutes(
+    userId: string,
     request: SubstituteRequest,
     feedback: Record<string, FoodFeedback>,
   ): Promise<string[] | null> {
     const text = await this.ask({
       task: 'Sugestão de substitutos',
+      log: 'substitutes',
+      userId,
       instructions: SUBSTITUTE_INSTRUCTIONS,
       prompt: substitutePrompt(request),
       schema: SUBSTITUTES_SCHEMA,
-      maxTokens: 1000,
+      // O Haiku pensa antes de responder, e o raciocínio também conta no limite.
+      maxTokens: 16000,
       // O diálogo de troca espera esta chamada: sem resposta rápida, usa os do mesmo grupo.
       timeout: SUBSTITUTES_TIMEOUT_MS,
     });
@@ -97,11 +104,14 @@ export class MealComposerService {
    * cliente, se a chamada falhar ou se alguma refeição pedida vier sem alimentos válidos.
    */
   async composePersonalPlan(
+    userId: string,
     request: PersonalPlanRequest,
     feedback: Record<string, FoodFeedback>,
   ): Promise<PersonalMeals | null> {
     const text = await this.ask({
       task: 'Plano individual',
+      log: 'personal-plan',
+      userId,
       instructions: PERSONAL_PLAN_INSTRUCTIONS,
       prompt: personalPlanPrompt(request),
       schema: PERSONAL_PLAN_SCHEMA,
@@ -136,6 +146,9 @@ export class MealComposerService {
    */
   private async ask(options: {
     task: string;
+    /** Tarefa e usuário no log das chamadas (`llm_calls`). */
+    log: LlmTask;
+    userId: string;
     instructions: string;
     prompt: string;
     schema: Record<string, unknown>;
@@ -162,8 +175,16 @@ export class MealComposerService {
         { role: 'user', content: options.prompt },
       ];
       const request = { timeout: options.timeout, maxRetries: 1 };
+      const anthropic = this.anthropic;
+      const track = <T extends { model: string }, R extends object>(
+        params: T,
+        call: (params: T) => Promise<R>,
+      ) =>
+        this.llmLog.track(options.log, options.userId, params, () =>
+          call(params),
+        );
       const response = options.plan
-        ? await this.anthropic.beta.messages.create(
+        ? await track(
             {
               model: CLAUDE_PLAN_MODEL,
               max_tokens: options.maxTokens,
@@ -175,20 +196,22 @@ export class MealComposerService {
               },
               betas: ['server-side-fallback-2026-07-01'],
               fallbacks: 'default',
-            },
-            request,
+            } satisfies Anthropic.Beta.MessageCreateParamsNonStreaming,
+            (params) => anthropic.beta.messages.create(params, request),
           )
-        : await this.anthropic.messages.create(
+        : await track(
             {
               model: CLAUDE_MODEL,
               max_tokens: options.maxTokens,
               system,
               messages,
+              // Escolher substitutos é simples, e o diálogo de troca espera: pouco raciocínio.
               output_config: {
+                effort: 'low',
                 format: { type: 'json_schema', schema: options.schema },
               },
-            },
-            request,
+            } satisfies Anthropic.MessageCreateParamsNonStreaming,
+            (params) => anthropic.messages.create(params, request),
           );
       if (
         response.stop_reason === 'refusal' ||

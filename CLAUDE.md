@@ -129,7 +129,8 @@ npx vitest run -t "não gosto"                     # por nome do teste
   palavras pesadas pela raridade, sinônimos (`SYNONYMS`, na forma de `stem`), a família do nome tem de estar no
   citado, calorias longe demais descartam; sem par → descartado. `parseFoods` e `parseSubstitutes` usam o
   `match` e depois descartam restritos e fora da dieta. O cliente e o modelo (`CLAUDE_MODEL`) ficam em
-  `src/ai/`. Sugere substitutos ao trocar alimento (`substitution.ts`; até 8, sem crus se o original não for
+  `src/ai/`. Toda chamada ao Claude (chat, substitutos, plano individual) passa por `LlmLogService.track`
+  (`src/ai/llm-log.service.ts`), que grava pedido, resposta ou erro, tokens e duração em `llm_calls`. Sugere substitutos ao trocar alimento (`substitution.ts`; até 8, sem crus se o original não for
   cru e nunca o próprio alimento em outro preparo, `isSameFood`); sem o Claude, os do mesmo grupo mais parecidos
   em macros e em kcal/100 g (`FoodCatalog.substituteOptions`), no máximo 2 por família do nome e sem duas
   versões do mesmo alimento. A troca aceita

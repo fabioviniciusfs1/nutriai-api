@@ -14,6 +14,7 @@ import { PlanService } from '../plan/plan.service.js';
 import { calculateTargets } from '../targets/targets.js';
 import { UsersService } from '../users/users.service.js';
 import { ANTHROPIC_CLIENT, CLAUDE_MODEL } from '../ai/anthropic.provider.js';
+import { LlmLogService } from '../ai/llm-log.service.js';
 import { SYSTEM_PROMPT, userContext } from './chat-prompt.js';
 
 /** Mensagens anteriores enviadas ao modelo. */
@@ -46,6 +47,7 @@ export class ChatService {
     private readonly messages: Repository<ChatMessageEntity>,
     private readonly users: UsersService,
     private readonly plan: PlanService,
+    private readonly llmLog: LlmLogService,
   ) {}
 
   /** Conversa do mais antigo para o mais recente; começa com a saudação do assistente. */
@@ -108,6 +110,7 @@ export class ChatService {
     while (turns.length > 0 && turns[0].role !== 'user') turns.shift();
 
     const reply = await this.ask(
+      userId,
       userContext({
         name: user.name,
         today: clock.today,
@@ -125,11 +128,12 @@ export class ChatService {
   }
 
   private async ask(
+    userId: string,
     context: string,
     messages: Anthropic.MessageParam[],
   ): Promise<string> {
     try {
-      const response = await this.anthropic!.messages.create({
+      const params: Anthropic.MessageCreateParamsNonStreaming = {
         model: CLAUDE_MODEL,
         max_tokens: 16000,
         system: [
@@ -141,7 +145,10 @@ export class ChatService {
           { type: 'text', text: context },
         ],
         messages,
-      });
+      };
+      const response = await this.llmLog.track('chat', userId, params, () =>
+        this.anthropic!.messages.create(params),
+      );
       if (response.stop_reason === 'refusal') return REFUSAL_REPLY;
       const text = response.content
         .flatMap((block) => (block.type === 'text' ? [block.text] : []))

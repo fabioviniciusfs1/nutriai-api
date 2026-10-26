@@ -1158,6 +1158,27 @@ describe('chat', () => {
       3,
     );
 
+    // As duas chamadas ficam no log, com o pedido e a resposta ou o erro.
+    const calls = await app
+      .get(DataSource)
+      .query(
+        `SELECT task, model, request, response, error FROM llm_calls ORDER BY id DESC LIMIT 2`,
+      );
+    expect(calls[0]).toMatchObject({
+      task: 'chat',
+      model: 'claude-haiku-5-5',
+      response: null,
+      error: 'falhou',
+    });
+    expect(calls[1]).toMatchObject({
+      task: 'chat',
+      error: null,
+      response: { stop_reason: 'end_turn' },
+    });
+    expect(calls[1].request.messages).toEqual([
+      { role: 'user', content: 'Quantas calorias hoje?' },
+    ]);
+
     const suggestions = await http('get', '/chat/suggestions').expect(200);
     expect(suggestions.body).toHaveLength(4);
   });

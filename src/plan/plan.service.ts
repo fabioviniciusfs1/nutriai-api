@@ -148,7 +148,11 @@ export class PlanService {
       };
       return { request, feedback: planner.state.foodFeedback };
     });
-    const names = await this.composer.suggestSubstitutes(request, feedback);
+    const names = await this.composer.suggestSubstitutes(
+      userId,
+      request,
+      feedback,
+    );
     return this.read(userId, clock, (planner) => {
       const suggested = names
         ? planner.substitutes(mealId, foodName, names, exclude)
