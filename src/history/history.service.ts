@@ -6,7 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, LessThan, type Repository } from 'typeorm';
 import { CatalogService } from '../catalog/catalog.service.js';
-import type { UserClock } from '../common/timezone.js';
+import { localDate, type UserClock } from '../common/timezone.js';
 import type {
   ActivityHistory,
   ActivitySource,
@@ -123,7 +123,10 @@ export class HistoryService {
     );
     if (!def) throw new NotFoundException('Nutriente não encontrado.');
     const data = await this.window(userId, clock, days);
-    return nutrientHistory(data.dates, data.logsByDate, {
+    // Os dias começam no da criação da conta: antes dele não há consumo para mostrar (nem zerar a média).
+    const created = localDate(data.user.createdAt, clock.timeZone);
+    const dates = data.dates.filter((date) => date >= created);
+    return nutrientHistory(dates, data.logsByDate, {
       id: def.id,
       name: def.name,
       unit: def.unit,

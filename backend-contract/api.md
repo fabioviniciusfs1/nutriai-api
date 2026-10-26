@@ -641,7 +641,8 @@ Médias por dia e distância total arredondadas para inteiro.
 }
 ```
 
-Dia sem registro vale 0. `averagePercent` = média em % da meta. `daysOnGoal` = dias com valor ≥ meta;
+Os dias começam no dia da criação da conta (no fuso do usuário): numa conta nova, `days` tem menos itens que o
+período. Dia sem registro vale 0. `averagePercent` = média em % da meta. `daysOnGoal` = dias com valor ≥ meta;
 `daysOverLimit` = dias com valor > meta (o front mostra um ou outro conforme `limit`).
 
 ### `GET /history/plans` → `PlanHistoryEntry[]`

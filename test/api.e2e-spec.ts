@@ -980,7 +980,7 @@ describe('plano individual do assistente', () => {
 
 describe('nutrientes e histórico', () => {
   it('responde nutrientes de hoje e as estatísticas', async () => {
-    const { http } = await newUser();
+    const { http, username } = await newUser();
     await http('put', '/me/profile').send(PROFILE).expect(200);
     await http('put', '/me/routine').send(ROUTINE).expect(200);
     await personalizationIdle();
@@ -1068,8 +1068,24 @@ describe('nutrientes e histórico', () => {
       'get',
       '/history/nutrients/proteinas?days=7',
     ).expect(200);
-    expect(protein.body.days).toHaveLength(7);
-    expect(protein.body.days[6].value).toBeGreaterThan(0);
+    // Conta criada hoje: só o dia de hoje.
+    expect(protein.body.days).toHaveLength(1);
+    expect(protein.body.days[0].value).toBeGreaterThan(0);
+    // Criada há 3 dias: do dia da criação até hoje.
+    await app
+      .get(DataSource)
+      .query(
+        `UPDATE users SET created_at = now() - interval '3 days' WHERE username = $1`,
+        [username],
+      );
+    const sinceCreation = await http(
+      'get',
+      '/history/nutrients/proteinas?days=7',
+    ).expect(200);
+    const today = userClock('America/Sao_Paulo').today;
+    expect(
+      sinceCreation.body.days.map((day: { date: string }) => day.date),
+    ).toEqual([-3, -2, -1, 0].map((delta) => addDays(today, delta)));
     await http('get', '/history/nutrients/nao-existe?days=7').expect(404);
 
     // Só o plano montado, que é o em vigor.
