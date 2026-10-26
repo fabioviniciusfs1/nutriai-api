@@ -3,7 +3,6 @@ import {
   fillDayLogs,
   historySummary,
   nutrientHistory,
-  planHistory,
   windowDates,
 } from './stats.js';
 
@@ -103,19 +102,6 @@ describe('history stats', () => {
       daysOnGoal: 1,
       daysOverLimit: 1,
     });
-  });
-
-  it('planos anteriores do mais recente para o mais antigo, sem hoje', () => {
-    const result = planHistory(
-      [
-        log('2026-09-26', 1400),
-        log('2026-09-28', 1500),
-        log('2026-09-27', 1450),
-      ],
-      '2026-09-28',
-    );
-    expect(result.map((day) => day.date)).toEqual(['2026-09-27', '2026-09-26']);
-    expect(result[0]).toMatchObject({ followedCount: 1, plannedKcal: 1450 });
   });
 
   it('dia sem foto repete o plano do último dia gravado; antes da primeira foto, nada', () => {

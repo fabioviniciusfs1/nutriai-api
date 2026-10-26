@@ -3,6 +3,7 @@ import { CurrentUser } from '../common/auth.decorators.js';
 import { Clock, type UserClock } from '../common/timezone.js';
 import type {
   DietAdjustment,
+  DietPreview,
   Me,
   Targets,
   WeightProjection,
@@ -17,12 +18,14 @@ import {
 } from './diet.dto.js';
 import { UsersService } from './users.service.js';
 import { PlanPersonalizerService } from '../plan/personalizer.service.js';
+import { PlanService } from '../plan/plan.service.js';
 
 @Controller()
 export class UsersController {
   constructor(
     private readonly users: UsersService,
     private readonly personalizer: PlanPersonalizerService,
+    private readonly plan: PlanService,
   ) {}
 
   @Get('me')
@@ -80,6 +83,19 @@ export class UsersController {
     @Body() body: DietEstimateDto,
   ): Promise<DietAdjustment> {
     return this.users.estimateDiet(userId, body);
+  }
+
+  /** O plano de hoje com o ajuste, sem salvar ("Ver prévia"). */
+  @Post('me/diet/preview')
+  @HttpCode(200)
+  async previewDiet(
+    @CurrentUser() userId: string,
+    @Body() body: DietSettingsDto,
+    @Clock() clock: UserClock,
+  ): Promise<DietPreview> {
+    const settings = toDietSettings(body);
+    await this.users.checkDiet(userId, settings);
+    return this.plan.previewDiet(userId, clock, settings);
   }
 
   @Put('me/diet')

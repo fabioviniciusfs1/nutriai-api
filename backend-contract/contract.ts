@@ -151,6 +151,17 @@ export type DietEstimateRequest = {
   perKg: number;
 };
 
+/** `POST /me/diet/preview`: o plano de hoje com o ajuste novo, sem salvar. */
+export type DietPreview = {
+  /** Totais do plano atual e do plano com o ajuste. */
+  current: Totals & { fiber: number };
+  next: Totals & { fiber: number };
+  /** O plano com o ajuste. */
+  meals: { title: string; time: string; kcal: number; foods: PlanHistoryFood[] }[];
+  /** O que muda do plano atual para o novo (quase sempre `grams`). */
+  changes: PlanHistoryChange[];
+};
+
 export type AuthResponse = { token: string };
 
 /** URL de consentimento do Google para conectar a conta já logada. */
@@ -315,12 +326,33 @@ export type NutrientHistory = {
   daysOverLimit: number;
 };
 
-export type PlanHistoryDay = {
+export type PlanHistoryFood = { name: string; grams: number; units?: number };
+
+/** Mudança de um plano para o anterior, numa refeição. */
+export type PlanHistoryChange = {
+  /** Título da refeição. */
+  meal: string;
+  /** `swap`: um alimento no lugar de outro; `grams`: o mesmo alimento com outra quantidade. */
+  kind: "swap" | "added" | "removed" | "grams";
+  /** `null` em `added`. */
+  from: PlanHistoryFood | null;
+  /** `null` em `removed`. */
+  to: PlanHistoryFood | null;
+};
+
+/** Um plano do histórico: o montado e, por dia, no máximo um alterado com as mudanças daquele dia. */
+export type PlanHistoryEntry = {
+  id: string;
+  /** "AAAA-MM-DD": dia em que o plano foi montado ou alterado. */
   date: string;
-  followedCount: number;
-  plannedKcal: number;
-  meals: { time: string; title: string; kcal: number; followed: boolean }[];
-  flaggedFoods: { name: string; feedback: FoodFeedback }[];
+  /** `false` = montado (pelo assistente); `true` = alterado pelo usuário nesse dia. */
+  edited: boolean;
+  /** O plano em vigor (o primeiro da lista). */
+  current: boolean;
+  totals: Totals & { fiber: number };
+  meals: { title: string; time: string; kcal: number; foods: PlanHistoryFood[] }[];
+  /** Diferenças para o plano anterior; vazio no plano montado. */
+  changes: PlanHistoryChange[];
 };
 
 export type ActivitySource = {

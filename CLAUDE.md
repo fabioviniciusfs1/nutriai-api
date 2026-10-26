@@ -79,7 +79,8 @@ npx vitest run -t "não gosto"                     # por nome do teste
   manhã, lanche da manhã, almoço, lanche da tarde, jantar, ceia; pelo menos uma), dia da pesagem e tipo de
   alimentação. As regras entre os campos e as linhas de prompt ficam em `routine.ts` (`routineError`,
   `routineLines`, `MEAL_SLOTS`). Sem rotina: café da manhã, almoço e jantar, sem restrição.
-- Ajuste da dieta (`src/targets/diet.ts`; `GET`/`PUT /me/diet` e `POST /me/diet/estimate`, que não salva):
+- Ajuste da dieta (`src/targets/diet.ts`; `GET`/`PUT /me/diet`, `POST /me/diet/estimate` e `POST /me/diet/preview`,
+  que não salvam; a prévia é o `PlanService.previewDiet`, com o plano de hoje pelas metas novas e o que muda):
   `users.diet_settings` tem proteína e gordura em g/kg e o peso da unidade do ovo (`null` = 2, 1 e 55 g). Mínimos
   de 1,6 g/kg de proteína e 0,5 g/kg de gordura; a meta calórica não muda: proteína e gordura compensam no
   carboidrato, o carboidrato compensa na gordura (`adjustMacro`, que prende nos limites). `macroTargets(profile,
@@ -135,7 +136,11 @@ npx vitest run -t "não gosto"                     # por nome do teste
   em macros e em kcal/100 g (`FoodCatalog.substituteOptions`), no máximo 2 por família do nome e sem duas
   versões do mesmo alimento. A troca aceita
   qualquer alimento do catálogo não restrito.
-- Lacuna conhecida: não há rota para marcar refeição feita (`/history/plans` conta todas como seguidas).
+- Histórico de planos (`plan_versions`, `GET /history/plans`): o `PlanVersionService` grava, junto da foto do dia
+  em `withPlanner`, a versão do plano quando os alimentos ou as gramas mudam (o horário não conta; nada enquanto a
+  personalização está `pending`). A primeira é a montada (`edited: false`); depois, no máximo uma alterada por dia,
+  que as outras mudanças do mesmo dia editam (`nextPlanVersion` em `src/plan/plan-versions.ts`). O que mudou entre
+  duas versões é calculado na leitura (`planChanges`).
 
 ## Contrato com o front
 

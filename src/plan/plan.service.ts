@@ -9,13 +9,19 @@ import type { DataSource, EntityManager } from 'typeorm';
 import { CatalogService } from '../catalog/catalog.service.js';
 import type { UserClock } from '../common/timezone.js';
 import type {
+  DietPreview,
+  DietSettings,
   FoodFeedback,
   Personalization,
   PlanFood,
+  PlanMeal,
   TodayPlan,
 } from '../contract.js';
 import { PlanStateEntity } from '../database/entities/index.js';
 import { DayLogService } from './day-log.service.js';
+import { planNutrients } from './nutrients.js';
+import { PlanVersionService } from './plan-version.service.js';
+import { planChanges, planVersion } from './plan-versions.js';
 import { FOOD_NOT_FOUND, Planner, PlanRuleError } from './engine/planner.js';
 import {
   DEFAULT_PLANNER_OPTIONS,
@@ -93,6 +99,7 @@ export class PlanService {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly catalog: CatalogService,
     private readonly dayLogs: DayLogService,
+    private readonly versions: PlanVersionService,
     private readonly users: UsersService,
     private readonly composer: MealComposerService,
   ) {}
@@ -102,9 +109,12 @@ export class PlanService {
    * tipo de alimentação da rotina (sem perfil: porções originais; sem rotina: café da manhã, almoço e jantar, sem
    * restrição).
    */
-  private async plannerOptions(userId: string): Promise<PlannerOptions> {
+  private async plannerOptions(
+    userId: string,
+    settings?: DietSettings,
+  ): Promise<PlannerOptions> {
     const { profile, routine, dietSettings } = await this.users.get(userId);
-    const diet = dietSettingsOf(dietSettings);
+    const diet = settings ?? dietSettingsOf(dietSettings);
     const macros = profile ? macroTargets(profile, diet) : null;
     return {
       calorieGoal: profile ? calculateTargets(profile).calories : null,
@@ -213,11 +223,56 @@ export class PlanService {
           );
         }
         await this.dayLogs.record(manager, userId, today, after.plan, flagged);
+        await this.versions.record(
+          manager,
+          userId,
+          today,
+          after.plan,
+          options.personalization ?? null,
+        );
         return result(after);
       });
     } catch (error) {
       throw asHttpError(error);
     }
+  }
+
+  /**
+   * O plano de hoje com o ajuste da dieta `settings`, sem salvar: mesmas mudanças do usuário, porções pelas
+   * metas novas. Devolve os totais dos dois planos e o que muda.
+   */
+  async previewDiet(
+    userId: string,
+    clock: UserClock,
+    settings: DietSettings,
+  ): Promise<DietPreview> {
+    const [catalog, next, micros] = await Promise.all([
+      this.catalog.catalog(),
+      this.plannerOptions(userId, settings),
+      this.catalog.micros(),
+    ]);
+    const { before, after } = await this.read(userId, clock, (planner) => ({
+      before: planner.plan,
+      after: new Planner(catalog, planner.state, {
+        ...next,
+        personalization: planner.todayPlan().personalization,
+      }).plan,
+    }));
+    const version = (meals: PlanMeal[]) =>
+      planVersion(meals, planNutrients(meals, micros).fibras ?? 0);
+    const current = version(before);
+    const preview = version(after);
+    return {
+      current: current.totals,
+      next: preview.totals,
+      meals: preview.meals.map(({ title, time, kcal, foods }) => ({
+        title,
+        time,
+        kcal,
+        foods,
+      })),
+      changes: planChanges(current.meals, preview.meals),
+    };
   }
 
   /** Lê sem alterar o estado. */

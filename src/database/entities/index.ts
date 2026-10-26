@@ -10,12 +10,17 @@ import { GoogleAccountEntity } from './google-account.entity.js';
 import { LlmCallEntity } from './llm-call.entity.js';
 import { OAuthCodeEntity } from './oauth-code.entity.js';
 import { PlanStateEntity } from './plan-state.entity.js';
+import { PlanVersionEntity } from './plan-version.entity.js';
 import { TacoFoodEntity } from './taco-food.entity.js';
 import { TbcaFoodEntity } from './tbca-food.entity.js';
 import { UserEntity } from './user.entity.js';
 import { WeightEntity } from './weight.entity.js';
 
 export type { LlmTask } from './llm-call.entity.js';
+export type {
+  PlanVersionMeal,
+  PlanVersionTotals,
+} from './plan-version.entity.js';
 
 export {
   ActivityDayEntity,
@@ -28,6 +33,7 @@ export {
   NutrientDefEntity,
   OAuthCodeEntity,
   PlanStateEntity,
+  PlanVersionEntity,
   TacoFoodEntity,
   TbcaFoodEntity,
   UserEntity,
@@ -45,6 +51,7 @@ export const ENTITIES = [
   NutrientDefEntity,
   OAuthCodeEntity,
   PlanStateEntity,
+  PlanVersionEntity,
   TacoFoodEntity,
   TbcaFoodEntity,
   UserEntity,

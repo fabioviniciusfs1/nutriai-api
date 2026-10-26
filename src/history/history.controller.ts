@@ -13,7 +13,7 @@ import type {
   ActivitySource,
   HistorySummary,
   NutrientHistory,
-  PlanHistoryDay,
+  PlanHistoryEntry,
 } from '../contract.js';
 import { HistoryService } from './history.service.js';
 
@@ -59,7 +59,7 @@ export class HistoryController {
   plans(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
-  ): Promise<PlanHistoryDay[]> {
+  ): Promise<PlanHistoryEntry[]> {
     return this.history.plans(userId, clock);
   }
 

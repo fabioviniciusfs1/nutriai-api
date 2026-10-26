@@ -12,15 +12,17 @@ import type {
   ActivitySource,
   HistorySummary,
   NutrientHistory,
-  PlanHistoryDay,
+  PlanHistoryEntry,
 } from '../contract.js';
 import {
   ActivityDayEntity,
   DayLogEntity,
   GoogleAccountEntity,
+  PlanVersionEntity,
 } from '../database/entities/index.js';
 import { GOOGLE_SOURCE, HealthService } from '../health/health.service.js';
 import { nutrientGoal } from '../nutrition/nutrient-goals.js';
+import { planChanges } from '../plan/plan-versions.js';
 import { PlanService } from '../plan/plan.service.js';
 import { calculateTargets, DEFAULT_CALORIE_GOAL } from '../targets/targets.js';
 import { UsersService } from '../users/users.service.js';
@@ -29,15 +31,14 @@ import {
   fillDayLogs,
   historySummary,
   nutrientHistory,
-  planHistory,
   windowDates,
 } from './stats.js';
 
 /** Períodos que o front pede. */
 export const PERIODS = [7, 30, 90];
 
-/** Quantos dias anteriores `/history/plans` devolve. */
-const PLAN_HISTORY_DAYS = 90;
+/** Quantos planos `/history/plans` devolve. */
+const PLAN_HISTORY_LIMIT = 50;
 
 @Injectable()
 export class HistoryService {
@@ -52,6 +53,8 @@ export class HistoryService {
     private readonly activityDays: Repository<ActivityDayEntity>,
     @InjectRepository(GoogleAccountEntity)
     private readonly googleAccounts: Repository<GoogleAccountEntity>,
+    @InjectRepository(PlanVersionEntity)
+    private readonly planVersions: Repository<PlanVersionEntity>,
   ) {}
 
   /** Dados da janela de `days` dias até hoje (com a foto de hoje atualizada). */
@@ -129,9 +132,36 @@ export class HistoryService {
     });
   }
 
-  async plans(userId: string, clock: UserClock): Promise<PlanHistoryDay[]> {
-    const dates = windowDates(clock.today, PLAN_HISTORY_DAYS + 1);
-    return planHistory(await this.filledLogs(userId, dates), clock.today);
+  /** Planos do mais recente (o em vigor) para o mais antigo, cada um com o que mudou do anterior. */
+  async plans(userId: string, clock: UserClock): Promise<PlanHistoryEntry[]> {
+    // Lê o plano antes: a versão de agora fica gravada.
+    await this.plan.read(userId, clock, () => null);
+    // Um a mais, para o mais antigo da lista também ter com quem comparar.
+    const versions = await this.planVersions.find({
+      where: { userId },
+      order: { id: 'DESC' },
+      take: PLAN_HISTORY_LIMIT + 1,
+    });
+    return versions.slice(0, PLAN_HISTORY_LIMIT).map((version, index) => {
+      const previous = versions[index + 1];
+      return {
+        id: `p-${version.id}`,
+        date: version.date,
+        edited: version.edited,
+        current: index === 0,
+        totals: version.totals,
+        meals: version.meals.map(({ title, time, kcal, foods }) => ({
+          title,
+          time,
+          kcal,
+          foods,
+        })),
+        changes:
+          version.edited && previous
+            ? planChanges(previous.meals, version.meals)
+            : [],
+      };
+    });
   }
 
   /** Fotos de cada dia de `dates`, repetindo o plano nos dias em que o app não foi aberto. */

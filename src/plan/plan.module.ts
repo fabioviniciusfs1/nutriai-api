@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { FoodsController } from '../foods/foods.controller.js';
 import { MealComposerService } from './composer/meal-composer.service.js';
 import { DayLogService } from './day-log.service.js';
+import { PlanVersionService } from './plan-version.service.js';
 import { PlanController } from './plan.controller.js';
 import { PlanService } from './plan.service.js';
 import { PlanPersonalizerService } from './personalizer.service.js';
@@ -11,6 +12,7 @@ import { PlanPersonalizerService } from './personalizer.service.js';
   providers: [
     PlanService,
     DayLogService,
+    PlanVersionService,
     MealComposerService,
     PlanPersonalizerService,
   ],

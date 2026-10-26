@@ -195,11 +195,17 @@ export class UsersService {
     userId: string,
     settings: DietSettings,
   ): Promise<DietAdjustment> {
+    const profile = await this.checkDiet(userId, settings);
+    await this.users.update({ id: userId }, { dietSettings: settings });
+    return dietAdjustment(profile, settings);
+  }
+
+  /** Confere o ajuste da dieta (como ao salvar) e devolve o perfil. */
+  async checkDiet(userId: string, settings: DietSettings): Promise<Profile> {
     const { profile } = await this.profileOf(userId);
     const error = dietSettingsError(profile, settings);
     if (error) throw new BadRequestException(error);
-    await this.users.update({ id: userId }, { dietSettings: settings });
-    return dietAdjustment(profile, settings);
+    return profile;
   }
 
   /** Hoje é o dia de pesagem da rotina e ainda não há peso registrado hoje (no fuso do usuário). */

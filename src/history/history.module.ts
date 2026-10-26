@@ -4,6 +4,7 @@ import {
   ActivityDayEntity,
   DayLogEntity,
   GoogleAccountEntity,
+  PlanVersionEntity,
 } from '../database/entities/index.js';
 import { PlanModule } from '../plan/plan.module.js';
 import { HistoryController } from './history.controller.js';
@@ -16,6 +17,7 @@ import { HistoryService } from './history.service.js';
       DayLogEntity,
       ActivityDayEntity,
       GoogleAccountEntity,
+      PlanVersionEntity,
     ]),
   ],
   controllers: [HistoryController],

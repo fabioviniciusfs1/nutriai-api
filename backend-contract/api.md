@@ -314,6 +314,11 @@ primeiro." sem ele) e respondem `DietAdjustment`:
 - `GET /me/diet`: o ajuste salvo; sem ajuste, os padrões (proteína 2 g/kg, gordura 1 g/kg, ovo de 55 g).
 - `POST /me/diet/estimate` (`DietEstimateRequest`), **sem salvar**: aplica a mudança de um macro com a
   compensação. O front chama a cada − / + (passo de 0,1 g/kg) e mostra a resposta.
+- `POST /me/diet/preview` (`DietSettings`) → `DietPreview`, **sem salvar**: o plano de hoje com o ajuste (as
+  mesmas trocas e extras do usuário, porções pelas metas novas). `current`/`next` são os totais do plano atual e
+  do novo (kcal, proteína, carboidrato, gordura e fibra); `meals` é o plano novo; `changes` é o que muda, no mesmo
+  formato de `/history/plans` (quase sempre `grams`). Valida igual ao `PUT` (mesmos erros 400). O front mostra
+  em "Ver prévia" e só salva quando o usuário aprova.
 - `PUT /me/diet` (`DietSettings`): salva. Vale na hora para as metas de `/nutrition/today` e do histórico, para
   as porções de `/plan/today` e para o próximo plano individual.
 
@@ -639,18 +644,45 @@ Médias por dia e distância total arredondadas para inteiro.
 Dia sem registro vale 0. `averagePercent` = média em % da meta. `daysOnGoal` = dias com valor ≥ meta;
 `daysOverLimit` = dias com valor > meta (o front mostra um ou outro conforme `limit`).
 
-### `GET /history/plans` → `PlanHistoryDay[]`
+### `GET /history/plans` → `PlanHistoryEntry[]`
 
-Dias anteriores, do mais recente para o mais antigo:
+Histórico de **planos** (não de dias), do mais recente para o mais antigo (até 50). O primeiro é o plano em vigor
+(`current: true`).
+
+- O primeiro plano é o **montado** (`edited: false`): o do assistente, ou o plano base quando não há assistente.
+  Enquanto o assistente monta (`personalization: "pending"`), nada é gravado.
+- Mudar alimentos ou quantidades (troca, alimento extra, porção, ajuste da dieta, plano remontado) gera um plano
+  **alterado** (`edited: true`) com o dia (`date`). **No máximo um por dia**: as outras mudanças do mesmo dia
+  editam esse plano. Se o usuário desfaz no dia tudo o que mudou, o alterado do dia some. Mudar só o horário de
+  uma refeição não conta (o plano guarda os horários do momento em que foi gravado).
+- `totals`: kcal, proteína, carboidrato, gordura e fibra do plano, em gramas inteiras.
+- `changes`: o que mudou em relação ao plano anterior, por refeição. `swap` (um alimento no lugar de outro),
+  `added`, `removed` e `grams` (o mesmo alimento com outra quantidade). Vazio no plano montado.
 
 ```json
 [
   {
-    "date": "2026-09-27",
-    "followedCount": 3,
-    "plannedKcal": 1440,
-    "meals": [{ "time": "07:30", "title": "Panqueca de Aveia com Banana", "kcal": 380, "followed": true }],
-    "flaggedFoods": [{ "name": "Guacamole", "feedback": "nao-quero" }]
+    "id": "p-12",
+    "date": "2026-10-26",
+    "edited": true,
+    "current": true,
+    "totals": { "kcal": 1560, "protein": 128, "carbs": 142, "fat": 52, "fiber": 24 },
+    "meals": [
+      {
+        "title": "Omelete de Queijo com Mamão e Pão",
+        "time": "06:30",
+        "kcal": 540,
+        "foods": [{ "name": "Ovo, de galinha, inteiro, cozido/10minutos", "grams": 165, "units": 3 }]
+      }
+    ],
+    "changes": [
+      {
+        "meal": "Omelete de Queijo com Mamão e Pão",
+        "kind": "swap",
+        "from": { "name": "Pão, trigo, francês", "grams": 50 },
+        "to": { "name": "Tapioca, goma hidratada", "grams": 60 }
+      }
+    ]
   }
 ]
 ```

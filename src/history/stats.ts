@@ -4,7 +4,6 @@ import type {
   ActivityHistory,
   HistorySummary,
   NutrientHistory,
-  PlanHistoryDay,
 } from '../contract.js';
 import type {
   ActivityDayEntity,
@@ -147,19 +146,4 @@ export function nutrientHistory(
     daysOnGoal: days.filter((day) => day.value >= meta).length,
     daysOverLimit: days.filter((day) => day.value > meta).length,
   };
-}
-
-/** Planos dos dias anteriores, do mais recente para o mais antigo. */
-export function planHistory(logs: DayLog[], today: string): PlanHistoryDay[] {
-  return logs
-    .filter((log) => log.date < today)
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .map((log) => ({
-      date: log.date,
-      // Ainda não há como marcar uma refeição como feita: o plano do dia conta como seguido.
-      followedCount: log.meals.length,
-      plannedKcal: log.meals.reduce((sum, meal) => sum + meal.kcal, 0),
-      meals: log.meals.map((meal) => ({ ...meal, followed: true })),
-      flaggedFoods: log.flaggedFoods,
-    }));
 }
