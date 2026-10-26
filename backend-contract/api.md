@@ -445,13 +445,18 @@ horário é adequado:
 {
   "ok": false,
   "message": "Jantar às 22:30 não seria muito recomendado para você, visto que você dorme às 23:00. Que tal às 20:00?",
-  "suggestedTime": "20:00"
+  "suggestedTime": "20:00",
+  "canKeep": true
 }
 ```
 
 - `ok: true` (com `message` e `suggestedTime` `null`): o front salva direto.
-- `ok: false`: o front mostra `message` com "Manter 22:30" e, se houver `suggestedTime`, "Mudar para 20:00".
-  `suggestedTime` sempre cai num horário em que a rotina permite começar uma refeição.
+- `ok: false`: o front mostra `message` com "Mudar para 20:00" (se houver `suggestedTime`) e, quando `canKeep`,
+  "Manter 22:30". `suggestedTime` sempre cai num horário em que a rotina permite começar uma refeição.
+- Horário fora dos que a rotina permite para começar uma refeição: o backend responde sem o assistente, sempre
+  igual, com `canKeep: false` e o início permitido mais perto em `suggestedTime` ("Pela sua rotina, você não
+  pode comer às 06:00: os horários para começar uma refeição são … Que tal às 07:00?"). O assistente só avalia
+  horários dentro da rotina (sono, treino, distância entre refeições).
 - Sem perfil, sem o assistente, com erro ou demora dele, ou com o mesmo horário de agora: `ok: true`. A avaliação
   nunca impede a troca. Horário inválido → 400; refeição que não existe → 404.
 

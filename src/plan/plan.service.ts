@@ -20,6 +20,7 @@ import type {
 } from '../contract.js';
 import { PlanStateEntity } from '../database/entities/index.js';
 import { DayLogService } from './day-log.service.js';
+import { outsideWindowsAdvice } from './composer/meal-time.js';
 import { planNutrients } from './nutrients.js';
 import { PlanVersionService } from './plan-version.service.js';
 import { planChanges, planVersion } from './plan-versions.js';
@@ -140,7 +141,12 @@ export class PlanService {
     mealId: number,
     time: string,
   ): Promise<MealTimeCheck> {
-    const ok: MealTimeCheck = { ok: true, message: null, suggestedTime: null };
+    const ok: MealTimeCheck = {
+      ok: true,
+      message: null,
+      suggestedTime: null,
+      canKeep: true,
+    };
     const [meals, { profile, routine }] = await Promise.all([
       this.read(userId, clock, (planner) => {
         planner.meal(mealId);
@@ -155,15 +161,15 @@ export class PlanService {
       this.users.get(userId),
     ]);
     const current = meals.find((meal) => meal.id === mealId)!;
-    if (!profile || current.time === time) return ok;
-    const advice = await this.composer.checkMealTime(userId, {
-      profile,
-      routine,
-      meals,
-      mealId,
-      time,
-    });
-    return advice ?? ok;
+    if (current.time === time) return ok;
+    const request = { profile, routine, meals, mealId, time };
+    // Fora dos horários da rotina não precisa do assistente: a resposta é sempre a mesma.
+    const outside = outsideWindowsAdvice(request);
+    if (outside) return outside;
+    if (!profile) return ok;
+    return (
+      (await this.composer.checkMealTime(userId, { ...request, profile })) ?? ok
+    );
   }
 
   /**

@@ -225,6 +225,8 @@ export type MealTimeCheck = {
   message: string | null;
   /** "HH:MM" sugerido no lugar; `null` quando `ok` ou sem sugestão. */
   suggestedTime: string | null;
+  /** `false` quando a rotina não deixa comer no horário pedido: o front não oferece "Manter". */
+  canKeep: boolean;
 };
 
 /** Plano de hoje já com todas as mudanças do usuário, ordenado por horário. */

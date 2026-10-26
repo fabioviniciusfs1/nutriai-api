@@ -16,7 +16,10 @@ olhando a rotina e as outras refeições:
 - o tempo até a refeição anterior e até a seguinte (refeições muito próximas, ou mais de 6 horas sem comer);
 - o treino (não marque uma refeição grande para logo antes de treinar);
 - a ordem do dia (o café da manhã antes do almoço, o jantar depois do lanche da tarde etc.);
-- os horários em que a pessoa pode comer e os períodos em que sente mais ou menos fome.
+- os períodos em que a pessoa sente mais ou menos fome.
+
+O app já conferiu que o novo horário está dentro dos horários em que a pessoa pode começar uma refeição: não
+use isso como motivo para reprovar.
 
 Seja tolerante: aprove (ok = true) quando o horário for razoável, mesmo que não seja o ideal. Só reprove quando
 houver um motivo concreto entre os acima.
@@ -90,9 +93,60 @@ export type MealTimeAdvice = {
   ok: boolean;
   message: string | null;
   suggestedTime: string | null;
+  /** `false` quando a rotina não deixa comer no horário pedido: só dá para mudar ou cancelar. */
+  canKeep: boolean;
 };
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+const toMinutes = (time: string) =>
+  Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+const timeOf = (total: number) =>
+  `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+
+type Starts = ReturnType<typeof mealStartWindows>;
+const inStarts = (starts: Starts, time: string) =>
+  starts.some(({ start, end }) => start <= time && time <= end);
+
+/** "07:00, 12:00–13:00 e 18:00–22:00". */
+function startsText(starts: Starts) {
+  const items = starts.map(({ start, end }) =>
+    start === end ? start : `${start}–${end}`,
+  );
+  return items.length > 1
+    ? `${items.slice(0, -1).join(', ')} e ${items[items.length - 1]}`
+    : items[0];
+}
+
+/**
+ * Regra que não depende do assistente: fora dos inícios de refeição da rotina (`mealStartWindows`) a pessoa não
+ * pode comer. Devolve o aviso com o início permitido mais perto do pedido (e sem "manter"); `null` se o horário
+ * está dentro, ou sem rotina.
+ */
+export function outsideWindowsAdvice(
+  request: Pick<MealTimeRequest, 'routine' | 'time'>,
+): MealTimeAdvice | null {
+  if (!request.routine) return null;
+  const starts = mealStartWindows(request.routine.eatingWindows);
+  if (starts.length === 0 || inStarts(starts, request.time)) return null;
+  const target = toMinutes(request.time);
+  // Em cada janela, o início mais perto é a borda dela (o pedido está fora de todas).
+  const closest = starts
+    .map(({ start, end }) =>
+      Math.min(toMinutes(end), Math.max(toMinutes(start), target)),
+    )
+    .reduce((best, at) =>
+      Math.abs(at - target) < Math.abs(best - target) ? at : best,
+    );
+  const suggestedTime = timeOf(closest);
+  return {
+    ok: false,
+    message:
+      `Pela sua rotina, você não pode comer às ${request.time}: os horários para começar uma refeição são ` +
+      `${startsText(starts)}. Que tal às ${suggestedTime}?`,
+    suggestedTime,
+    canKeep: false,
+  };
+}
 
 /**
  * Lê a resposta do assistente. O horário sugerido só vale em "HH:MM", diferente do pedido e dentro dos inícios
@@ -114,19 +168,18 @@ export function parseMealTimeAdvice(
   const { ok, message, suggestedTime } = data as Record<string, unknown>;
   if (typeof ok !== 'boolean') return null;
   const reply = typeof message === 'string' ? message.trim() : '';
-  if (ok || !reply) return { ok: true, message: null, suggestedTime: null };
+  if (ok || !reply)
+    return { ok: true, message: null, suggestedTime: null, canKeep: true };
   const starts = routine ? mealStartWindows(routine.eatingWindows) : null;
   const valid =
     typeof suggestedTime === 'string' &&
     TIME.test(suggestedTime) &&
     suggestedTime !== time &&
-    (!starts ||
-      starts.some(
-        ({ start, end }) => start <= suggestedTime && suggestedTime <= end,
-      ));
+    (!starts || inStarts(starts, suggestedTime));
   return {
     ok: false,
     message: reply,
     suggestedTime: valid ? suggestedTime : null,
+    canKeep: true,
   };
 }

@@ -138,7 +138,8 @@ npx vitest run -t "não gosto"                     # por nome do teste
   qualquer alimento do catálogo não restrito.
 - Horário da refeição (`composer/meal-time.ts`, `POST /plan/meals/{id}/time-check`, não salva): o Haiku avalia o novo
   horário pelo perfil, a rotina e o plano do dia e devolve ok ou a explicação com um horário sugerido
-  (`parseMealTimeAdvice` só aceita sugestão nos inícios de `mealStartWindows`). Sem o Claude ou se ele falhar, ok.
+  (`parseMealTimeAdvice` só aceita sugestão nos inícios de `mealStartWindows`). Fora desses inícios, o
+  `outsideWindowsAdvice` responde sem o Claude, com `canKeep: false` (sem "Manter"). Sem o Claude ou se ele falhar, ok.
 - Histórico de planos (`plan_versions`, `GET /history/plans`): o `PlanVersionService` grava, junto da foto do dia
   em `withPlanner`, a versão do plano quando os alimentos ou as gramas mudam (o horário não conta; nada enquanto a
   personalização está `pending`). A primeira é a montada (`edited: false`); depois, no máximo uma alterada por dia,

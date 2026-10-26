@@ -5,6 +5,7 @@ import { DataSource } from 'typeorm';
 import type {
   DietAdjustment,
   DietPreview,
+  MealTimeCheck,
   Me,
   PlanHistoryEntry,
   PlanMeal,
@@ -509,7 +510,12 @@ describe('horário da refeição', () => {
       stop_reason: 'end_turn',
       content: [{ type: 'text', text: JSON.stringify(body) }],
     });
-    const OK = { ok: true, message: null, suggestedTime: null };
+    const OK = {
+      ok: true,
+      message: null,
+      suggestedTime: null,
+      canKeep: true,
+    };
 
     const message =
       'Jantar às 23:30 fica muito perto do sono. Que tal às 19:00?';
@@ -520,6 +526,7 @@ describe('horário da refeição', () => {
       ok: false,
       message,
       suggestedTime: '19:00',
+      canKeep: true,
     });
     const params = create.mock.calls[0][0];
     expect(params).toMatchObject({ model: 'claude-haiku-5-5' });
@@ -554,6 +561,30 @@ describe('horário da refeição', () => {
         `SELECT count(*)::int AS n FROM llm_calls WHERE task = 'meal-time'`,
       );
     expect(logged[0].n).toBeGreaterThanOrEqual(3);
+  });
+
+  it('fora dos horários da rotina, responde sem o assistente e sem manter', async () => {
+    const { http } = await newUser();
+    await http('put', '/me/profile').send(PROFILE).expect(200);
+    await http('put', '/me/routine').send(ROUTINE).expect(200);
+    await personalizationIdle();
+    create.mockReset();
+    const breakfast = (
+      (await http('get', '/plan/today').expect(200)).body as TodayPlan
+    ).meals.find((meal) => meal.slot === 'cafe-da-manha')!;
+    // Janelas da ROUTINE: 07:00–08:30, 12:00–13:30, 15:30–16:30, 19:00–21:00.
+    const check = (
+      await http('post', `/plan/meals/${breakfast.id}/time-check`)
+        .send({ time: '06:00' })
+        .expect(200)
+    ).body as MealTimeCheck;
+    expect(check).toMatchObject({
+      ok: false,
+      suggestedTime: '07:00',
+      canKeep: false,
+    });
+    expect(check.message).toContain('você não pode comer às 06:00');
+    expect(create).not.toHaveBeenCalled();
   });
 });
 

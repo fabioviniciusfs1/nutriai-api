@@ -1,6 +1,7 @@
 import type { Routine } from '../../contract.js';
 import {
   mealTimePrompt,
+  outsideWindowsAdvice,
   parseMealTimeAdvice,
   type MealTimeRequest,
 } from './meal-time.js';
@@ -95,6 +96,7 @@ describe('parseMealTimeAdvice', () => {
       ok: true,
       message: null,
       suggestedTime: null,
+      canKeep: true,
     });
   });
 
@@ -109,6 +111,7 @@ describe('parseMealTimeAdvice', () => {
       ok: false,
       message: 'Jantar às 22:00 fica perto do sono. Que tal às 20:00?',
       suggestedTime: '20:00',
+      canKeep: true,
     });
   });
 
@@ -130,5 +133,29 @@ describe('parseMealTimeAdvice', () => {
   it('resposta que não é o JSON esperado: null', () => {
     expect(parse('não é json')).toBeNull();
     expect(parse({ message: 'sem ok' })).toBeNull();
+  });
+});
+
+describe('outsideWindowsAdvice', () => {
+  const advice = (time: string) => outsideWindowsAdvice({ routine, time });
+
+  it('dentro dos inícios de refeição (ou sem rotina): sem aviso', () => {
+    expect(advice('07:30')).toBeNull();
+    expect(advice('22:00')).toBeNull();
+    expect(outsideWindowsAdvice({ routine: null, time: '03:00' })).toBeNull();
+  });
+
+  it('fora deles: sem manter, com o início permitido mais perto', () => {
+    expect(advice('06:00')).toEqual({
+      ok: false,
+      message:
+        'Pela sua rotina, você não pode comer às 06:00: os horários para começar uma refeição são ' +
+        '07:00–08:00, 12:00–13:00 e 18:00–22:00. Que tal às 07:00?',
+      suggestedTime: '07:00',
+      canKeep: false,
+    });
+    expect(advice('10:30')?.suggestedTime).toBe('12:00');
+    expect(advice('09:00')?.suggestedTime).toBe('08:00');
+    expect(advice('22:30')?.suggestedTime).toBe('22:00');
   });
 });
