@@ -12,6 +12,7 @@ import type {
   DietPreview,
   DietSettings,
   FoodFeedback,
+  MealTimeCheck,
   Personalization,
   PlanFood,
   PlanMeal,
@@ -127,6 +128,42 @@ export class PlanService {
       meals: routine?.meals ?? DEFAULT_PLANNER_OPTIONS.meals,
       diet: routine?.diet,
     };
+  }
+
+  /**
+   * O que o assistente acha de mudar o horário da refeição para `time`, sem salvar. Sem perfil, sem o assistente
+   * ou se ele falhar, a mudança passa (`ok`): a avaliação nunca impede trocar o horário.
+   */
+  async checkMealTime(
+    userId: string,
+    clock: UserClock,
+    mealId: number,
+    time: string,
+  ): Promise<MealTimeCheck> {
+    const ok: MealTimeCheck = { ok: true, message: null, suggestedTime: null };
+    const [meals, { profile, routine }] = await Promise.all([
+      this.read(userId, clock, (planner) => {
+        planner.meal(mealId);
+        return planner.plan.map(({ id, slot, title, time, totals }) => ({
+          id,
+          slot,
+          title,
+          time,
+          kcal: totals.kcal,
+        }));
+      }),
+      this.users.get(userId),
+    ]);
+    const current = meals.find((meal) => meal.id === mealId)!;
+    if (!profile || current.time === time) return ok;
+    const advice = await this.composer.checkMealTime(userId, {
+      profile,
+      routine,
+      meals,
+      mealId,
+      time,
+    });
+    return advice ?? ok;
   }
 
   /**

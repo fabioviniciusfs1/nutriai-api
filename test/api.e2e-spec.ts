@@ -493,6 +493,70 @@ describe('ajuste da dieta', () => {
   });
 });
 
+describe('horário da refeição', () => {
+  it('o assistente avalia o novo horário sem salvar; sem ele, a mudança passa', async () => {
+    create.mockReset();
+    const { http } = await newUser();
+    await http('put', '/me/profile').send(PROFILE).expect(200);
+    const dinnerOf = async () =>
+      (
+        (await http('get', '/plan/today').expect(200)).body as TodayPlan
+      ).meals.find((meal) => meal.slot === 'jantar')!;
+    const dinner = await dinnerOf();
+    const check = (time: string) =>
+      http('post', `/plan/meals/${dinner.id}/time-check`).send({ time });
+    const reply = (body: object) => ({
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: JSON.stringify(body) }],
+    });
+    const OK = { ok: true, message: null, suggestedTime: null };
+
+    const message =
+      'Jantar às 23:30 fica muito perto do sono. Que tal às 19:00?';
+    create.mockResolvedValueOnce(
+      reply({ ok: false, message, suggestedTime: '19:00' }),
+    );
+    expect((await check('23:30').expect(200)).body).toEqual({
+      ok: false,
+      message,
+      suggestedTime: '19:00',
+    });
+    const params = create.mock.calls[0][0];
+    expect(params).toMatchObject({ model: 'claude-haiku-5-5' });
+    expect(params.messages[0].content).toContain(
+      `passa de ${dinner.time} para 23:30.`,
+    );
+    // A avaliação não salva.
+    expect((await dinnerOf()).time).toBe(dinner.time);
+
+    create.mockResolvedValueOnce(
+      reply({ ok: true, message: '', suggestedTime: '' }),
+    );
+    expect((await check('19:30').expect(200)).body).toEqual(OK);
+
+    // Sem resposta do assistente, a mudança passa.
+    create.mockRejectedValueOnce(new Error('falhou'));
+    expect((await check('21:00').expect(200)).body).toEqual(OK);
+
+    // O mesmo horário de agora nem chega ao assistente.
+    const calls = create.mock.calls.length;
+    expect((await check(dinner.time).expect(200)).body).toEqual(OK);
+    expect(create.mock.calls.length).toBe(calls);
+
+    await check('25:00').expect(400);
+    await http('post', '/plan/meals/99/time-check')
+      .send({ time: '20:00' })
+      .expect(404);
+
+    const logged = await app
+      .get(DataSource)
+      .query(
+        `SELECT count(*)::int AS n FROM llm_calls WHERE task = 'meal-time'`,
+      );
+    expect(logged[0].n).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe('plano alimentar', () => {
   it('acrescenta o alimento extra nas gramas do usuário, somando ao dia', async () => {
     const { http } = await newUser();

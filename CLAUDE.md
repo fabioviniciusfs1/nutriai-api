@@ -130,12 +130,15 @@ npx vitest run -t "não gosto"                     # por nome do teste
   palavras pesadas pela raridade, sinônimos (`SYNONYMS`, na forma de `stem`), a família do nome tem de estar no
   citado, calorias longe demais descartam; sem par → descartado. `parseFoods` e `parseSubstitutes` usam o
   `match` e depois descartam restritos e fora da dieta. O cliente e o modelo (`CLAUDE_MODEL`) ficam em
-  `src/ai/`. Toda chamada ao Claude (chat, substitutos, plano individual) passa por `LlmLogService.track`
+  `src/ai/`. Toda chamada ao Claude (chat, substitutos, plano individual, horário) passa por `LlmLogService.track`
   (`src/ai/llm-log.service.ts`), que grava pedido, resposta ou erro, tokens e duração em `llm_calls`. Sugere substitutos ao trocar alimento (`substitution.ts`; até 8, sem crus se o original não for
   cru e nunca o próprio alimento em outro preparo, `isSameFood`); sem o Claude, os do mesmo grupo mais parecidos
   em macros e em kcal/100 g (`FoodCatalog.substituteOptions`), no máximo 2 por família do nome e sem duas
   versões do mesmo alimento. A troca aceita
   qualquer alimento do catálogo não restrito.
+- Horário da refeição (`composer/meal-time.ts`, `POST /plan/meals/{id}/time-check`, não salva): o Haiku avalia o novo
+  horário pelo perfil, a rotina e o plano do dia e devolve ok ou a explicação com um horário sugerido
+  (`parseMealTimeAdvice` só aceita sugestão nos inícios de `mealStartWindows`). Sem o Claude ou se ele falhar, ok.
 - Histórico de planos (`plan_versions`, `GET /history/plans`): o `PlanVersionService` grava, junto da foto do dia
   em `withPlanner`, a versão do plano quando os alimentos ou as gramas mudam (o horário não conta; nada enquanto a
   personalização está `pending`). A primeira é a montada (`edited: false`); depois, no máximo uma alterada por dia,

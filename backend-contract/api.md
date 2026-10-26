@@ -435,6 +435,26 @@ alimentos acrescentados por refeição, trocas de alimentos e um fator de porç�
   passar do total anterior, reduza o fator aos poucos (×0,999) até caber. Só o alimento extra aumenta as
   calorias do dia.
 
+### `POST /plan/meals/{id}/time-check` → `MealTimeCheck`
+
+Corpo: `{ "time": "22:30" }`. **Não salva.** O front chama ao confirmar o novo horário, antes do `PUT`. O
+assistente (Claude Haiku) olha o perfil, a rotina (sono, treino, janelas, fome) e o plano do dia, e diz se o
+horário é adequado:
+
+```json
+{
+  "ok": false,
+  "message": "Jantar às 22:30 não seria muito recomendado para você, visto que você dorme às 23:00. Que tal às 20:00?",
+  "suggestedTime": "20:00"
+}
+```
+
+- `ok: true` (com `message` e `suggestedTime` `null`): o front salva direto.
+- `ok: false`: o front mostra `message` com "Manter 22:30" e, se houver `suggestedTime`, "Mudar para 20:00".
+  `suggestedTime` sempre cai num horário em que a rotina permite começar uma refeição.
+- Sem perfil, sem o assistente, com erro ou demora dele, ou com o mesmo horário de agora: `ok: true`. A avaliação
+  nunca impede a troca. Horário inválido → 400; refeição que não existe → 404.
+
 ### `PUT /plan/meals/{id}/time`
 
 Corpo: `{ "time": "08:00" }`. Permanente.

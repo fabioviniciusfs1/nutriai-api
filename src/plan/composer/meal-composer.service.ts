@@ -13,6 +13,14 @@ import { allowedByDiet } from '../engine/diet.js';
 import { FoodCatalog } from '../engine/foods.js';
 import type { PersonalMeals } from '../engine/types.js';
 import {
+  MEAL_TIME_INSTRUCTIONS,
+  MEAL_TIME_SCHEMA,
+  mealTimePrompt,
+  parseMealTimeAdvice,
+  type MealTimeAdvice,
+  type MealTimeRequest,
+} from './meal-time.js';
+import {
   parsePersonalPlan,
   PERSONAL_PLAN_INSTRUCTIONS,
   PERSONAL_PLAN_SCHEMA,
@@ -29,6 +37,9 @@ import {
 
 /** Tempo máximo de espera pelos substitutos (o diálogo de troca fica aguardando). */
 const SUBSTITUTES_TIMEOUT_MS = 15_000;
+
+/** Tempo máximo de espera pela avaliação do horário (o diálogo de horário fica aguardando). */
+const MEAL_TIME_TIMEOUT_MS = 10_000;
 
 /** Tempo máximo de espera pelo plano individual (roda em segundo plano). */
 const PERSONAL_PLAN_TIMEOUT_MS = 120_000;
@@ -97,6 +108,32 @@ export class MealComposerService {
       return null;
     }
     return names;
+  }
+
+  /**
+   * O que o Claude acha do novo horário de uma refeição, conferido (`parseMealTimeAdvice`). `null` sem cliente,
+   * se a chamada falhar ou se a resposta não servir: o horário é salvo sem aviso.
+   */
+  async checkMealTime(
+    userId: string,
+    request: MealTimeRequest,
+  ): Promise<MealTimeAdvice | null> {
+    const text = await this.ask({
+      task: 'Horário da refeição',
+      log: 'meal-time',
+      userId,
+      instructions: MEAL_TIME_INSTRUCTIONS,
+      prompt: mealTimePrompt(request),
+      schema: MEAL_TIME_SCHEMA,
+      // O Haiku pensa antes de responder, e o raciocínio também conta no limite.
+      maxTokens: 16000,
+      timeout: MEAL_TIME_TIMEOUT_MS,
+    });
+    if (text === null) return null;
+    const advice = parseMealTimeAdvice(text, request.time, request.routine);
+    if (!advice)
+      this.logger.warn('Avaliação do horário com resposta inválida.');
+    return advice;
   }
 
   /**
@@ -205,7 +242,7 @@ export class MealComposerService {
               max_tokens: options.maxTokens,
               system,
               messages,
-              // Escolher substitutos é simples, e o diálogo de troca espera: pouco raciocínio.
+              // Substitutos e horário são escolhas simples, e o usuário espera no diálogo: pouco raciocínio.
               output_config: {
                 effort: 'low',
                 format: { type: 'json_schema', schema: options.schema },

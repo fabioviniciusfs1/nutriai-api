@@ -200,6 +200,15 @@ export type PlanMeal = {
 
 export type Personalization = "pending" | "ready" | "failed" | null;
 
+/** `POST /plan/meals/{id}/time-check`: o que o assistente acha do novo horário (não salva). */
+export type MealTimeCheck = {
+  ok: boolean;
+  /** Explicação para mostrar ao usuário; `null` quando `ok`. */
+  message: string | null;
+  /** "HH:MM" sugerido no lugar; `null` quando `ok` ou sem sugestão. */
+  suggestedTime: string | null;
+};
+
 /** Plano de hoje já com todas as mudanças do usuário, ordenado por horário. */
 export type TodayPlan = {
   meals: PlanMeal[];

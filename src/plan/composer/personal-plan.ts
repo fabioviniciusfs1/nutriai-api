@@ -122,12 +122,19 @@ const GOAL_NAMES: Record<Goal, string> = {
 const macrosText = ({ protein, fat, carbs }: Macros) =>
   `${protein} g de proteína, ${fat} g de gordura, ${carbs} g de carboidrato`;
 
+/** O usuário em uma linha: sexo, idade, peso, altura, atividade e objetivo. */
+export function profileLine(profile: PersonalPlanRequest['profile']): string {
+  return (
+    `Usuário: sexo ${profile.sex}, ${profile.age} anos, ${profile.weightKg} kg, ${profile.heightCm} cm, ` +
+    `${ACTIVITY_NAMES[profile.activityLevel]}, objetivo ${GOAL_NAMES[profile.goal]}.`
+  );
+}
+
 /** Pedido para o assistente (muda a cada usuário). */
 export function personalPlanPrompt(request: PersonalPlanRequest): string {
   const { profile, day } = request;
   const lines = [
-    `Usuário: sexo ${profile.sex}, ${profile.age} anos, ${profile.weightKg} kg, ${profile.heightCm} cm, ` +
-      `${ACTIVITY_NAMES[profile.activityLevel]}, objetivo ${GOAL_NAMES[profile.goal]}.`,
+    profileLine(profile),
     `Meta do dia: ${day.kcal} kcal (${macrosText(day)}).`,
     dietLine(request.routine.diet),
     ...routineLines(request.routine),

@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 
 /** O que a chamada ao Claude fazia. */
-export type LlmTask = 'chat' | 'substitutes' | 'personal-plan';
+export type LlmTask = 'chat' | 'substitutes' | 'personal-plan' | 'meal-time';
 
 /** Uma chamada à API da Anthropic: o pedido inteiro, a resposta (ou o erro), tokens e duração. */
 @Entity('llm_calls')

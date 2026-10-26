@@ -13,7 +13,12 @@ import {
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CurrentUser } from '../common/auth.decorators.js';
 import { Clock, type UserClock } from '../common/timezone.js';
-import type { FoodSearchResult, PlanFood, TodayPlan } from '../contract.js';
+import type {
+  FoodSearchResult,
+  MealTimeCheck,
+  PlanFood,
+  TodayPlan,
+} from '../contract.js';
 import { MEAL_NOT_FOUND } from './engine/planner.js';
 import {
   AddFoodDto,
@@ -71,6 +76,18 @@ export class PlanController {
   ): Promise<TodayPlan> {
     await this.personalizer.retry(userId);
     return this.plan.read(userId, clock, (planner) => planner.todayPlan());
+  }
+
+  /** O que o assistente acha do novo horário, antes de salvar (o `PUT` salva depois). */
+  @Post('meals/:id/time-check')
+  @HttpCode(200)
+  checkTime(
+    @CurrentUser() userId: string,
+    @Clock() clock: UserClock,
+    @Param('id', MealId()) id: number,
+    @Body() body: MealTimeDto,
+  ): Promise<MealTimeCheck> {
+    return this.plan.checkMealTime(userId, clock, id, body.time);
   }
 
   @Put('meals/:id/time')
