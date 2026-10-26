@@ -23,7 +23,7 @@ import {
   type PlannerOptions,
   type PlanState,
 } from './engine/types.js';
-import { calculateTargets } from '../targets/targets.js';
+import { calculateTargets, macroTargets } from '../targets/targets.js';
 import type { SubstituteRequest } from './composer/substitution.js';
 import { MealComposerService } from './composer/meal-composer.service.js';
 import { UsersService } from '../users/users.service.js';
@@ -97,13 +97,19 @@ export class PlanService {
   ) {}
 
   /**
-   * Meta calórica do perfil, refeições e tipo de alimentação da rotina (sem perfil: porções originais; sem
-   * rotina: café da manhã, almoço e jantar, sem restrição).
+   * Metas de calorias e macronutrientes do perfil, refeições e tipo de alimentação da rotina (sem perfil:
+   * porções originais; sem rotina: café da manhã, almoço e jantar, sem restrição).
    */
   private async plannerOptions(userId: string): Promise<PlannerOptions> {
     const { profile, routine } = await this.users.get(userId);
+    const macros = profile ? macroTargets(profile) : null;
     return {
       calorieGoal: profile ? calculateTargets(profile).calories : null,
+      macroGoals: macros && {
+        protein: macros.proteinas,
+        fat: macros.gorduras,
+        carbs: macros.carboidratos,
+      },
       meals: routine?.meals ?? DEFAULT_PLANNER_OPTIONS.meals,
       diet: routine?.diet,
     };

@@ -84,10 +84,15 @@ export type PersonalMeals = Record<
   { title: string; foods: PlanFood[]; time?: string }
 >;
 
+/** Metas de macronutrientes do dia, em gramas. */
+export type MacroGoals = { protein: number; fat: number; carbs: number };
+
 /** O que o plano usa do perfil do usuário. */
 export type PlannerOptions = {
   /** Meta calórica do dia; `null` (sem perfil) = porções originais do plano base. */
   calorieGoal: number | null;
+  /** Metas de macronutrientes do dia; sem elas, todas as porções crescem na mesma proporção. */
+  macroGoals?: MacroGoals | null;
   /** Refeições do plano inicial: as que o usuário marcou na rotina. */
   meals: MealSlot[];
   /** Tipo de alimentação do perfil: substitutos fora dela ficam de fora (padrão: onívora). */

@@ -11,6 +11,7 @@ import type {
 import { FoodCatalog, scaleFoods, sumTotals } from './foods.js';
 import type {
   Catalog,
+  MacroGoals,
   MealPeriod,
   PlanChanges,
   PlanFood,
@@ -63,14 +64,167 @@ export class PlanRuleError extends Error {
   }
 }
 
+/** Macronutrientes na ordem dos pesos de `macroWeights`, com as kcal por grama. */
+const MACROS = [
+  ['protein', 4],
+  ['fat', 9],
+  ['carbs', 4],
+] as const;
+
+/** Pesos neutros: todas as porções crescem na mesma proporção. */
+const EVEN_WEIGHTS = [1, 1, 1];
+
 /**
- * Fator que leva as refeições `meals` (porções originais) para perto de `goal` kcal: a proporção
- * direta, ajustada em passos de 0,1% (até ±5%) para o total já arredondado ficar o mais perto da meta.
+ * Quanto o peso de um macronutriente pode se afastar da proporção direta (entre 1/x e x): segura as porções
+ * em tamanhos realistas quando o plano está longe das metas.
  */
-export function goalFactor(meals: PlanFood[][], goal: number | null): number {
+export const MAX_MACRO_SHIFT = 1.5;
+
+/** Fração das calorias dos macronutrientes do alimento que vem de cada um; `null` sem nenhum. */
+function macroShares(food: Totals) {
+  const kcal = MACROS.map(([macro, perGram]) => food[macro] * perGram);
+  const total = kcal.reduce((sum, value) => sum + value, 0);
+  return total > 0 ? kcal.map((value) => value / total) : null;
+}
+
+/** Fator da porção do alimento: a média dos pesos pelas frações das calorias dele (sem macros: 1). */
+export function foodWeight(food: Totals, weights: number[]) {
+  const shares = macroShares(food);
+  return shares
+    ? shares.reduce((sum, share, index) => sum + share * weights[index], 0)
+    : 1;
+}
+
+/** Porções de `foods` multiplicadas por `factor` e pelo fator de cada alimento em `weights`. */
+function scaleWeighted<T extends PlanFood>(
+  foods: T[],
+  weights: number[],
+  factor: number,
+): T[] {
+  return foods.map(
+    (food) => scaleFoods([food], foodWeight(food, weights) * factor)[0],
+  );
+}
+
+/** Solução de `matrix · x = vector` (eliminação com pivô parcial); `null` se o sistema for singular. */
+function solveLinear(matrix: number[][], vector: number[]): number[] | null {
+  const n = vector.length;
+  const rows = matrix.map((row, index) => [...row, vector[index]]);
+  for (let col = 0; col < n; col++) {
+    let pivot = col;
+    for (let row = col + 1; row < n; row++)
+      if (Math.abs(rows[row][col]) > Math.abs(rows[pivot][col])) pivot = row;
+    if (Math.abs(rows[pivot][col]) < 1e-9) return null;
+    [rows[col], rows[pivot]] = [rows[pivot], rows[col]];
+    for (let row = 0; row < n; row++) {
+      if (row === col) continue;
+      const ratio = rows[row][col] / rows[col][col];
+      for (let k = col; k <= n; k++) rows[row][k] -= ratio * rows[col][k];
+    }
+  }
+  return rows.map((row, index) => row[n] / row[index]);
+}
+
+/**
+ * Mínimos quadrados de `matrix · x ≈ target` com cada `x` entre `min` e `max`: resolve com as variáveis
+ * livres e prende no limite as que passam dele, até todas caberem. Começa (e fica, se singular) em 1.
+ */
+function boundedLeastSquares(
+  matrix: number[][],
+  target: number[],
+  min: number,
+  max: number,
+) {
+  const size = matrix[0].length;
+  const x = Array<number>(size).fill(1);
+  let free = [...Array(size).keys()].filter((col) =>
+    matrix.some((row) => row[col] !== 0),
+  );
+  while (free.length > 0) {
+    const rest = target.map(
+      (value, row) =>
+        value -
+        matrix[row].reduce(
+          (sum, cell, col) => (free.includes(col) ? sum : sum + cell * x[col]),
+          0,
+        ),
+    );
+    const normal = free.map((i) =>
+      free.map((j) => matrix.reduce((sum, row) => sum + row[i] * row[j], 0)),
+    );
+    const rhs = free.map((i) =>
+      matrix.reduce((sum, row, index) => sum + row[i] * rest[index], 0),
+    );
+    const solution = solveLinear(normal, rhs);
+    if (!solution) break;
+    free.forEach((col, index) => {
+      x[col] = Math.min(max, Math.max(min, solution[index]));
+    });
+    const inside = free.filter(
+      (_, index) => solution[index] >= min && solution[index] <= max,
+    );
+    if (inside.length === free.length) break;
+    free = inside;
+  }
+  return x;
+}
+
+/**
+ * Pesos de proteína, gordura e carboidrato nas porções, para a proporção do dia ficar perto de `goals`. Cada
+ * alimento é multiplicado pela média dos pesos pelas frações das calorias dele (o frango segue o peso da
+ * proteína; o ovo, o da gordura e um pouco o da proteína). Os pesos minimizam o erro relativo de cada macro,
+ * entre 1/`MAX_MACRO_SHIFT` e `MAX_MACRO_SHIFT` da proporção direta; o total de calorias fica com o
+ * `goalFactor`. Sem metas, ou sem como separar os macros, todos ficam em 1.
+ */
+export function macroWeights(
+  meals: PlanFood[][],
+  goals: MacroGoals | null | undefined,
+): number[] {
+  const foods = meals.flat();
+  if (!goals || foods.length === 0) return EVEN_WEIGHTS;
+  // Quanto de cada macro (linhas) cresce com o peso de cada macro (colunas).
+  const shares = foods.map(macroShares);
+  const effect = MACROS.map(([macro]) =>
+    MACROS.map((_, col) =>
+      foods.reduce(
+        (sum, food, index) => sum + food[macro] * (shares[index]?.[col] ?? 0),
+        0,
+      ),
+    ),
+  );
+  const macroKcal = (totals: MacroGoals) =>
+    MACROS.reduce((sum, [macro, perGram]) => sum + totals[macro] * perGram, 0);
+  const planKcal = macroKcal(sumTotals(foods));
+  if (planKcal === 0 || macroKcal(goals) === 0) return EVEN_WEIGHTS;
+  // As metas na escala do plano (proporção direta das calorias), com cada linha no erro relativo.
+  const direct = macroKcal(goals) / planKcal;
+  const scaled = MACROS.map(([macro]) => goals[macro] / direct);
+  const matrix = effect.map((row, index) =>
+    row.map((cell) => cell / Math.max(1, scaled[index])),
+  );
+  const target = scaled.map((value) => value / Math.max(1, value));
+  return boundedLeastSquares(
+    matrix,
+    target,
+    1 / MAX_MACRO_SHIFT,
+    MAX_MACRO_SHIFT,
+  );
+}
+
+/**
+ * Fator que leva as refeições `meals` (porções originais, com o fator de cada alimento pelos `weights` dos
+ * macros) para perto de `goal` kcal: a proporção direta, ajustada em passos de 0,1% (até ±5%) para o total já
+ * arredondado ficar o mais perto da meta.
+ */
+export function goalFactor(
+  meals: PlanFood[][],
+  goal: number | null,
+  weights: number[] = EVEN_WEIGHTS,
+): number {
   const kcalAt = (factor: number) =>
     meals.reduce(
-      (sum, foods) => sum + sumTotals(scaleFoods(foods, factor)).kcal,
+      (sum, foods) =>
+        sum + sumTotals(scaleWeighted(foods, weights, factor)).kcal,
       0,
     );
   const baseKcal = kcalAt(1);
@@ -105,9 +259,11 @@ export class Planner {
    * individual do assistente, quando houver).
    */
   private readonly baseMeals: Catalog['baseMeals'];
+  /** Pesos de proteína, gordura e carboidrato nas porções, para os macros do dia irem para as metas. */
+  readonly macroWeights: number[];
   /**
-   * Multiplica todas as porções para o plano inicial (sem mudanças do usuário) ficar perto da meta
-   * calórica. As ações do usuário mudam os fatores de porção por cima dele.
+   * Multiplica todas as porções (com os pesos dos macros) para o plano inicial (sem mudanças do usuário) ficar
+   * perto da meta calórica. As ações do usuário mudam os fatores de porção por cima dele.
    */
   readonly goalFactor: number;
 
@@ -124,9 +280,15 @@ export class Planner {
       .map((meal) =>
         personal[meal.id] ? { ...meal, ...personal[meal.id] } : meal,
       );
+    const baseFoods = this.baseMeals.map((meal) => meal.foods);
+    this.macroWeights =
+      options.calorieGoal === null
+        ? EVEN_WEIGHTS
+        : macroWeights(baseFoods, options.macroGoals);
     this.goalFactor = goalFactor(
-      this.baseMeals.map((meal) => meal.foods),
+      baseFoods,
       options.calorieGoal,
+      this.macroWeights,
     );
     this.plan = this.buildPlan(state.planChanges);
   }
@@ -139,13 +301,11 @@ export class Planner {
         const scale = changes.scales[meal.id] ?? 1;
         // As trocas da refeição ("Não quero") valem por cima das gerais ("Não gosto"/"Não tenho"/"Não posso").
         const swaps = { ...foodSubstitutes, ...mealFoodSwaps[meal.id] };
-        const planFoods = this.foods
-          .resolve(meal.foods, swaps)
-          .map((food) => ({
-            ...food,
-            extraId: null as string | null,
-            fixed: false,
-          }));
+        const planFoods = this.foods.resolve(meal.foods, swaps).map((food) => ({
+          ...food,
+          extraId: null as string | null,
+          fixed: false,
+        }));
         const extras = (changes.extraFoods[meal.id] ?? []).flatMap((extra) =>
           this.foods.resolve([extra], swaps).map((resolved) => ({
             ...plain(resolved),
@@ -154,10 +314,16 @@ export class Planner {
           })),
         );
         const baseFoods = [...planFoods, ...extras];
-        // Porções ajustadas pelos fatores; os extras nas gramas do usuário (`fixed`) ficam como estão.
+        // Porções ajustadas pelos fatores e pelos pesos dos macros; os extras nas gramas do usuário (`fixed`)
+        // ficam como estão.
         const scaled = (factor: number) =>
           baseFoods.map(({ fixed, ...food }) =>
-            fixed ? food : scaleFoods([food], factor)[0],
+            fixed
+              ? food
+              : scaleFoods(
+                  [food],
+                  foodWeight(food, this.macroWeights) * factor,
+                )[0],
           );
         const foods = scaled(this.goalFactor * scale);
         return {

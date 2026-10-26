@@ -3,8 +3,14 @@ import {
   testCatalog as catalog,
   testFoods as foodCatalog,
 } from './test-catalog.js';
-import { FoodCatalog, similarity } from './foods.js';
-import { goalFactor, Planner, PlanRuleError } from './planner.js';
+import { FoodCatalog, similarity, sumTotals } from './foods.js';
+import {
+  goalFactor,
+  MAX_MACRO_SHIFT,
+  macroWeights,
+  Planner,
+  PlanRuleError,
+} from './planner.js';
 import {
   DEFAULT_PLANNER_OPTIONS,
   EMPTY_PLAN_CHANGES,
@@ -431,6 +437,60 @@ describe('tipo de alimentação', () => {
         .searchSubstitutes(3, 'Salmão grelhado', 'frango')
         .map((food) => food.name),
     ).not.toContain('Peito de frango grelhado');
+  });
+});
+
+describe('metas de macronutrientes', () => {
+  const meals = mealsFor(4);
+  const goals = { protein: 160, fat: 80, carbs: 233 };
+  const withMacros = (macroGoals: typeof goals | null) =>
+    new Planner(catalog, EMPTY_STATE, { calorieGoal: 2290, macroGoals, meals });
+  const dayTotals = (p: Planner) =>
+    sumTotals(p.plan.map((meal) => meal.totals));
+  const distance = (p: Planner) => {
+    const totals = dayTotals(p);
+    return (['protein', 'fat', 'carbs'] as const).reduce(
+      (sum, macro) =>
+        sum + Math.abs(totals[macro] - goals[macro]) / goals[macro],
+      0,
+    );
+  };
+
+  it('aproxima os macros do dia das metas, sem sair da meta calórica', () => {
+    const even = withMacros(null);
+    const weighted = withMacros(goals);
+    expect(distance(weighted)).toBeLessThan(distance(even) / 2);
+    expect(dayTotals(weighted).protein).toBe(goals.protein);
+    expect(Math.abs(weighted.dayKcal() - 2290)).toBeLessThanOrEqual(23);
+  });
+
+  it('os pesos ficam nos limites, para as porções seguirem realistas', () => {
+    const foods = baseMeals.slice(0, 4).map((meal) => meal.foods);
+    const weights = macroWeights(foods, { protein: 400, fat: 10, carbs: 50 });
+    for (const weight of weights) {
+      expect(weight).toBeGreaterThanOrEqual(1 / MAX_MACRO_SHIFT);
+      expect(weight).toBeLessThanOrEqual(MAX_MACRO_SHIFT);
+    }
+  });
+
+  it('sem metas de macros, ou sem meta calórica, todas as porções crescem igual', () => {
+    expect(withMacros(null).macroWeights).toEqual([1, 1, 1]);
+    const noGoal = new Planner(catalog, EMPTY_STATE, {
+      calorieGoal: null,
+      macroGoals: goals,
+      meals,
+    });
+    expect(noGoal.macroWeights).toEqual([1, 1, 1]);
+    expect(kcalOf(noGoal)).toEqual(
+      kcalOf(new Planner(catalog, EMPTY_STATE, { calorieGoal: null, meals })),
+    );
+  });
+
+  it('o fator de porção da refeição vale por cima dos pesos', () => {
+    const p = withMacros(goals);
+    const [preview] = p.plan;
+    expect(preview.totalsAt(1)).toEqual(preview.totals);
+    expect(preview.totalsAt(0.5).kcal).toBeLessThan(preview.totals.kcal);
   });
 });
 
