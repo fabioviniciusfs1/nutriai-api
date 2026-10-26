@@ -236,6 +236,8 @@ export class FoodCatalog {
     /** Palavras de cada alimento (na ordem de `foods`) e as da família (antes da 1ª vírgula). */
     words: Set<string>[];
     family: string[][];
+    /** Palavras do nome sem as stopwords, como estão e na forma de `stem` (para a busca). */
+    tokens: { raw: string; stem: string }[][];
     /** Palavra → posições dos alimentos que a têm. */
     postings: Map<string, number[]>;
   } | null = null;
@@ -263,6 +265,12 @@ export class FoodCatalog {
     this.index = {
       words: all,
       family: this.foods.map((food) => words(food.name.split(',')[0])),
+      tokens: this.foods.map((food) =>
+        normalize(food.name)
+          .split(' ')
+          .filter((word) => word && !STOPWORDS.has(word))
+          .map((raw) => ({ raw, stem: stem(raw) })),
+      ),
       postings,
     };
     return this.index;
@@ -494,20 +502,45 @@ export class FoodCatalog {
   }
 
   /**
-   * Busca do "Adicionar alimento": nomes que contêm o texto (sem diferenciar maiúsculas nem acentos);
-   * se nenhum, os mais parecidos. Restritos nunca aparecem; `restricted` diz se o texto é um deles.
+   * Busca do "Adicionar alimento": nomes que têm todas as palavras do texto, em qualquer ordem (sem diferenciar
+   * maiúsculas nem acentos). Cada palavra vale pelo começo de uma palavra do nome ("guaca" → "Guacamole"), sem
+   * plural nem gênero ("ovos" → "Ovo") ou por um sinônimo ("aipim" → "Mandioca"); "de", "com" etc. não contam.
+   * Se nenhum, os mais parecidos. Restritos nunca aparecem; `restricted` diz se o texto é um deles.
    */
   search(query: string, feedback: Record<string, FoodFeedback>) {
     const normalized = normalize(query);
     const allowed = this.foods.filter((food) => !feedback[food.name]);
-    // Primeiro os que começam pelo texto, depois os da TACO e os nomes mais curtos (não as receitas longas).
-    const matches = allowed
-      .map((food) => ({ food, name: normalize(food.name) }))
-      .filter(({ name }) => name.includes(normalized))
+    const all = normalized.split(' ').filter(Boolean);
+    const meaningful = all.filter((token) => !STOPWORDS.has(token));
+    const tokens = meaningful.length > 0 ? meaningful : all;
+    const index = this.wordIndex();
+    const accepted = tokens.map((token) => [
+      stem(token),
+      ...(SYNONYMS[stem(token)] ?? []),
+    ]);
+    const hits = (token: number, word: { raw: string; stem: string }) =>
+      word.raw.startsWith(tokens[token]) || accepted[token].includes(word.stem);
+    const hitsAny = (word: { raw: string; stem: string }) =>
+      tokens.some((_, token) => hits(token, word));
+    // Primeiro os que começam por uma palavra do texto ("Frango, …" antes de "Linguiça, frango"), depois os
+    // com menos palavras além das do texto (não as receitas longas), depois os da TACO e os nomes mais curtos.
+    const matches = this.foods
+      .map((food, position) => ({ food, words: index.tokens[position] }))
+      .filter(
+        ({ food, words }) =>
+          tokens.length > 0 &&
+          !feedback[food.name] &&
+          tokens.every((_, token) => words.some((word) => hits(token, word))),
+      )
+      .map(({ food, words }) => ({
+        food,
+        lead: words.length > 0 && hitsAny(words[0]),
+        extra: words.filter((word) => !hitsAny(word)).length,
+      }))
       .sort(
         (a, b) =>
-          Number(!a.name.startsWith(normalized)) -
-            Number(!b.name.startsWith(normalized)) ||
+          Number(!a.lead) - Number(!b.lead) ||
+          a.extra - b.extra ||
           (preferred(a.food, b.food) ? -1 : 1),
       )
       .map(({ food }) => food);

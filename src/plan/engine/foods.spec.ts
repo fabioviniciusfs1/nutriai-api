@@ -112,7 +112,7 @@ describe('FoodCatalog.match', () => {
 });
 
 describe('FoodCatalog.search', () => {
-  it('primeiro os que começam pelo texto, depois a TACO e os nomes curtos', () => {
+  it('primeiro os que começam por uma palavra do texto, depois a TACO e os nomes curtos', () => {
     expect(
       catalog.search('arroz', {}).candidates.map((food) => food.name),
     ).toEqual([
@@ -124,6 +124,46 @@ describe('FoodCatalog.search', () => {
     expect(
       catalog.search('banana', {}).candidates.map((food) => food.name),
     ).toEqual(['Banana, prata, crua', 'Bolo, banana, caseiro']);
+  });
+
+  it('acha as palavras em qualquer ordem, pelo começo, sem plural e pelos sinônimos', () => {
+    const names = (query: string) =>
+      catalog.search(query, {}).candidates.map((food) => food.name);
+    expect(names('frango grelhado')).toEqual([
+      'Frango, peito, sem pele, grelhado',
+    ]);
+    expect(names('peito de frango')).toEqual([
+      'Frango, peito, sem pele, cru',
+      'Frango, peito, sem pele, grelhado',
+    ]);
+    expect(names('bananas')).toEqual([
+      'Banana, prata, crua',
+      'Bolo, banana, caseiro',
+    ]);
+    expect(names('arroz integ')).toEqual(['Arroz, integral, cozido']);
+    expect(names('aipim')).toEqual(['Mandioca, cozida']);
+    expect(catalog.search('tilapia assada', {}).found).toBe(false);
+  });
+
+  it('sem gênero: "assada" também acha "assado"', () => {
+    expect(
+      catalog.search('assada', {}).candidates.map((food) => food.name),
+    ).toEqual([
+      'Batata, inglesa, assada',
+      'Frango, coxa, com pele, assada',
+      'Carne, bovina, fraldinha, assada',
+      'Peixe, água salgada, pescada, assado/grelhado, s/ óleo, c/ sal',
+    ]);
+  });
+
+  it('começar por uma palavra do texto vem antes do nome mais curto', () => {
+    const small = new FoodCatalog([
+      food('Salada, c/ frango', 100),
+      food('Frango, coxa, cozida', 200),
+    ]);
+    expect(
+      small.search('frangos', {}).candidates.map((food) => food.name),
+    ).toEqual(['Frango, coxa, cozida', 'Salada, c/ frango']);
   });
 });
 
