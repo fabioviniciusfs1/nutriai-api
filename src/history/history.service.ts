@@ -140,11 +140,18 @@ export class HistoryService {
     // Lê o plano antes: a versão de agora fica gravada.
     await this.plan.read(userId, clock, () => null);
     // Um a mais, para o mais antigo da lista também ter com quem comparar.
-    const versions = await this.planVersions.find({
-      where: { userId },
-      order: { id: 'DESC' },
-      take: PLAN_HISTORY_LIMIT + 1,
-    });
+    const [versions, catalog] = await Promise.all([
+      this.planVersions.find({
+        where: { userId },
+        order: { id: 'DESC' },
+        take: PLAN_HISTORY_LIMIT + 1,
+      }),
+      this.catalog.catalog(),
+    ]);
+    // Versões gravadas antes do campo `slot`: o da refeição base (o assistente não muda).
+    const baseSlots = new Map(
+      catalog.baseMeals.map((meal) => [meal.id, meal.slot]),
+    );
     return versions.slice(0, PLAN_HISTORY_LIMIT).map((version, index) => {
       const previous = versions[index + 1];
       return {
@@ -153,7 +160,8 @@ export class HistoryService {
         edited: version.edited,
         current: index === 0,
         totals: version.totals,
-        meals: version.meals.map(({ title, time, kcal, foods }) => ({
+        meals: version.meals.map(({ id, slot, title, time, kcal, foods }) => ({
+          slot: slot ?? baseSlots.get(id)!,
           title,
           time,
           kcal,

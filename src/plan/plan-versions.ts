@@ -1,5 +1,6 @@
 // Versões do plano para o histórico: o que gravar quando o plano muda e o que mudou entre duas versões.
 import type {
+  MealSlot,
   PlanHistoryChange,
   PlanHistoryFood,
   PlanMeal,
@@ -19,7 +20,7 @@ export function planVersion(
   meals: PlanMeal[],
   fiber: number,
 ): {
-  meals: PlanVersionMeal[];
+  meals: (PlanVersionMeal & { slot: MealSlot })[];
   totals: PlanVersionTotals;
   fingerprint: string;
 } {
@@ -29,6 +30,7 @@ export function planVersion(
   return {
     meals: meals.map((meal) => ({
       id: meal.id,
+      slot: meal.slot,
       title: meal.title,
       time: meal.time,
       kcal: meal.totals.kcal,

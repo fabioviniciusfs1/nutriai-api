@@ -1,5 +1,6 @@
 // Partes puras das sugestões de substituto pelo assistente: prompt, schema da resposta e validação.
-import type { Diet, FoodFeedback } from '../../contract.js';
+import type { Diet, FoodFeedback, MealSlot } from '../../contract.js';
+import { MEAL_NAMES } from '../../users/routine.js';
 import { FoodCatalog, isRaw, isSameFood } from '../engine/foods.js';
 import {
   dietLine,
@@ -48,6 +49,8 @@ export const SUBSTITUTES_SCHEMA = {
 export type SubstituteRequest = {
   /** Alimento a substituir, com a porção de hoje. */
   food: { name: string; grams: number };
+  /** Que refeição do dia é (almoço, jantar…). */
+  slot: MealSlot;
   mealTitle: string;
   time: string;
   /** Os outros alimentos da refeição. */
@@ -63,7 +66,7 @@ export type SubstituteRequest = {
 export function substitutePrompt(request: SubstituteRequest): string {
   return [
     `Substituir: "${request.food.name}" (${request.food.grams} g).`,
-    `Refeição: "${request.mealTitle}", às ${request.time} (${PERIOD_NAMES[mealPeriod(request.time)]}).`,
+    `Refeição: ${MEAL_NAMES[request.slot]}, "${request.mealTitle}", às ${request.time} (${PERIOD_NAMES[mealPeriod(request.time)]}).`,
     request.mealFoods.length > 0
       ? `Outros alimentos da refeição: ${request.mealFoods.join('; ')}.`
       : 'Outros alimentos da refeição: nenhum.',

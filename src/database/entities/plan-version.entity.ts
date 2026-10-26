@@ -6,11 +6,13 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import type { PlanHistoryFood } from '../../contract.js';
+import type { MealSlot, PlanHistoryFood } from '../../contract.js';
 
 /** Refeição numa versão do plano (`id` da refeição base, para comparar versões). */
 export type PlanVersionMeal = {
   id: number;
+  /** Ausente nas versões gravadas antes do campo: vale o da refeição base. */
+  slot?: MealSlot;
   title: string;
   time: string;
   kcal: number;

@@ -341,6 +341,7 @@ export class Planner {
         const foods = scaled(this.goalFactor * scale);
         return {
           id: meal.id,
+          slot: meal.slot,
           title: meal.title,
           time: mealTimes[meal.id] ?? meal.time,
           totals: sumTotals(foods),
@@ -354,8 +355,9 @@ export class Planner {
 
   todayPlan(): TodayPlan {
     return {
-      meals: this.plan.map(({ id, title, time, totals, foods }) => ({
+      meals: this.plan.map(({ id, slot, title, time, totals, foods }) => ({
         id,
+        slot,
         title,
         time,
         totals,

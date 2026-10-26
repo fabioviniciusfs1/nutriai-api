@@ -501,6 +501,12 @@ describe('plano alimentar', () => {
     expect(today.meals.map((meal) => meal.totals.kcal)).toEqual([
       355, 399, 399,
     ]);
+    // Sem rotina: café da manhã, almoço e jantar.
+    expect(today.meals.map((meal) => meal.slot)).toEqual([
+      'cafe-da-manha',
+      'almoco',
+      'jantar',
+    ]);
 
     const search = await http(
       'get',

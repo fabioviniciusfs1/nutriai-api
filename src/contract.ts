@@ -165,6 +165,7 @@ export type DietPreview = {
   next: Totals & { fiber: number };
   /** O plano com o ajuste. */
   meals: {
+    slot: MealSlot;
     title: string;
     time: string;
     kcal: number;
@@ -205,6 +206,8 @@ export type PlanFood = Totals & { name: string; grams: number; units?: number };
 
 export type PlanMeal = {
   id: number;
+  /** Que refeição do dia é (café da manhã, almoço…): a da refeição base, que o assistente não muda. */
+  slot: MealSlot;
   title: string;
   /** "HH:MM" */
   time: string;
@@ -374,6 +377,7 @@ export type PlanHistoryEntry = {
   current: boolean;
   totals: Totals & { fiber: number };
   meals: {
+    slot: MealSlot;
     title: string;
     time: string;
     kcal: number;

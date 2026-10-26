@@ -362,6 +362,7 @@ O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por h
   "meals": [
     {
       "id": 1,
+      "slot": "cafe-da-manha",
       "title": "Torrada de Abacate com Ovo Poché",
       "time": "07:30",
       "totals": { "carbs": 29, "protein": 13, "fat": 22, "kcal": 350 },
@@ -375,6 +376,8 @@ O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por h
 ```
 
 - `totals` = soma dos alimentos já arredondados, como aparecem.
+- `slot`: que refeição do dia é (`MealSlot`: café da manhã, almoço…). É o da refeição base: o plano individual do
+  assistente muda título, alimentos e horário, mas não o tipo.
 - `extraId` ≠ `null`: alimento acrescentado pelo usuário (tem botão de remover).
 - `units`: só nos ovos de galinha inteiros (cozido, frito, poché…), quantas unidades; `grams` = `units` ×
   `eggUnitGrams` do ajuste da dieta (55 g por padrão). As porções desses ovos sempre ficam em unidades inteiras
@@ -670,6 +673,7 @@ Histórico de **planos** (não de dias), do mais recente para o mais antigo (at�
     "totals": { "kcal": 1560, "protein": 128, "carbs": 142, "fat": 52, "fiber": 24 },
     "meals": [
       {
+        "slot": "cafe-da-manha",
         "title": "Omelete de Queijo com Mamão e Pão",
         "time": "06:30",
         "kcal": 540,

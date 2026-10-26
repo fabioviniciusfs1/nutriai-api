@@ -157,7 +157,7 @@ export type DietPreview = {
   current: Totals & { fiber: number };
   next: Totals & { fiber: number };
   /** O plano com o ajuste. */
-  meals: { title: string; time: string; kcal: number; foods: PlanHistoryFood[] }[];
+  meals: { slot: MealSlot; title: string; time: string; kcal: number; foods: PlanHistoryFood[] }[];
   /** O que muda do plano atual para o novo (quase sempre `grams`). */
   changes: PlanHistoryChange[];
 };
@@ -188,6 +188,8 @@ export type PlanFood = Totals & { name: string; grams: number; units?: number };
 
 export type PlanMeal = {
   id: number;
+  /** Que refeição do dia é (café da manhã, almoço…): a da refeição base, que o assistente não muda. */
+  slot: MealSlot;
   title: string;
   /** "HH:MM" */
   time: string;
@@ -350,7 +352,7 @@ export type PlanHistoryEntry = {
   /** O plano em vigor (o primeiro da lista). */
   current: boolean;
   totals: Totals & { fiber: number };
-  meals: { title: string; time: string; kcal: number; foods: PlanHistoryFood[] }[];
+  meals: { slot: MealSlot; title: string; time: string; kcal: number; foods: PlanHistoryFood[] }[];
   /** Diferenças para o plano anterior; vazio no plano montado. */
   changes: PlanHistoryChange[];
 };

@@ -141,6 +141,7 @@ describe('substitutePrompt', () => {
   it('traz o alimento, a refeição, os outros alimentos e os restritos', () => {
     const prompt = substitutePrompt({
       food: { name: 'Guacamole', grams: 30 },
+      slot: 'almoco',
       mealTitle: 'Bowl de Frango',
       time: '12:30',
       mealFoods: ['Arroz integral'],
@@ -149,7 +150,9 @@ describe('substitutePrompt', () => {
       exclude: [],
     });
     expect(prompt).toContain('"Guacamole" (30 g)');
-    expect(prompt).toContain('"Bowl de Frango", às 12:30 (tarde)');
+    expect(prompt).toContain(
+      'Refeição: almoço, "Bowl de Frango", às 12:30 (tarde)',
+    );
     expect(prompt).toContain('Outros alimentos da refeição: Arroz integral.');
     expect(prompt).toContain('Alimentos restritos (não sugira): Abacate.');
     expect(prompt).not.toContain('Já oferecidos');
@@ -158,6 +161,7 @@ describe('substitutePrompt', () => {
   it('no "Ver mais", lista os já oferecidos para não repetir', () => {
     const prompt = substitutePrompt({
       food: { name: 'Guacamole', grams: 30 },
+      slot: 'almoco',
       mealTitle: 'Bowl de Frango',
       time: '12:30',
       mealFoods: [],

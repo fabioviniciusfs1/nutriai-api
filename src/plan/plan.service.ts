@@ -147,6 +147,7 @@ export class PlanService {
       if (!food) throw new PlanRuleError('not-found', FOOD_NOT_FOUND);
       const request: SubstituteRequest = {
         food: { name: food.name, grams: food.grams },
+        slot: meal.slot,
         mealTitle: meal.title,
         time: meal.time,
         mealFoods: meal.foods
@@ -265,7 +266,8 @@ export class PlanService {
     return {
       current: current.totals,
       next: preview.totals,
-      meals: preview.meals.map(({ title, time, kcal, foods }) => ({
+      meals: preview.meals.map(({ slot, title, time, kcal, foods }) => ({
+        slot,
         title,
         time,
         kcal,
