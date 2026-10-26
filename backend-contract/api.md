@@ -373,7 +373,7 @@ O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por h
 - `extraId` ≠ `null`: alimento acrescentado pelo usuário (tem botão de remover).
 - `units`: só nos ovos de galinha inteiros (cozido, frito, poché…), quantas unidades; `grams` = `units` ×
   `eggUnitGrams` do ajuste da dieta (55 g por padrão). As porções desses ovos sempre ficam em unidades inteiras
-  (pelo menos 1), menos no alimento extra com as gramas do usuário. O front mostra "2 un. de 55g".
+  (pelo menos 1), menos no alimento extra com as gramas do usuário. O front mostra "2 ovos" com "55 g/unid." embaixo.
 - `personalization`: montagem do plano individual — `pending` (montando; `meals` traz o plano atual, mas o front
   mostra só um card "Montando seu plano personalizado…" e pergunta de novo a cada poucos segundos), `ready` (aplicado), `failed` (não deu certo; o plano não muda) ou `null`
   (nunca pedido: sem assistente).
