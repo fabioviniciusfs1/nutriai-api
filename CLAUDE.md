@@ -142,6 +142,8 @@ npx vitest run -t "não gosto"                     # por nome do teste
   horário pelo perfil, a rotina e o plano do dia e devolve ok ou a explicação com um horário sugerido
   (`parseMealTimeAdvice` só aceita sugestão nos inícios de `mealStartWindows`). Fora desses inícios, o
   `outsideWindowsAdvice` responde sem o Claude, com `canKeep: false` (sem "Manter"). Sem o Claude ou se ele falhar, ok.
+- Histórico (`src/history/`): `days` = 7, 30 ou `all` (`HistoryPeriod`); o `window()` do `HistoryService` nunca
+  vai antes do dia da criação da conta (`users.created_at` no fuso do usuário, também em `Me.user.createdOn`).
 - Histórico de planos (`plan_versions`, `GET /history/plans`): uma versão por montagem. O `PlanVersionService` grava,
   junto da foto do dia em `withPlanner` (nada enquanto a personalização está `pending`), pela regra de
   `nextPlanVersion` (`src/plan/plan-versions.ts`): `plan_versions.assembled_at` guarda o `personalization_at` da

@@ -87,7 +87,8 @@ export type Targets = {
 };
 
 export type Me = {
-  user: { name: string; username: string };
+  /** `createdOn`: "AAAA-MM-DD", dia em que a conta foi criada (no fuso do `X-Timezone`); o histórico começa nele. */
+  user: { name: string; username: string; createdOn: string };
   /** `null` até o usuário preencher o perfil. */
   profile: Profile | null;
   /** `null` até o usuário preencher a rotina (segundo passo do cadastro). */

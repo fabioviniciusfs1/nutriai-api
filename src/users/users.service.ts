@@ -64,7 +64,11 @@ export class UsersService {
     const user = await this.get(userId);
     const google = await this.googleAccounts.findOneBy({ userId });
     return {
-      user: { name: user.name, username: user.username },
+      user: {
+        name: user.name,
+        username: user.username,
+        createdOn: localDate(user.createdAt, clock.timeZone),
+      },
       // Perfis salvos antes do peso meta não têm o campo.
       profile: user.profile
         ? {

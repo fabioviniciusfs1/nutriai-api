@@ -3,7 +3,7 @@ import {
   Controller,
   Get,
   Param,
-  ParseIntPipe,
+  type PipeTransform,
   Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../common/auth.decorators.js';
@@ -15,13 +15,23 @@ import type {
   NutrientHistory,
   PlanHistoryEntry,
 } from '../contract.js';
-import { HistoryService } from './history.service.js';
+import {
+  type HistoryPeriod,
+  HistoryService,
+  PERIODS,
+} from './history.service.js';
 
-const Days = () =>
-  new ParseIntPipe({
-    exceptionFactory: () =>
-      new BadRequestException('Período inválido: use 7, 30 ou 90 dias.'),
-  });
+/** `days` da query: 7, 30 ou `all` (desde a criação da conta). */
+class Days implements PipeTransform<string, HistoryPeriod> {
+  transform(value: string): HistoryPeriod {
+    const period = value === 'all' ? value : Number(value);
+    if (!PERIODS.includes(period))
+      throw new BadRequestException(
+        'Período inválido: use 7 ou 30 dias, ou todos.',
+      );
+    return period as HistoryPeriod;
+  }
+}
 
 @Controller()
 export class HistoryController {
@@ -31,7 +41,7 @@ export class HistoryController {
   summary(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
-    @Query('days', Days()) days: number,
+    @Query('days', Days) days: HistoryPeriod,
   ): Promise<HistorySummary> {
     return this.history.summary(userId, clock, days);
   }
@@ -40,7 +50,7 @@ export class HistoryController {
   activity(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
-    @Query('days', Days()) days: number,
+    @Query('days', Days) days: HistoryPeriod,
   ): Promise<ActivityHistory> {
     return this.history.activity(userId, clock, days);
   }
@@ -50,7 +60,7 @@ export class HistoryController {
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
     @Param('id') id: string,
-    @Query('days', Days()) days: number,
+    @Query('days', Days) days: HistoryPeriod,
   ): Promise<NutrientHistory> {
     return this.history.nutrient(userId, clock, id, days);
   }

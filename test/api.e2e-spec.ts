@@ -142,6 +142,7 @@ describe('perfil e pesos', () => {
     const { http } = await newUser();
     const before = await http('get', '/me').expect(200);
     expect(before.body).toMatchObject({
+      user: { createdOn: userClock('America/Sao_Paulo').today },
       profile: null,
       routine: null,
       targets: null,
@@ -1180,6 +1181,9 @@ describe('nutrientes e histórico', () => {
       goalTolerance: 150,
     });
     await http('get', '/history/summary?days=12').expect(400);
+    await http('get', '/history/summary?days=90').expect(400, {
+      error: 'Período inválido: use 7 ou 30 dias, ou todos.',
+    });
 
     const activity = await http('get', '/history/activity?days=7').expect(200);
     expect(activity.body.days).toHaveLength(1);
@@ -1207,6 +1211,33 @@ describe('nutrientes e histórico', () => {
     expect(
       sinceCreation.body.days.map((day: { date: string }) => day.date),
     ).toEqual([-3, -2, -1, 0].map((delta) => addDays(today, delta)));
+    // "Todos": da criação até hoje, também no consumo e na atividade.
+    await app
+      .get(DataSource)
+      .query(
+        `UPDATE users SET created_at = now() - interval '40 days' WHERE username = $1`,
+        [username],
+      );
+    const all = await http(
+      'get',
+      '/history/nutrients/proteinas?days=all',
+    ).expect(200);
+    expect(all.body.days).toHaveLength(41);
+    expect(all.body.days[0].date).toBe(addDays(today, -40));
+    const last30 = await http(
+      'get',
+      '/history/nutrients/proteinas?days=30',
+    ).expect(200);
+    expect(last30.body.days).toHaveLength(30);
+    expect(
+      (await http('get', '/history/summary?days=all').expect(200)).body,
+    ).toMatchObject({ totalDays: 1 });
+    expect(
+      (await http('get', '/history/activity?days=all').expect(200)).body.days,
+    ).toHaveLength(1);
+    expect((await http('get', '/me').expect(200)).body.user.createdOn).toBe(
+      addDays(today, -40),
+    );
     await http('get', '/history/nutrients/nao-existe?days=7').expect(404);
 
     // Só o plano montado, que é o em vigor.
@@ -1236,6 +1267,11 @@ describe('histórico com dias sem o app aberto', () => {
     )) as { id: string }[];
     const today = userClock('America/Sao_Paulo').today;
     const day = (delta: number) => addDays(today, delta);
+    // O histórico começa na criação da conta.
+    await db.query(
+      `UPDATE users SET created_at = now() - interval '6 days' WHERE id = $1`,
+      [id],
+    );
 
     // Fotos só em dias alternados (como quem abre o app dia sim, dia não) e atividade todos os dias.
     for (const delta of [-4, -2]) {

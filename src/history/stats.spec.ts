@@ -1,5 +1,6 @@
 import {
   activityHistory,
+  datesSince,
   fillDayLogs,
   historySummary,
   nutrientHistory,
@@ -29,6 +30,15 @@ const activity = (date: string, burned: number) => ({
 });
 
 describe('history stats', () => {
+  it('desde a criação da conta até hoje', () => {
+    expect(datesSince('2026-09-26', '2026-09-28')).toEqual([
+      '2026-09-26',
+      '2026-09-27',
+      '2026-09-28',
+    ]);
+    expect(datesSince('2026-09-28', '2026-09-28')).toEqual(['2026-09-28']);
+  });
+
   it('janela termina hoje', () => {
     expect(windowDates('2026-09-28', 3)).toEqual([
       '2026-09-26',

@@ -54,6 +54,13 @@ export function windowDates(today: string, days: number) {
   return Array.from({ length: days }, (_, i) => addDays(today, i - days + 1));
 }
 
+/** Os dias de `from` até `today`, do mais antigo para o mais recente (só `today` se `from` for depois). */
+export function datesSince(from: string, today: string) {
+  const dates = [today];
+  while (dates[0] > from) dates.unshift(addDays(dates[0], -1));
+  return dates;
+}
+
 /**
  * Médias dos dias com registro de consumo. O gasto e o saldo usam só os dias que também têm dados de
  * atividade; sem nenhum (Google não conectado), `null`: não há estimativa de gasto.

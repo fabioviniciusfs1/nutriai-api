@@ -149,7 +149,7 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
 
 ```json
 {
-  "user": { "name": "Ana Souza", "username": "ana.souza" },
+  "user": { "name": "Ana Souza", "username": "ana.souza", "createdOn": "2026-09-01" },
   "profile": {
     "sex": "feminino",
     "age": 32,
@@ -621,7 +621,11 @@ Seletor do gráfico de nutrientes do histórico:
 
 ## Histórico 🔒
 
-O front pede `days` = 7, 30 ou 90. Dias do mais antigo para o mais recente, o último é hoje.
+O front pede `days` = `7`, `30` ou `all` (botão "Todos"); outro valor → `400` com "Período inválido: use 7 ou 30
+dias, ou todos.". Dias do mais antigo para o mais recente, o último é hoje. **Nunca antes do dia da criação da
+conta** (`user.createdOn` de `GET /me`, no fuso do usuário): `7` e `30` são os últimos 7 ou 30 dias, cortados nesse
+dia (numa conta nova, menos dias que o período); `all` vai do dia da criação até hoje. Vale para as médias do
+resumo, a atividade e os nutrientes; o front corta o gráfico de peso pelo mesmo dia.
 
 ### `GET /history/summary?days=N` → `HistorySummary`
 
@@ -679,8 +683,7 @@ dia sem dados de atividade, `burned` e `source` vêm `null` e o resto da ativida
 }
 ```
 
-Os dias começam no dia da criação da conta (no fuso do usuário): numa conta nova, `days` tem menos itens que o
-período. Dia sem registro vale 0. `averagePercent` = média em % da meta. `daysOnGoal` = dias com valor ≥ meta;
+Os dias começam, no máximo, no dia da criação da conta (ver o início da seção). Dia sem registro vale 0. `averagePercent` = média em % da meta. `daysOnGoal` = dias com valor ≥ meta;
 `daysOverLimit` = dias com valor > meta (o front mostra um ou outro conforme `limit`).
 
 ### `GET /history/plans` → `PlanHistoryEntry[]`

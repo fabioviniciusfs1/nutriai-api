@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, LessThan, type Repository } from 'typeorm';
 import { CatalogService } from '../catalog/catalog.service.js';
@@ -30,11 +26,14 @@ import {
   fillDayLogs,
   historySummary,
   nutrientHistory,
+  datesSince,
   windowDates,
 } from './stats.js';
 
 /** Períodos que o front pede. */
-export const PERIODS = [7, 30, 90];
+/** Últimos 7 ou 30 dias, ou `all`: desde a criação da conta. */
+export type HistoryPeriod = 7 | 30 | 'all';
+export const PERIODS: (number | string)[] = [7, 30, 'all'];
 
 /** Quantos planos `/history/plans` devolve. */
 const PLAN_HISTORY_LIMIT = 50;
@@ -56,16 +55,21 @@ export class HistoryService {
     private readonly planVersions: Repository<PlanVersionEntity>,
   ) {}
 
-  /** Dados da janela de `days` dias até hoje (com a foto de hoje atualizada). */
-  private async window(userId: string, clock: UserClock, days: number) {
-    if (!PERIODS.includes(days))
-      throw new BadRequestException('Período inválido: use 7, 30 ou 90 dias.');
+  /**
+   * Dados do período até hoje (com a foto de hoje atualizada). Os dias começam, no máximo, no da criação da
+   * conta: antes dele não há nada para mostrar (nem zerar as médias).
+   */
+  private async window(userId: string, clock: UserClock, days: HistoryPeriod) {
     // Lê o plano de hoje para a foto do dia existir e estar em dia.
     await this.plan.read(userId, clock, () => null);
-    const dates = windowDates(clock.today, days);
+    const user = await this.users.get(userId);
+    const created = localDate(user.createdAt, clock.timeZone);
+    const dates =
+      days === 'all'
+        ? datesSince(created, clock.today)
+        : windowDates(clock.today, days).filter((date) => date >= created);
     const range = Between(dates[0], dates[dates.length - 1]);
-    const [user, logs, activity] = await Promise.all([
-      this.users.get(userId),
+    const [logs, activity] = await Promise.all([
       this.filledLogs(userId, dates),
       this.activityDays.find({ where: { userId, date: range } }),
     ]);
@@ -83,7 +87,7 @@ export class HistoryService {
   async summary(
     userId: string,
     clock: UserClock,
-    days: number,
+    days: HistoryPeriod,
   ): Promise<HistorySummary> {
     await this.health.syncIfStale(userId, clock);
     const data = await this.window(userId, clock, days);
@@ -93,7 +97,7 @@ export class HistoryService {
   async activity(
     userId: string,
     clock: UserClock,
-    days: number,
+    days: HistoryPeriod,
   ): Promise<ActivityHistory> {
     await this.health.syncIfStale(userId, clock);
     const data = await this.window(userId, clock, days);
@@ -104,17 +108,14 @@ export class HistoryService {
     userId: string,
     clock: UserClock,
     nutrientId: string,
-    days: number,
+    days: HistoryPeriod,
   ): Promise<NutrientHistory> {
     const def = (await this.catalog.nutrientDefs()).find(
       (item) => item.id === nutrientId,
     );
     if (!def) throw new NotFoundException('Nutriente não encontrado.');
     const data = await this.window(userId, clock, days);
-    // Os dias começam no da criação da conta: antes dele não há consumo para mostrar (nem zerar a média).
-    const created = localDate(data.user.createdAt, clock.timeZone);
-    const dates = data.dates.filter((date) => date >= created);
-    return nutrientHistory(dates, data.logsByDate, {
+    return nutrientHistory(data.dates, data.logsByDate, {
       id: def.id,
       name: def.name,
       unit: def.unit,
