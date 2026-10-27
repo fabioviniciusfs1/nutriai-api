@@ -249,9 +249,13 @@ export class PlanService {
         const options: PlannerOptions = {
           ...profileOptions,
           personalization: personalizationStatus(entity),
+          today,
         };
         const planner = new Planner(catalog, toPlanState(entity), options);
-        const { state, result, flagged } = change(planner);
+        const changed = change(planner);
+        const { result, flagged } = changed;
+        // Sem ação do usuário, o estado ainda muda quando um alimento extra de outro dia sai.
+        const state = changed.state ?? (planner.expired ? planner.state : null);
         let after = planner;
         if (state) {
           after = new Planner(catalog, state, options);
@@ -300,6 +304,7 @@ export class PlanService {
       after: new Planner(catalog, planner.state, {
         ...next,
         personalization: planner.todayPlan().personalization,
+        today: clock.today,
       }).plan,
     }));
     const version = (meals: PlanMeal[]) =>

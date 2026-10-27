@@ -1338,6 +1338,51 @@ describe('histórico de planos', () => {
   });
 });
 
+describe('alimento extra', () => {
+  it('vale só no dia em que foi acrescentado', async () => {
+    const { http, username } = await newUser();
+    const BANANA = 'Banana, prata, crua';
+    const before = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+    const added = (
+      await http('post', '/plan/meals/1/foods')
+        .send({ foodName: BANANA, grams: 150 })
+        .expect(200)
+    ).body as TodayPlan;
+    const extra = added.meals[0].foods.find((food) => food.extraId !== null)!;
+    expect(extra.name).toBe(BANANA);
+
+    // O dia virou: o extra e o plano alterado com ele passam a ser de ontem.
+    await app
+      .get(DataSource)
+      .query(
+        `UPDATE plan_versions SET date = date - 1 WHERE edited AND user_id = (SELECT id FROM users WHERE username = $1)`,
+        [username],
+      );
+    await app.get(DataSource).query(
+      `UPDATE plan_states
+         SET plan_changes = jsonb_set(plan_changes, '{extraFoods,1,0,date}', to_jsonb($2::text))
+       WHERE user_id = (SELECT id FROM users WHERE username = $1)`,
+      [username, addDays(userClock('America/Sao_Paulo').today, -1)],
+    );
+    const today = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+    expect(
+      today.meals.flatMap((meal) => meal.foods).some((food) => food.extraId),
+    ).toBe(false);
+    expect(today.meals).toEqual(before.meals);
+    await http('delete', `/plan/meals/1/foods/${extra.extraId}`).expect(404);
+
+    // A saída fica no histórico de planos, como uma alteração do dia.
+    const plans = (await http('get', '/history/plans').expect(200))
+      .body as PlanHistoryEntry[];
+    expect(plans[0].changes[0]).toMatchObject({
+      kind: 'removed',
+      from: expect.objectContaining({ name: BANANA }),
+    });
+  });
+});
+
 describe('chat', () => {
   it('começa com a saudação e responde com o Claude', async () => {
     create.mockReset();

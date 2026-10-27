@@ -95,9 +95,11 @@ npx vitest run -t "não gosto"                     # por nome do teste
   com a média dos pesos pelas frações das calorias dele, para os macros do dia irem para as metas. Os dois são
   recalculados a cada requisição pelo perfil e pela rotina (`PlanService.plannerOptions`). O alimento extra (`POST /plan/meals/{id}/foods` com `grams`) fica nas gramas
   do usuário, fora desse fator e dos fatores de porção (`ExtraFood.fixed`), e soma às calorias do dia; é a
-  única ação que aumenta o total. Extras antigos, sem `fixed`, seguem escalados com a refeição.
+  única ação que aumenta o total. Extras antigos, sem `fixed`, seguem escalados com a refeição. O extra vale só no
+  dia em que entrou (`ExtraFood.date`, o `today` do `PlannerOptions`): o construtor do `Planner` tira os de outro
+  dia (os sem `fixed` como em `removeExtraFood`) e o `withPlanner` salva o estado limpo (`planner.expired`).
 - Não há rota para criar nem remover refeição: as refeições do dia são as de `routine.meals`. O que o usuário
-  muda no plano é permanente (`plan_states`): horários, alimentos acrescentados, trocas e fatores de porção.
+  muda no plano é permanente (`plan_states`): horários, trocas e fatores de porção (os alimentos extras, só no dia).
 - Plano individual (`src/plan/personalizer.service.ts`): no primeiro `PUT /me/routine`, o Claude monta as refeições
   do plano base para o usuário em segundo plano (`composer/personal-plan.ts`, com o `CLAUDE_PLAN_MODEL`, Sonnet, e
   `fallbacks: 'default'` no endpoint beta), escolhendo o horário de cada uma dentro das janelas da rotina e

@@ -153,6 +153,64 @@ describe('Planner', () => {
       expect(extra.grams).toBe(50);
     });
 
+    describe('vale só no dia em que entrou', () => {
+      const TODAY = '2026-10-26';
+      const onDay = (state: PlanState, today?: string) =>
+        new Planner(catalog, state, { ...DEFAULT_PLANNER_OPTIONS, today });
+
+      it('guarda o dia e some no dia seguinte, com o total de antes', () => {
+        const before = onDay(EMPTY_STATE, TODAY);
+        const state = before.addFood(1, 'Banana-prata', 150);
+        expect(state.planChanges.extraFoods[1][0].date).toBe(TODAY);
+        const today = onDay(state, TODAY);
+        expect(today.expired).toBe(false);
+        expect(today.dayKcal()).toBeGreaterThan(before.dayKcal());
+
+        const tomorrow = onDay(state, '2026-10-27');
+        expect(tomorrow.expired).toBe(true);
+        expect(tomorrow.state.planChanges.extraFoods[1]).toEqual([]);
+        expect(tomorrow.todayPlan()).toEqual(before.todayPlan());
+        expect(() => tomorrow.removeExtraFood(1, 'x-1')).toThrow(
+          'Alimento não encontrado.',
+        );
+      });
+
+      it('sem o dia de hoje, nada expira', () => {
+        const state = onDay(EMPTY_STATE, TODAY).addFood(1, 'Banana-prata', 150);
+        expect(onDay(state).expired).toBe(false);
+        expect(onDay(state).state).toEqual(state);
+      });
+
+      it('o antigo (sem gramas fixas) sai com as calorias de volta para as refeições', () => {
+        const base = planner();
+        const legacy: PlanState = {
+          ...base.state,
+          planChanges: {
+            extraFoods: {
+              1: [
+                {
+                  ...base.foodPortion(1, 'Banana-prata', 100),
+                  id: 'x-1',
+                  date: '2026-10-25',
+                },
+              ],
+            },
+            scales: { 1: 0.8, 2: 0.8, 3: 0.8 },
+          },
+          nextExtraId: 2,
+        };
+        const yesterday = onDay(legacy, '2026-10-25');
+        const today = onDay(legacy, TODAY);
+        expect(today.expired).toBe(true);
+        expect(
+          today.plan.flatMap((meal) => meal.foods).some((food) => food.extraId),
+        ).toBe(false);
+        expect(
+          Math.abs(today.dayKcal() - yesterday.dayKcal()),
+        ).toBeLessThanOrEqual(yesterday.dayKcal() * 0.01);
+      });
+    });
+
     it('prévia: as gramas pedidas com os nutrientes do catálogo', () => {
       expect(planner().foodPortion(1, 'Banana-prata', 200)).toMatchObject({
         name: 'Banana-prata',

@@ -15,9 +15,10 @@ export type PlanFood = Totals & { name: string; grams: number; units?: number };
 
 /**
  * Alimento acrescentado pelo usuário. `fixed`: nas gramas que ele escolheu, fora dos fatores de porção (soma às
- * calorias do dia). Sem `fixed` (extras antigos): na porção "fator 1" da refeição, escalado com ela.
+ * calorias do dia). Sem `fixed` (extras antigos): na porção "fator 1" da refeição, escalado com ela. `date`: o dia
+ * ("AAAA-MM-DD", no fuso do usuário) em que foi acrescentado; só vale nesse dia.
  */
-export type ExtraFood = PlanFood & { id: string; fixed?: true };
+export type ExtraFood = PlanFood & { id: string; fixed?: true; date?: string };
 
 export type MealPeriod = 'manha' | 'tarde' | 'noite';
 
@@ -48,8 +49,8 @@ export type Catalog = {
 };
 
 /**
- * Mudanças permanentes no plano (até o usuário desfazer). Acrescentar alimento tira
- * as calorias das outras refeições (reduzindo as porções), para o total do dia não aumentar.
+ * Mudanças no plano: os fatores de porção são permanentes (até o usuário desfazer); os alimentos acrescentados
+ * valem só no dia em que entraram (`ExtraFood.date`).
  */
 export type PlanChanges = {
   /** Alimentos acrescentados a cada refeição (id → alimentos), na porção "fator 1". */
@@ -101,6 +102,8 @@ export type PlannerOptions = {
   diet?: Diet;
   /** Estado da montagem do plano individual, devolvido em `todayPlan()` (padrão: `null`). */
   personalization?: Personalization;
+  /** "AAAA-MM-DD" de hoje no fuso do usuário: os alimentos extras de outro dia saem do plano. Sem ele, nada expira. */
+  today?: string;
 };
 
 export const DEFAULT_PLANNER_OPTIONS: PlannerOptions = {

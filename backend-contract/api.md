@@ -427,7 +427,7 @@ instantes.".
   acompanha, menos os alimentos extras (ficam nas gramas que o usuário escolheu).
 
 **Como o plano de hoje é montado** (o que o usuário muda é permanente, até ele desfazer: horários escolhidos,
-alimentos acrescentados por refeição, trocas de alimentos e um fator de porção por refeição):
+trocas de alimentos e um fator de porção por refeição; os alimentos acrescentados valem só no dia em que entraram):
 
 - Para cada refeição: aplica as trocas de alimentos (ver "Trocas"), multiplica as porções pelo fator dela
   (gramas e nutrientes, arredondando; gramas no mínimo 1) e junta os alimentos extras, nas gramas do usuário
@@ -505,10 +505,12 @@ usuário digitou (gramas e nutrientes calculados). `grams`: inteiro de 1 a 2000;
 "Informe a quantidade em gramas (1 a 2000).". Alimento restrito ou fora do catálogo: o mesmo erro do `POST`.
 
 `POST /plan/meals/{id}/foods` com `{ "foodName": "Banana-prata", "grams": 150 }` acrescenta o alimento extra
-(permanente) nas gramas do usuário. `grams` como na prévia. As gramas ficam **fixas** (não acompanham o fator
+nas gramas do usuário, **só para hoje** (o dia do `X-Timezone`): no dia seguinte ele sai do plano, e quem comer
+de novo acrescenta outra vez. A saída conta como mudança do plano (`removed` no histórico de planos do dia). `grams` como na prévia. As gramas ficam **fixas** (não acompanham o fator
 da refeição nem a meta), as outras refeições não mudam e as calorias do extra **somam** às do dia.
 
-`DELETE /plan/meals/{id}/foods/{extraId}` remove um alimento extra; as outras refeições não mudam.
+`DELETE /plan/meals/{id}/foods/{extraId}` remove um alimento extra de hoje; as outras refeições não mudam. Um
+extra de outro dia já saiu: `404`.
 
 ### Trocar alimento ("Substituir alimento")
 

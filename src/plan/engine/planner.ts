@@ -16,6 +16,7 @@ import {
 } from './foods.js';
 import type {
   Catalog,
+  ExtraFood,
   MacroGoals,
   MealPeriod,
   PlanChanges,
@@ -276,10 +277,14 @@ export class Planner {
   readonly goalFactor: number;
   /** Peso da unidade do ovo (g). */
   private readonly eggUnitGrams: number;
+  /** O estado do usuário, sem os alimentos extras de outros dias. */
+  readonly state: PlanState;
+  /** Algum alimento extra de outro dia saiu: o estado mudou mesmo sem ação do usuário. */
+  readonly expired: boolean;
 
   constructor(
     private readonly catalog: Catalog,
-    readonly state: PlanState,
+    state: PlanState,
     private readonly options: PlannerOptions = DEFAULT_PLANNER_OPTIONS,
   ) {
     this.foods = new FoodCatalog(catalog.foods);
@@ -302,7 +307,58 @@ export class Planner {
       this.macroWeights,
       this.eggUnitGrams,
     );
-    this.plan = this.buildPlan(state.planChanges);
+    // O alimento extra vale só no dia em que entrou. O nas gramas do usuário só sai; o antigo (sem `fixed`)
+    // sai como em `removeExtraFood`, com as calorias voltando para as refeições do dia.
+    const expired = Object.entries(state.planChanges.extraFoods).flatMap(
+      ([mealId, extras]) =>
+        extras
+          .filter(
+            (extra) =>
+              options.today !== undefined && extra.date !== options.today,
+          )
+          .map((extra) => ({ mealId: Number(mealId), extra })),
+    );
+    const isExpired = (mealId: number, extra: ExtraFood) =>
+      expired.some((item) => item.mealId === mealId && item.extra === extra);
+    this.state = {
+      ...state,
+      planChanges: {
+        ...state.planChanges,
+        extraFoods: Object.fromEntries(
+          Object.entries(state.planChanges.extraFoods).map(
+            ([mealId, extras]) => [
+              mealId,
+              // Os antigos expirados ficam por enquanto: saem logo abaixo, com as calorias de volta.
+              extras.filter(
+                (extra) => !extra.fixed || !isExpired(Number(mealId), extra),
+              ),
+            ],
+          ),
+        ),
+      },
+    };
+    this.plan = this.buildPlan(this.state.planChanges);
+    for (const { mealId, extra } of expired) {
+      if (extra.fixed) continue;
+      this.state = this.plan.some((meal) => meal.id === mealId)
+        ? this.removeExtraFood(mealId, extra.id)
+        : this.withoutExtra(mealId, extra.id);
+      this.plan = this.buildPlan(this.state.planChanges);
+    }
+    this.expired = expired.length > 0;
+  }
+
+  /** O estado sem o alimento extra `extraId` da refeição (sem mexer nas porções). */
+  private withoutExtra(mealId: number, extraId: string): PlanState {
+    const { extraFoods } = this.state.planChanges;
+    return this.withPlanChanges({
+      extraFoods: {
+        ...extraFoods,
+        [mealId]: (extraFoods[mealId] ?? []).filter(
+          (food) => food.id !== extraId,
+        ),
+      },
+    });
   }
 
   /** Plano com as mudanças `changes`, nos horários do usuário. */
@@ -453,6 +509,7 @@ export class Planner {
       ...food,
       id: `x-${this.state.nextExtraId}`,
       fixed: true as const,
+      ...(this.options.today !== undefined ? { date: this.options.today } : {}),
     };
     return {
       ...this.withPlanChanges({
