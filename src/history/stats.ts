@@ -14,9 +14,6 @@ import { displayValue } from '../nutrition/nutrient-goals.js';
 /** Um dia conta como "dentro da meta" quando o consumo fica a até esta distância da meta (kcal). */
 export const GOAL_TOLERANCE = 150;
 
-/** Fonte mostrada nos dias sem dados de atividade: o gasto é o estimado pelo perfil. */
-export const ESTIMATED_SOURCE = 'Estimativa do perfil';
-
 export type DayLog = Pick<
   DayLogEntity,
   'date' | 'consumedKcal' | 'nutrients' | 'meals' | 'flaggedFoods'
@@ -58,25 +55,27 @@ export function windowDates(today: string, days: number) {
 }
 
 /**
- * Médias dos dias com registro de consumo. O gasto de um dia sem dados de atividade é o gasto
- * diário estimado pelo perfil (`estimatedBurn`).
+ * Médias dos dias com registro de consumo. O gasto e o saldo usam só os dias que também têm dados de
+ * atividade; sem nenhum (Google não conectado), `null`: não há estimativa de gasto.
  */
 export function historySummary(
   logs: DayLog[],
   activity: Map<string, ActivityDay>,
-  estimatedBurn: number | null,
   calorieGoal: number,
 ): HistorySummary {
-  const avgConsumed = Math.round(average(logs.map((log) => log.consumedKcal)));
-  const avgBurned = Math.round(
-    average(
-      logs.map((log) => activity.get(log.date)?.burned ?? estimatedBurn ?? 0),
-    ),
-  );
+  const tracked = logs.flatMap((log) => {
+    const day = activity.get(log.date);
+    return day ? [{ consumed: log.consumedKcal, burned: day.burned }] : [];
+  });
+  const hasBurned = tracked.length > 0;
   return {
-    avgConsumed,
-    avgBurned,
-    avgBalance: avgConsumed - avgBurned,
+    avgConsumed: Math.round(average(logs.map((log) => log.consumedKcal))),
+    avgBurned: hasBurned
+      ? Math.round(average(tracked.map((day) => day.burned)))
+      : null,
+    avgBalance: hasBurned
+      ? Math.round(average(tracked.map((day) => day.consumed - day.burned)))
+      : null,
     daysOnGoal: logs.filter(
       (log) => Math.abs(log.consumedKcal - calorieGoal) <= GOAL_TOLERANCE,
     ).length,
@@ -86,12 +85,14 @@ export function historySummary(
   };
 }
 
-/** Dias com consumo ou atividade; as médias consideram só os dias com dados de atividade. */
+/**
+ * Dias com consumo ou atividade; as médias consideram só os dias com dados de atividade. Dia sem
+ * dados de atividade: gasto e fonte `null`.
+ */
 export function activityHistory(
   dates: string[],
   logs: Map<string, DayLog>,
   activity: Map<string, ActivityDay>,
-  estimatedBurn: number | null,
 ): ActivityHistory {
   const days = dates
     .filter((date) => logs.has(date) || activity.has(date))
@@ -100,12 +101,12 @@ export function activityHistory(
       return {
         date,
         consumed: logs.get(date)?.consumedKcal ?? 0,
-        burned: day?.burned ?? estimatedBurn ?? 0,
+        burned: day?.burned ?? null,
         activeCalories: day?.activeCalories ?? 0,
         steps: day?.steps ?? 0,
         activeMinutes: day?.activeMinutes ?? 0,
         distanceKm: day?.distanceKm ?? 0,
-        source: day?.source ?? ESTIMATED_SOURCE,
+        source: day?.source ?? null,
       };
     });
   const tracked = dates.flatMap((date) => activity.get(date) ?? []);

@@ -637,8 +637,10 @@ O front pede `days` = 7, 30 ou 90. Dias do mais antigo para o mais recente, o ú
 }
 ```
 
-Médias arredondadas; `avgBalance` = consumida − gasta. Um dia está "dentro da meta" quando o consumo fica a
-até `goalTolerance` (150) kcal da meta calórica.
+Médias arredondadas. `avgConsumed` usa os dias com registro de consumo; `avgBurned` e `avgBalance` (consumida −
+gasta), só os que também têm dados de atividade (Google Fit / Apple Saúde). Sem nenhum (Google não conectado, ou
+nenhum dia importado no período), os dois vêm `null`: não há estimativa de gasto. Um dia está "dentro da meta"
+quando o consumo fica a até `goalTolerance` (150) kcal da meta calórica.
 
 ### `GET /history/activity?days=N` → `ActivityHistory`
 
@@ -661,7 +663,8 @@ até `goalTolerance` (150) kcal da meta calórica.
 }
 ```
 
-Médias por dia e distância total arredondadas para inteiro.
+Médias por dia e distância total arredondadas para inteiro. `days` traz os dias com consumo ou atividade; no
+dia sem dados de atividade, `burned` e `source` vêm `null` e o resto da atividade, 0.
 
 ### `GET /history/nutrients/{id}?days=N` → `NutrientHistory`
 
@@ -734,8 +737,7 @@ Histórico de **planos** (não de dias), do mais recente para o mais antigo (at�
 
 ```json
 [
-  { "name": "Google Fit", "platform": "Android", "connected": true, "lastSync": "2026-09-28T01:14:00.000Z" },
-  { "name": "Apple Saúde", "platform": "iOS", "connected": false, "lastSync": null }
+  { "name": "Google Fit", "platform": "Android", "connected": true, "lastSync": "2026-09-28T01:14:00.000Z" }
 ]
 ```
 

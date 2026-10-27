@@ -1153,8 +1153,8 @@ describe('nutrientes e histórico', () => {
     const summary = await http('get', '/history/summary?days=7').expect(200);
     expect(summary.body).toEqual({
       avgConsumed: planKcal,
-      avgBurned: 2163,
-      avgBalance: planKcal - 2163,
+      avgBurned: null,
+      avgBalance: null,
       daysOnGoal: 1,
       totalDays: 1,
       calorieGoal: 1660,
@@ -1164,6 +1164,7 @@ describe('nutrientes e histórico', () => {
 
     const activity = await http('get', '/history/activity?days=7').expect(200);
     expect(activity.body.days).toHaveLength(1);
+    expect(activity.body.days[0]).toMatchObject({ burned: null, source: null });
 
     const protein = await http(
       'get',
@@ -1201,7 +1202,7 @@ describe('nutrientes e histórico', () => {
     const sources = await http('get', '/activity-sources').expect(200);
     expect(
       sources.body.map((source: { connected: boolean }) => source.connected),
-    ).toEqual([false, false]);
+    ).toEqual([false]);
   });
 });
 

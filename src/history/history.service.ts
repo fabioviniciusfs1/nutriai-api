@@ -77,7 +77,6 @@ export class HistoryService {
       logs,
       logsByDate: new Map(logs.map((log) => [log.date, log])),
       activityByDate: new Map(activity.map((day) => [day.date, day])),
-      estimatedBurn: targets?.tdee ?? null,
       calorieGoal: targets?.calories ?? DEFAULT_CALORIE_GOAL,
     };
   }
@@ -89,12 +88,7 @@ export class HistoryService {
   ): Promise<HistorySummary> {
     await this.health.syncIfStale(userId, clock);
     const data = await this.window(userId, clock, days);
-    return historySummary(
-      data.logs,
-      data.activityByDate,
-      data.estimatedBurn,
-      data.calorieGoal,
-    );
+    return historySummary(data.logs, data.activityByDate, data.calorieGoal);
   }
 
   async activity(
@@ -104,12 +98,7 @@ export class HistoryService {
   ): Promise<ActivityHistory> {
     await this.health.syncIfStale(userId, clock);
     const data = await this.window(userId, clock, days);
-    return activityHistory(
-      data.dates,
-      data.logsByDate,
-      data.activityByDate,
-      data.estimatedBurn,
-    );
+    return activityHistory(data.dates, data.logsByDate, data.activityByDate);
   }
 
   async nutrient(
@@ -200,13 +189,6 @@ export class HistoryService {
         platform: 'Android',
         connected: google !== null,
         lastSync: google?.lastSync?.toISOString() ?? null,
-      },
-      // Apple Saúde não tem API web: só um app iOS poderia enviar os dados.
-      {
-        name: 'Apple Saúde',
-        platform: 'iOS',
-        connected: false,
-        lastSync: null,
       },
     ];
   }

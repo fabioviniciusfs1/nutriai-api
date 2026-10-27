@@ -122,7 +122,7 @@ npx vitest run -t "não gosto"                     # por nome do teste
   (`HealthSyncScheduler`: `HEALTH_SYNC_CRON`, padrão `0 3 * * *`, fuso `HEALTH_SYNC_TIMEZONE`; `off`
   desliga). Nunca importa antes do dia 0 (`google_accounts.start_date`, o dia em que o Google foi
   conectado); depois dele, busca desde o dia da última sincronização (mínimo 7, máximo 90 dias). Nunca
-  quebra a rota se falhar. Sem dados de atividade, o gasto do dia é o `tdee` do perfil.
+  quebra a rota se falhar. Sem dados de atividade, o gasto do dia é `null` (sem estimativa pelo perfil).
 - `src/chat/`: Claude (`claude-haiku-5-5`, o mais barato) com o contexto do usuário; sem `ANTHROPIC_API_KEY` o chat responde 503.
   `CHAT_ENABLED=false` não registra o `ChatModule` (rotas `/chat/*` dão 404; o código e a tabela ficam); no front, o
   mesmo papel é do `NEXT_PUBLIC_CHAT_ENABLED` (em produção, `docker-compose.prod.yml` passa o `CHAT_ENABLED` para os dois).

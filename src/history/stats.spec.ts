@@ -37,22 +37,30 @@ describe('history stats', () => {
     ]);
   });
 
-  it('resumo usa o gasto estimado nos dias sem atividade', () => {
+  it('resumo: gasto e saldo só dos dias com atividade', () => {
     const logs = [log('2026-09-27', 1600), log('2026-09-28', 2000)];
     const summary = historySummary(
       logs,
       new Map([['2026-09-28', activity('2026-09-28', 2400)]]),
-      2100,
       1660,
     );
     expect(summary).toEqual({
       avgConsumed: 1800,
-      avgBurned: 2250,
-      avgBalance: -450,
+      avgBurned: 2400,
+      avgBalance: -400,
       daysOnGoal: 1,
       totalDays: 2,
       calorieGoal: 1660,
       goalTolerance: 150,
+    });
+  });
+
+  it('resumo sem dados de atividade: sem gasto nem saldo', () => {
+    const summary = historySummary([log('2026-09-28', 2000)], new Map(), 1660);
+    expect(summary).toMatchObject({
+      avgConsumed: 2000,
+      avgBurned: null,
+      avgBalance: null,
     });
   });
 
@@ -65,13 +73,12 @@ describe('history stats', () => {
         ['2026-09-26', activity('2026-09-26', 2300)],
         ['2026-09-28', activity('2026-09-28', 2400)],
       ]),
-      2000,
     );
     expect(
       result.days.map((day) => [day.date, day.burned, day.source]),
     ).toEqual([
       ['2026-09-26', 2300, 'Google Health'],
-      ['2026-09-27', 2000, 'Estimativa do perfil'],
+      ['2026-09-27', null, null],
       ['2026-09-28', 2400, 'Google Health'],
     ]);
     expect(result.averages).toEqual({

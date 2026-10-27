@@ -299,9 +299,10 @@ export type NutrientGroup = {
 
 export type HistorySummary = {
   avgConsumed: number;
-  avgBurned: number;
-  /** Consumida − gasta; negativo = déficit. */
-  avgBalance: number;
+  /** Média dos dias com consumo e dados de atividade; `null` sem nenhum (Google não conectado). */
+  avgBurned: number | null;
+  /** Consumida − gasta nesses mesmos dias; negativo = déficit. `null` junto com `avgBurned`. */
+  avgBalance: number | null;
   daysOnGoal: number;
   totalDays: number;
   calorieGoal: number;
@@ -314,12 +315,14 @@ export type ActivityDay = {
   /** "AAAA-MM-DD" */
   date: string;
   consumed: number;
-  burned: number;
+  /** `null` no dia sem dados de atividade. */
+  burned: number | null;
   activeCalories: number;
   steps: number;
   activeMinutes: number;
   distanceKm: number;
-  source: string;
+  /** `null` no dia sem dados de atividade. */
+  source: string | null;
 };
 
 export type ActivityHistory = {
