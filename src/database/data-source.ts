@@ -15,6 +15,7 @@ import { Tbca1791100000000 } from './migrations/1791100000000-tbca.js';
 import { DietSettings1791200000000 } from './migrations/1791200000000-diet-settings.js';
 import { LlmCalls1791300000000 } from './migrations/1791300000000-llm-calls.js';
 import { PlanVersions1791400000000 } from './migrations/1791400000000-plan-versions.js';
+import { PlanVersionChanges1791500000000 } from './migrations/1791500000000-plan-version-changes.js';
 
 /** Migrations em ordem; as novas entram no fim da lista. */
 export const MIGRATIONS = [
@@ -33,6 +34,7 @@ export const MIGRATIONS = [
   DietSettings1791200000000,
   LlmCalls1791300000000,
   PlanVersions1791400000000,
+  PlanVersionChanges1791500000000,
 ];
 
 export function dataSourceOptions(url: string): DataSourceOptions {

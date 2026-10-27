@@ -6,7 +6,11 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import type { MealSlot, PlanHistoryFood } from '../../contract.js';
+import type {
+  MealSlot,
+  PlanHistoryEdit,
+  PlanHistoryFood,
+} from '../../contract.js';
 
 /** Refeição numa versão do plano (`id` da refeição base, para comparar versões). */
 export type PlanVersionMeal = {
@@ -57,6 +61,10 @@ export class PlanVersionEntity {
 
   @Column('jsonb')
   totals: PlanVersionTotals;
+
+  /** Alterações nessa versão, da mais recente para a mais antiga; `null` nas gravadas antes do horário. */
+  @Column('jsonb', { nullable: true })
+  changes: PlanHistoryEdit[] | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;

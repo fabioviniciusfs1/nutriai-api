@@ -22,7 +22,7 @@ import {
 } from '../database/entities/index.js';
 import { GOOGLE_SOURCE, HealthService } from '../health/health.service.js';
 import { nutrientGoal } from '../nutrition/nutrient-goals.js';
-import { planChanges } from '../plan/plan-versions.js';
+import { appendEdits } from '../plan/plan-versions.js';
 import { PlanService } from '../plan/plan.service.js';
 import { calculateTargets, DEFAULT_CALORIE_GOAL } from '../targets/targets.js';
 import { UsersService } from '../users/users.service.js';
@@ -167,10 +167,11 @@ export class HistoryService {
           kcal,
           foods,
         })),
-        changes:
-          version.edited && previous
-            ? planChanges(previous.meals, version.meals)
-            : [],
+        // Versões de antes do horário: as alterações calculadas, sem horário.
+        changes: !version.edited
+          ? []
+          : (version.changes ??
+            (previous ? appendEdits(previous.meals, version.meals, null) : [])),
       };
     });
   }

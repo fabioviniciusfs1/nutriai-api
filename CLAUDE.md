@@ -143,8 +143,10 @@ npx vitest run -t "não gosto"                     # por nome do teste
 - Histórico de planos (`plan_versions`, `GET /history/plans`): o `PlanVersionService` grava, junto da foto do dia
   em `withPlanner`, a versão do plano quando os alimentos ou as gramas mudam (o horário não conta; nada enquanto a
   personalização está `pending`). A primeira é a montada (`edited: false`); depois, no máximo uma alterada por dia,
-  que as outras mudanças do mesmo dia editam (`nextPlanVersion` em `src/plan/plan-versions.ts`). O que mudou entre
-  duas versões é calculado na leitura (`planChanges`).
+  que as outras mudanças do mesmo dia editam (`nextPlanVersion` em `src/plan/plan-versions.ts`). Cada mudança grava
+  as alterações dela com o horário em `plan_versions.changes` (`appendEdits`, sobre o `planChanges` entre o antes e
+  o depois; da mais recente para a mais antiga). Versões de antes do campo (`changes` `null`) mostram o
+  `planChanges` da anterior para ela, sem horário.
 
 ## Contrato com o front
 

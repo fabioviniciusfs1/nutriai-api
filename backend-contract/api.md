@@ -689,8 +689,13 @@ Histórico de **planos** (não de dias), do mais recente para o mais antigo (at�
   editam esse plano. Se o usuário desfaz no dia tudo o que mudou, o alterado do dia some. Mudar só o horário de
   uma refeição não conta (o plano guarda os horários do momento em que foi gravado).
 - `totals`: kcal, proteína, carboidrato, gordura e fibra do plano, em gramas inteiras.
-- `changes`: o que mudou em relação ao plano anterior, por refeição. `swap` (um alimento no lugar de outro),
-  `added`, `removed` e `grams` (o mesmo alimento com outra quantidade). Vazio no plano montado.
+- `changes`: as alterações feitas nesse plano, **uma por mudança do usuário**, da mais recente para a mais
+  antiga, cada uma com a refeição, o tipo — `swap` (um alimento no lugar de outro), `added`, `removed` e `grams` (o
+  mesmo alimento com outra quantidade) — e o horário (`at`, ISO 8601). É um registro: trocar um alimento e depois
+  mudar as gramas dele no mesmo dia são duas alterações. Planos gravados antes do horário existir trazem o que
+  mudou em relação ao plano anterior, com `at: null`. Vazio no plano montado. O front mostra as alterações ao
+  abrir o plano, depois das refeições: uma página por dia com alterações (do dia do plano para os anteriores),
+  com o horário de cada uma.
 
 ```json
 [
@@ -714,7 +719,8 @@ Histórico de **planos** (não de dias), do mais recente para o mais antigo (at�
         "meal": "Omelete de Queijo com Mamão e Pão",
         "kind": "swap",
         "from": { "name": "Pão, trigo, francês", "grams": 50 },
-        "to": { "name": "Tapioca, goma hidratada", "grams": 60 }
+        "to": { "name": "Tapioca, goma hidratada", "grams": 60 },
+        "at": "2026-10-26T17:32:00.000Z"
       }
     ]
   }

@@ -1307,6 +1307,15 @@ describe('histórico de planos', () => {
     expect(list[0].changes.map((change) => change.kind)).toEqual(
       expect.arrayContaining(['swap', 'added']),
     );
+    // Uma alteração por mudança, com o horário, da mais recente para a mais antiga.
+    expect(list[0].changes[0]).toMatchObject({
+      kind: 'added',
+      to: expect.objectContaining({ name: BANANA, grams: 150 }),
+    });
+    const times = list[0].changes.map((change) => change.at!);
+    expect(times.every((at) => !Number.isNaN(Date.parse(at)))).toBe(true);
+    expect([...times].sort().reverse()).toEqual(times);
+    expect(times[0] > times.at(-1)!).toBe(true);
 
     // No dia seguinte, a mudança vira outro plano.
     await app

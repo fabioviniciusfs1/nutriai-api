@@ -1,5 +1,5 @@
 import type { PlanVersionMeal } from '../database/entities/index.js';
-import { nextPlanVersion, planChanges } from './plan-versions.js';
+import { appendEdits, nextPlanVersion, planChanges } from './plan-versions.js';
 
 const meal = (
   id: number,
@@ -126,5 +126,48 @@ describe('planChanges', () => {
       ['swap', 'Pão', 'Tapioca'],
       ['swap', 'Queijo', 'Ricota'],
     ]);
+  });
+});
+
+describe('appendEdits', () => {
+  it('põe as alterações novas, com o horário, na frente das que já havia', () => {
+    const before = [meal(1, [['Arroz', 100]])];
+    const after = [
+      meal(1, [
+        ['Arroz', 120],
+        ['Banana', 60],
+      ]),
+    ];
+    const log = appendEdits([meal(1, [['Feijão', 80]])], before, null);
+    expect(appendEdits(before, after, '2026-10-26T14:32:00.000Z', log)).toEqual(
+      [
+        {
+          meal: 'Refeição 1',
+          kind: 'added',
+          from: null,
+          to: { name: 'Banana', grams: 60 },
+          at: '2026-10-26T14:32:00.000Z',
+        },
+        {
+          meal: 'Refeição 1',
+          kind: 'grams',
+          from: { name: 'Arroz', grams: 100 },
+          to: { name: 'Arroz', grams: 120 },
+          at: '2026-10-26T14:32:00.000Z',
+        },
+        {
+          meal: 'Refeição 1',
+          kind: 'swap',
+          from: { name: 'Feijão', grams: 80 },
+          to: { name: 'Arroz', grams: 100 },
+          at: null,
+        },
+      ],
+    );
+  });
+
+  it('sem mudança não acrescenta nada', () => {
+    const meals = [meal(1, [['Arroz', 100]])];
+    expect(appendEdits(meals, meals, '2026-10-26T14:32:00.000Z')).toEqual([]);
   });
 });

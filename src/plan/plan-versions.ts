@@ -2,6 +2,7 @@
 import type {
   MealSlot,
   PlanHistoryChange,
+  PlanHistoryEdit,
   PlanHistoryFood,
   PlanMeal,
 } from '../contract.js';
@@ -119,4 +120,20 @@ export function planChanges(
     for (const from of meal.foods)
       changes.push({ meal: meal.title, kind: 'removed', from, to: null });
   return changes;
+}
+
+/**
+ * As alterações de `before` para `after`, com o horário `at` (`null` = sem horário, versões de antes dele),
+ * na frente do `log` da versão: a lista fica da mais recente para a mais antiga.
+ */
+export function appendEdits(
+  before: PlanVersionMeal[],
+  after: PlanVersionMeal[],
+  at: string | null,
+  log: PlanHistoryEdit[] = [],
+): PlanHistoryEdit[] {
+  return [
+    ...planChanges(before, after).map((change) => ({ ...change, at })),
+    ...log,
+  ];
 }
