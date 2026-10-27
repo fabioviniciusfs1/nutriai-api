@@ -14,6 +14,8 @@ import {
   type UserClock,
 } from '../common/timezone.js';
 import type {
+  CalorieAdjustment,
+  CalorieStep,
   DietAdjustment,
   DietEstimateRequest,
   DietSettings,
@@ -29,9 +31,16 @@ import {
 } from '../database/entities/index.js';
 import {
   calculateTargets,
+  MINIMUM_CALORIES,
   projectWeight,
   targetWeightError,
 } from '../targets/targets.js';
+import {
+  calorieAdvice,
+  goalForTarget,
+  stepCalories,
+  weeklyChange,
+} from '../targets/calorie-advice.js';
 import {
   adjustMacro,
   dietAdjustment,
@@ -77,8 +86,13 @@ export class UsersService {
           }
         : null,
       routine: user.routine,
-      targets: user.profile ? calculateTargets(user.profile) : null,
+      targets: user.profile
+        ? calculateTargets(user.profile, user.calorieGoal)
+        : null,
       weighInDue: await this.weighInDue(user, clock),
+      calorieAdvice: user.profile
+        ? (await this.calorieAdjustment(user, user.profile, clock)).advice
+        : null,
       // Conta criada pelo Google (sem senha) não pode desconectar: seria o único jeito de entrar.
       google: google
         ? { email: google.email, canDisconnect: user.passwordHash !== null }
@@ -99,6 +113,11 @@ export class UsersService {
       {
         profile,
         targetWeightSetOn: targetWeightSetOn(user, profile, clock),
+        // Perfil novo: a meta volta a ser a dele, sem os ajustes de antes.
+        calorieGoal: null,
+        calorieGoalSetAt: null,
+        weightGoal: null,
+        weightGoalSetAt: null,
       },
     );
     if (!result.affected)
@@ -116,16 +135,43 @@ export class UsersService {
     if (!user.profile)
       throw new BadRequestException('Preencha o perfil primeiro.');
     const profile: Profile = { ...user.profile, targetWeightKg };
-    const error = targetWeightError(profile);
-    if (error) throw new BadRequestException(error);
+    // O peso meta decide o objetivo: acima do peso atual, ganhar; abaixo, perder.
+    let weightGoal: UserEntity['weightGoal'] = null;
+    if (targetWeightKg === null) {
+      const error = targetWeightError(profile);
+      if (error) throw new BadRequestException(error);
+    } else {
+      weightGoal = goalForTarget(
+        targetWeightKg,
+        await this.currentWeight(user),
+      );
+      if (!weightGoal)
+        throw new BadRequestException(
+          'O peso meta deve ser diferente do peso atual.',
+        );
+    }
+    const turned =
+      weightGoal !== null && weightGoal !== (user.weightGoal ?? profile.goal);
     await this.users.update(
       { id: userId },
       {
         profile,
         targetWeightSetOn: targetWeightSetOn(user, profile, clock),
+        weightGoal,
+        // O objetivo virou: o ajuste das calorias sugere na hora a direção nova.
+        weightGoalSetAt: turned ? new Date() : user.weightGoalSetAt,
       },
     );
     return this.me(userId, clock);
+  }
+
+  /** Peso atual: a última pesagem; sem pesagem, o do perfil. */
+  private async currentWeight(user: UserEntity): Promise<number> {
+    const latest = await this.weights.findOne({
+      where: { userId: user.id },
+      order: { at: 'DESC' },
+    });
+    return latest?.kg ?? user.profile!.weightKg;
   }
 
   /**
@@ -143,7 +189,19 @@ export class UsersService {
       saved !== null && saved === profile.targetWeightKg
         ? (user.targetWeightSetOn ?? clock.today)
         : clock.today;
-    const result = projectWeight(profile, startDate);
+    // Peso meta do perfil salvo, depois do cadastro: parte do peso atual, no objetivo que o peso meta decide (acima, ganhar).
+    let projected = profile;
+    if (
+      user.routine &&
+      user.profile &&
+      profile.targetWeightKg !== null &&
+      sameBody(user.profile, profile)
+    ) {
+      const weightKg = await this.currentWeight(user);
+      const goal = goalForTarget(profile.targetWeightKg, weightKg);
+      if (goal) projected = { ...profile, weightKg, goal };
+    }
+    const result = projectWeight(projected, startDate, user.calorieGoal);
     if (typeof result === 'string') throw new BadRequestException(result);
     return result;
   }
@@ -174,7 +232,11 @@ export class UsersService {
   /** Ajuste da dieta salvo, com as contas feitas. */
   async diet(userId: string): Promise<DietAdjustment> {
     const { user, profile } = await this.profileOf(userId);
-    return dietAdjustment(profile, dietSettingsOf(user.dietSettings));
+    return dietAdjustment(
+      profile,
+      dietSettingsOf(user.dietSettings),
+      user.calorieGoal,
+    );
   }
 
   /** O ajuste com a mudança de um macro (e a compensação), sem salvar. */
@@ -190,7 +252,14 @@ export class UsersService {
     };
     return dietAdjustment(
       profile,
-      adjustMacro(profile, current, request.macro, request.perKg),
+      adjustMacro(
+        profile,
+        current,
+        request.macro,
+        request.perKg,
+        user.calorieGoal,
+      ),
+      user.calorieGoal,
     );
   }
 
@@ -199,17 +268,94 @@ export class UsersService {
     userId: string,
     settings: DietSettings,
   ): Promise<DietAdjustment> {
-    const profile = await this.checkDiet(userId, settings);
+    const { user, profile } = await this.checkDiet(userId, settings);
     await this.users.update({ id: userId }, { dietSettings: settings });
-    return dietAdjustment(profile, settings);
+    return dietAdjustment(profile, settings, user.calorieGoal);
   }
 
-  /** Confere o ajuste da dieta (como ao salvar) e devolve o perfil. */
-  async checkDiet(userId: string, settings: DietSettings): Promise<Profile> {
-    const { profile } = await this.profileOf(userId);
-    const error = dietSettingsError(profile, settings);
+  /** Confere o ajuste da dieta (como ao salvar) e devolve o usuário e o perfil. */
+  async checkDiet(userId: string, settings: DietSettings) {
+    const { user, profile } = await this.profileOf(userId);
+    const error = dietSettingsError(profile, settings, user.calorieGoal);
     if (error) throw new BadRequestException(error);
-    return profile;
+    return { user, profile };
+  }
+
+  /** Ajuste das calorias: a meta em vigor, o que cada botão faz e a sugestão pelas pesagens. */
+  async calories(userId: string, clock: UserClock): Promise<CalorieAdjustment> {
+    const { user, profile } = await this.profileOf(userId);
+    return this.calorieAdjustment(user, profile, clock);
+  }
+
+  /**
+   * "+10%" ou "−10%" na meta em vigor; vale na hora para o plano e as metas. Aumentar depois de chegar ao peso
+   * meta (perdendo) passa o objetivo para ganhar peso.
+   */
+  async stepCalories(
+    userId: string,
+    direction: CalorieStep,
+    clock: UserClock,
+  ): Promise<CalorieAdjustment> {
+    const { user, profile } = await this.profileOf(userId);
+    const current = await this.calorieAdjustment(user, profile, clock);
+    const calorieGoal =
+      direction === 'increase' ? current.increaseTo : current.decreaseTo;
+    if (calorieGoal === current.calories)
+      throw new BadRequestException('A meta já está no mínimo de calorias.');
+    const changes: Partial<UserEntity> = {
+      calorieGoal,
+      calorieGoalSetAt: new Date(),
+    };
+    await this.users.update({ id: userId }, changes);
+    return this.calorieAdjustment(Object.assign(user, changes), profile, clock);
+  }
+
+  private async calorieAdjustment(
+    user: UserEntity,
+    profile: Profile,
+    { today, timeZone }: UserClock,
+  ): Promise<CalorieAdjustment> {
+    const weights = await this.weights.find({
+      where: { userId: user.id },
+      order: { at: 'ASC' },
+    });
+    const { calories } = calculateTargets(profile, user.calorieGoal);
+    const minimum = MINIMUM_CALORIES[profile.sex];
+    const goal = user.weightGoal ?? profile.goal;
+    // Só contam as pesagens do dia do último ajuste das calorias e da última virada do objetivo em diante.
+    const changes = [user.calorieGoalSetAt, user.weightGoalSetAt].filter(
+      (at) => at !== null,
+    );
+    const since = changes.length
+      ? localDate(
+          new Date(Math.max(...changes.map((at) => at.getTime()))),
+          timeZone,
+        )
+      : null;
+    const weeklyChangeKg = weeklyChange(weights, since, today, timeZone);
+    // O objetivo virou e as calorias ainda não foram ajustadas desde então.
+    const turned =
+      user.weightGoalSetAt !== null &&
+      (user.calorieGoalSetAt === null ||
+        user.calorieGoalSetAt < user.weightGoalSetAt);
+    return {
+      calories,
+      profileCalories: calculateTargets(profile).calories,
+      minimum,
+      decreaseTo: stepCalories(calories, 'decrease', minimum),
+      increaseTo: stepCalories(calories, 'increase', minimum),
+      goal,
+      weeklyChangeKg,
+      advice: calorieAdvice({
+        goal,
+        targetWeightKg: profile.targetWeightKg ?? null,
+        weights,
+        weeklyChangeKg,
+        turned,
+        calories,
+        minimum,
+      }),
+    };
   }
 
   /** Hoje é o dia de pesagem da rotina e ainda não há peso registrado hoje (no fuso do usuário). */
@@ -237,4 +383,16 @@ function targetWeightSetOn(
   return unchanged && user.targetWeightSetOn
     ? user.targetWeightSetOn
     : clock.today;
+}
+
+/** Os mesmos dados do corpo e de atividade (o perfil salvo, com outro peso meta). */
+function sameBody(saved: Profile, profile: Profile): boolean {
+  return (
+    saved.sex === profile.sex &&
+    saved.age === profile.age &&
+    saved.weightKg === profile.weightKg &&
+    saved.heightCm === profile.heightCm &&
+    saved.activityLevel === profile.activityLevel &&
+    saved.goal === profile.goal
+  );
 }

@@ -96,6 +96,8 @@ export type Me = {
   targets: Targets | null;
   /** Hoje é o dia de pesagem da rotina e ainda não há peso registrado hoje. */
   weighInDue: boolean;
+  /** Sugestão do ajuste das calorias (ver `CalorieAdjustment`); `null` sem sugestão. */
+  calorieAdvice: CalorieAdvice | null;
   /**
    * Conta Google conectada (dá acesso à Google Health API); `null` se não houver.
    * `canDisconnect` é `false` quando o Google é o único jeito de entrar (conta criada pelo Google).
@@ -142,6 +144,43 @@ export type DietAdjustment = {
   /** Até onde cada macro pode ir (g/kg): o front desabilita − e + nos limites. */
   minPerKg: Record<MacroId, number>;
   maxPerKg: Record<MacroId, number>;
+};
+
+/** Botão do ajuste das calorias: +10% ou −10% da meta em vigor. */
+export type CalorieStep = "increase" | "decrease";
+
+/** Corpo de `POST /me/calories`. */
+export type CalorieStepRequest = { direction: CalorieStep };
+
+/**
+ * Sugestão do sistema pelas pesagens e pelo peso meta (card do ajuste das calorias e central de notificações):
+ * `decrease` = o peso parou de cair, ou o novo peso meta virou o objetivo para perder (−10%); `increase` = o peso
+ * parou de subir, ou o novo peso meta virou o objetivo para ganhar (+10%); `reached` = chegou ao peso meta
+ * (escolher um novo: acima do peso atual para ganhar, abaixo para perder); `floor` = sugeriria −10%, mas a meta
+ * já está no mínimo.
+ */
+export type CalorieAdvice = {
+  kind: "decrease" | "increase" | "reached" | "floor";
+  title: string;
+  text: string;
+};
+
+/** Ajuste das calorias (`/me/calories`): a meta em vigor, o que cada botão faz e a sugestão do sistema. */
+export type CalorieAdjustment = {
+  /** Meta calórica em vigor (vale para o plano, `/nutrition/today`, o histórico, `/me/diet` e a projeção). */
+  calories: number;
+  /** A meta calculada pelo perfil, sem ajuste. */
+  profileCalories: number;
+  /** Piso da meta (1200 kcal para mulheres, 1500 para homens). */
+  minimum: number;
+  /** Meta depois de "−10%" e de "+10%" (em dezenas; `decreaseTo` nunca abaixo de `minimum`). */
+  decreaseTo: number;
+  increaseTo: number;
+  /** O objetivo de agora: pelo último peso meta (acima do peso atual = ganhar, abaixo = perder); sem ele, o do perfil. */
+  goal: Goal;
+  /** Variação do peso na última semana (kg, uma casa), desde o último ajuste ou virada; `null` sem duas pesagens assim. */
+  weeklyChangeKg: number | null;
+  advice: CalorieAdvice | null;
 };
 
 /** Corpo de `POST /me/diet/estimate`: o ajuste atual e o novo valor (g/kg) do macro que o usuário mudou. */

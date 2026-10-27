@@ -26,7 +26,7 @@ const GOAL_ADJUSTMENTS: Record<Goal, number> = {
 };
 
 /** Pisos usuais para dietas sem acompanhamento médico. */
-const MINIMUM_CALORIES: Record<Sex, number> = {
+export const MINIMUM_CALORIES: Record<Sex, number> = {
   feminino: 1200,
   masculino: 1500,
 };
@@ -34,7 +34,14 @@ const MINIMUM_CALORIES: Record<Sex, number> = {
 /** Água: 35 ml por kg de peso. */
 const WATER_ML_PER_KG = 35;
 
-export function calculateTargets(profile: Profile): Targets {
+/**
+ * Metas do perfil. `calorieGoal` é a meta calórica ajustada pelo usuário (±10%, `users.calorie_goal`); `null` =
+ * a calculada pelo perfil.
+ */
+export function calculateTargets(
+  profile: Profile,
+  calorieGoal: number | null = null,
+): Targets {
   // Mifflin-St Jeor
   const bmr =
     10 * profile.weightKg +
@@ -45,7 +52,7 @@ export function calculateTargets(profile: Profile): Targets {
   const adjusted = tdee + GOAL_ADJUSTMENTS[profile.goal];
   const minimum = MINIMUM_CALORIES[profile.sex];
   return {
-    calories: Math.max(minimum, Math.round(adjusted / 10) * 10),
+    calories: calorieGoal ?? Math.max(minimum, Math.round(adjusted / 10) * 10),
     bmr: Math.round(bmr),
     tdee: Math.round(tdee),
     // Em litros com uma casa decimal.
@@ -88,6 +95,7 @@ export function targetWeightError(profile: Profile): string | null {
 export function projectWeight(
   profile: Profile,
   startDate: string,
+  calorieGoal: number | null = null,
 ): WeightProjection | string {
   const error = targetWeightError(profile);
   if (error) return error;
@@ -95,10 +103,15 @@ export function projectWeight(
   if (targetWeightKg === null)
     return 'Com o objetivo de manter o peso, não há peso meta.';
 
-  const { calories, tdee } = calculateTargets(profile);
+  const { calories, tdee } = calculateTargets(profile, calorieGoal);
   // Com a meta no piso, o gasto pode ficar abaixo dela: comendo a meta, o peso não cai.
   if (profile.goal === 'perder' && calories >= tdee)
-    return 'Com a meta mínima de calorias, não dá para estimar quando o peso meta chega. Procure um nutricionista.';
+    return calorieGoal === null
+      ? 'Com a meta mínima de calorias, não dá para estimar quando o peso meta chega. Procure um nutricionista.'
+      : 'Com a meta de calorias de agora, o peso não cai. Ajuste as calorias em "Ajuste da dieta".';
+  // A meta ajustada (ex.: logo depois de virar para ganhar peso) pode ainda estar abaixo do gasto.
+  if (profile.goal === 'ganhar' && calories <= tdee)
+    return 'Com a meta de calorias de agora, o peso não sobe. Ajuste as calorias em "Ajuste da dieta".';
   const kgPerMonth = ((calories - tdee) / KCAL_PER_KG) * DAYS_PER_MONTH;
   const exactMonths = (targetWeightKg - profile.weightKg) / kgPerMonth;
   const points: WeightProjection['points'] = [];
@@ -141,8 +154,9 @@ export function macroTargets(
     proteinPerKg: PROTEIN_G_PER_KG,
     fatPerKg: FAT_G_PER_KG,
   },
+  calorieGoal: number | null = null,
 ) {
-  const { calories } = calculateTargets(profile);
+  const { calories } = calculateTargets(profile, calorieGoal);
   const protein = profile.weightKg * perKg.proteinPerKg;
   const fat = profile.weightKg * perKg.fatPerKg;
   const carbs = Math.max(0, (calories - protein * 4 - fat * 9) / 4);

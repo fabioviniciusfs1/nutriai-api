@@ -115,11 +115,14 @@ export class PlanService {
     userId: string,
     settings?: DietSettings,
   ): Promise<PlannerOptions> {
-    const { profile, routine, dietSettings } = await this.users.get(userId);
+    const { profile, routine, dietSettings, calorieGoal } =
+      await this.users.get(userId);
     const diet = settings ?? dietSettingsOf(dietSettings);
-    const macros = profile ? macroTargets(profile, diet) : null;
+    const macros = profile ? macroTargets(profile, diet, calorieGoal) : null;
     return {
-      calorieGoal: profile ? calculateTargets(profile).calories : null,
+      calorieGoal: profile
+        ? calculateTargets(profile, calorieGoal).calories
+        : null,
       macroGoals: macros && {
         protein: macros.proteinas,
         fat: macros.gorduras,

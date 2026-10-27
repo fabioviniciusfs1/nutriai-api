@@ -11,12 +11,14 @@ export function nutrientGoal(
   def: NutrientDefEntity,
   profile: Profile | null,
   dietSettings: DietSettings | null,
+  calorieGoal: number | null = null,
 ): number {
   if (profile && def.section === 'macros') {
-    const goals = macroTargets(profile, dietSettingsOf(dietSettings)) as Record<
-      string,
-      number
-    >;
+    const goals = macroTargets(
+      profile,
+      dietSettingsOf(dietSettings),
+      calorieGoal,
+    ) as Record<string, number>;
     if (goals[def.id] !== undefined) return goals[def.id];
   }
   return def.meta;

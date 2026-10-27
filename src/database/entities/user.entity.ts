@@ -37,6 +37,25 @@ export class UserEntity {
   @Column('date', { name: 'target_weight_set_on', nullable: true })
   targetWeightSetOn: string | null;
 
+  /** Meta calórica ajustada pelo usuário (±10%, `POST /me/calories`); `null` = a calculada pelo perfil. */
+  @Column('int', { name: 'calorie_goal', nullable: true })
+  calorieGoal: number | null;
+
+  /** Quando foi o último ajuste das calorias: as sugestões só olham as pesagens a partir desse dia. */
+  @Column('timestamptz', { name: 'calorie_goal_set_at', nullable: true })
+  calorieGoalSetAt: Date | null;
+
+  /**
+   * Objetivo de agora pelo último peso meta salvo (`PUT /me/target-weight`): acima do peso atual = ganhar, abaixo =
+   * perder. `null` = o objetivo do perfil.
+   */
+  @Column('text', { name: 'weight_goal', nullable: true })
+  weightGoal: 'perder' | 'ganhar' | null;
+
+  /** Quando o objetivo virou (de perder para ganhar ou o contrário): o ajuste das calorias sugere na hora. */
+  @Column('timestamptz', { name: 'weight_goal_set_at', nullable: true })
+  weightGoalSetAt: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt: Date;
 }

@@ -19,6 +19,18 @@ const ana: Profile = {
 };
 
 describe('calculateTargets', () => {
+  it('a meta ajustada pelo usuário substitui a do perfil', () => {
+    expect(calculateTargets(ana, 1490)).toMatchObject({
+      calories: 1490,
+      tdee: 2163,
+    });
+    // Os macros fecham na meta ajustada.
+    const grams = macroTargets(ana, undefined, 1490);
+    expect(
+      grams.proteinas * 4 + grams.carboidratos * 4 + grams.gorduras * 9,
+    ).toBeCloseTo(1490, -1);
+  });
+
   it('reproduz o exemplo do contrato', () => {
     expect(calculateTargets(ana)).toEqual({
       calories: 1660,

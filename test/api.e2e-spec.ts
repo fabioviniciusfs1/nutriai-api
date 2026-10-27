@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 import type {
+  CalorieAdjustment,
   DietAdjustment,
   DietPreview,
   MealTimeCheck,
@@ -241,11 +242,19 @@ describe('perfil e pesos', () => {
     expect(await startDate(62.5)).toBe(today);
     // As metas continuam as do perfil.
     expect((changed.body as Me).targets?.calories).toBe(1660);
+    // Acima do peso atual (o do perfil, sem pesagem), o objetivo passa a ser ganhar peso.
     await http('put', '/me/target-weight')
       .send({ targetWeightKg: 70 })
-      .expect(400, {
-        error: 'Para perder peso, o peso meta deve ser menor que o atual.',
-      });
+      .expect(200);
+    expect(
+      (
+        (await http('get', '/me/calories').expect(200))
+          .body as CalorieAdjustment
+      ).goal,
+    ).toBe('ganhar');
+    await http('put', '/me/target-weight')
+      .send({ targetWeightKg: 68.5 })
+      .expect(400, { error: 'O peso meta deve ser diferente do peso atual.' });
     await http('put', '/me/target-weight')
       .send({ targetWeightKg: 400 })
       .expect(400, { error: 'O peso meta deve estar entre 30 e 300 kg.' });
@@ -492,6 +501,132 @@ describe('ajuste da dieta', () => {
       .find((food) => food.units !== undefined)!;
     expect(egg.name).toMatch(/^Ovo/);
     expect(egg.grams).toBe(egg.units! * 60);
+  });
+});
+
+describe('ajuste das calorias', () => {
+  it('sugere pelas pesagens e pelo peso meta, e a meta ajustada vale para o plano', async () => {
+    const { http, username } = await newUser();
+    await http('put', '/me/profile')
+      .send({ ...PROFILE, weightKg: 90, targetWeightKg: 60 })
+      .expect(200);
+    await http('put', '/me/routine').send(ROUTINE).expect(200);
+    await personalizationIdle();
+    const calories = async () =>
+      (await http('get', '/me/calories').expect(200)).body as CalorieAdjustment;
+    const weigh = (kg: number, daysAgo: number) =>
+      http('post', '/weights')
+        .send({
+          kg,
+          at: new Date(Date.now() - daysAgo * 24 * 3600 * 1000).toISOString(),
+        })
+        .expect(200);
+
+    const start = await calories();
+    expect(start).toMatchObject({
+      calories: start.profileCalories,
+      minimum: 1200,
+      goal: 'perder',
+      weeklyChangeKg: null,
+      advice: null,
+    });
+
+    // O peso não caiu na semana: o sistema sugere −10%, também na central de notificações.
+    await weigh(90, 7);
+    await weigh(89.9, 0);
+    const stalled = await calories();
+    expect(stalled.weeklyChangeKg).toBe(-0.1);
+    expect(stalled.advice).toMatchObject({ kind: 'decrease' });
+    expect(
+      ((await http('get', '/me').expect(200)).body as Me).calorieAdvice,
+    ).toMatchObject({ kind: 'decrease' });
+
+    const before = kcal((await http('get', '/plan/today').expect(200)).body);
+    const lowered = (
+      await http('post', '/me/calories')
+        .send({ direction: 'decrease' })
+        .expect(200)
+    ).body as CalorieAdjustment;
+    expect(lowered.calories).toBe(stalled.decreaseTo);
+    // Só as pesagens depois do ajuste contam: a sugestão sai.
+    expect(lowered.advice).toBeNull();
+    expect(
+      ((await http('get', '/me').expect(200)).body as Me).targets?.calories,
+    ).toBe(lowered.calories);
+    expect(
+      ((await http('get', '/me/diet').expect(200)).body as DietAdjustment)
+        .calories,
+    ).toBe(lowered.calories);
+    const after = kcal((await http('get', '/plan/today').expect(200)).body);
+    expect(after / before).toBeGreaterThan(0.85);
+    expect(after / before).toBeLessThan(0.95);
+
+    // Chegou ao peso meta: escolher um novo, que decide se ganha ou perde peso.
+    await weigh(59.8, 0);
+    expect((await calories()).advice).toMatchObject({ kind: 'reached' });
+    const target = (targetWeightKg: number) =>
+      http('put', '/me/target-weight').send({ targetWeightKg });
+    await target(59.8).expect(400, {
+      error: 'O peso meta deve ser diferente do peso atual.',
+    });
+
+    // Acima do peso atual: ganhar peso, e o sistema sugere +10% na hora.
+    await target(65).expect(200);
+    const turned = await calories();
+    expect(turned).toMatchObject({
+      goal: 'ganhar',
+      advice: { kind: 'increase', title: 'Você escolheu ganhar peso' },
+    });
+    expect(
+      ((await http('get', '/me').expect(200)).body as Me).calorieAdvice,
+    ).toMatchObject({ kind: 'increase' });
+    // A projeção parte do peso atual, ganhando peso: com a meta ainda abaixo do gasto, o peso não sobe.
+    await http('post', '/profile/projection')
+      .send({ ...PROFILE, weightKg: 90, targetWeightKg: 65 })
+      .expect(400, {
+        error:
+          'Com a meta de calorias de agora, o peso não sobe. Ajuste as calorias em "Ajuste da dieta".',
+      });
+
+    const gaining = (
+      await http('post', '/me/calories')
+        .send({ direction: 'increase' })
+        .expect(200)
+    ).body as CalorieAdjustment;
+    expect(gaining).toMatchObject({
+      calories: lowered.increaseTo,
+      goal: 'ganhar',
+      advice: null,
+    });
+
+    // Abaixo do peso atual: perder peso de novo, e o sistema sugere −10% na hora.
+    await target(55).expect(200);
+    expect(await calories()).toMatchObject({
+      goal: 'perder',
+      advice: { kind: 'decrease', title: 'Você escolheu perder peso' },
+    });
+
+    // No piso, não dá para diminuir.
+    await app
+      .get(DataSource)
+      .query(`UPDATE users SET calorie_goal = 1200 WHERE username = $1`, [
+        username,
+      ]);
+    await http('post', '/me/calories')
+      .send({ direction: 'decrease' })
+      .expect(400, { error: 'A meta já está no mínimo de calorias.' });
+    await http('post', '/me/calories')
+      .send({ direction: 'outra' })
+      .expect(400, { error: 'Escolha aumentar ou diminuir as calorias.' });
+
+    // Salvar o perfil volta para a meta dele.
+    await http('put', '/me/profile')
+      .send({ ...PROFILE, weightKg: 90, targetWeightKg: 60 })
+      .expect(200);
+    expect(await calories()).toMatchObject({
+      calories: start.profileCalories,
+      goal: 'perder',
+    });
   });
 });
 

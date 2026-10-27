@@ -114,9 +114,15 @@ export class ChatService {
       userContext({
         name: user.name,
         today: clock.today,
-        profile: user.profile,
+        // O objetivo de agora (o último peso meta pode ter virado o do cadastro).
+        profile: user.profile && {
+          ...user.profile,
+          goal: user.weightGoal ?? user.profile.goal,
+        },
         routine: user.routine,
-        targets: user.profile ? calculateTargets(user.profile) : null,
+        targets: user.profile
+          ? calculateTargets(user.profile, user.calorieGoal)
+          : null,
         ...context,
       }),
       turns.map((message) => ({ role: message.role, content: message.text })),

@@ -177,6 +177,7 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
   },
   "targets": { "calories": 1660, "bmr": 1395, "tdee": 2163, "waterLiters": 2.4, "waterMlPerKg": 35, "clampedToMinimum": false },
   "weighInDue": true,
+  "calorieAdvice": null,
   "google": { "email": "ana@gmail.com", "canDisconnect": true }
 }
 ```
@@ -194,6 +195,8 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
   animal de cada alimento do catálogo (categoria da TACO e nome, nos pratos prontos).
 - `weighInDue`: hoje (no fuso do usuário) é `routine.weighInDay` **e** não há pesagem registrada hoje.
   O front mostra o lembrete na central de notificações ("Minha conta" → "Notificações").
+- `calorieAdvice`: a sugestão do ajuste das calorias (`advice` de `GET /me/calories`); `null` sem sugestão.
+- `targets.calories`: a meta em vigor, com o ajuste das calorias (`POST /me/calories`), se houver.
 - `google`: conta Google conectada (`null` se não houver). `canDisconnect` é `false` quando a conta foi criada
   pelo Google (é o único jeito de entrar).
 
@@ -209,9 +212,15 @@ Corpo: o `profile` inteiro. Recalcula `targets`. Não monta o plano individual (
 ### `PUT /me/target-weight` → `Me`
 
 Corpo: `{ "targetWeightKg": 62.5 }` (`null` só com objetivo manter). O perfil fica fixo depois do cadastro, mas o
-peso meta pode mudar quando quiser (o card "Peso meta" em `/perfil`). Só troca esse campo: não muda as metas
-nem o plano. Sem perfil → `400` "Preencha o perfil primeiro."; as regras e mensagens são as de `PUT /me/profile`,
-contra o perfil salvo.
+peso meta pode mudar quando quiser (o card "Peso meta" em `/perfil` e o card do ajuste das calorias, ao chegar ao
+peso meta). Não muda as metas nem o plano. Sem perfil → `400` "Preencha o perfil primeiro.".
+
+- O novo peso meta decide o objetivo: **acima do peso atual = ganhar peso, abaixo = perder peso** (o peso atual é a
+  última pesagem; sem pesagem, o `weightKg` do perfil). Igual ao peso atual → `400` "O peso meta deve ser diferente
+  do peso atual.". `null` só com objetivo manter (como em `PUT /me/profile`); 30–300 kg.
+- Quando o objetivo vira (estava perdendo e o peso meta novo é maior que o atual, ou o contrário), o ajuste das
+  calorias sugere na hora +10% (ou −10%) — ver `GET /me/calories`.
+- `profile.goal` continua o do cadastro; o objetivo de agora é o `goal` de `GET /me/calories`.
 
 ### `PUT /me/routine` → `Me`
 
@@ -338,6 +347,59 @@ primeiro." sem ele) e respondem `DietAdjustment`:
   peso (ver `units` em `GET /plan/today`).
 - `PUT` valida: `400` com "A proteína deve ser de pelo menos 1,6 g/kg.", "A gordura deve ser de pelo menos
   0,5 g/kg.", "Proteína e gordura passam da meta de calorias." ou "O peso do ovo deve estar entre 30 e 90 g.".
+
+## Ajuste das calorias 🔒
+
+Card no topo de "Ajuste da dieta": **−10%** e **+10%** na meta calórica em vigor, com a sugestão do sistema
+pelas pesagens e pelo peso meta.
+
+### `GET /me/calories` → `CalorieAdjustment`
+
+```json
+{
+  "calories": 2000,
+  "profileCalories": 2000,
+  "minimum": 1200,
+  "decreaseTo": 1800,
+  "increaseTo": 2200,
+  "goal": "perder",
+  "weeklyChangeKg": -0.1,
+  "advice": {
+    "kind": "decrease",
+    "title": "Seu peso parou de cair",
+    "text": "Na última semana, seu peso variou -0,1 kg. Você pode diminuir 10% das calorias (para 1.800 kcal) para continuar emagrecendo."
+  }
+}
+```
+
+### `POST /me/calories` com `{ "direction": "increase" | "decrease" }` → `CalorieAdjustment`
+
+Salva a meta nova e responde como o `GET`. Vale na hora para `/plan/today` (porções), `/nutrition/today`, o
+histórico, `/me` (`targets.calories`), `/me/diet` e a projeção do peso meta. `400` com "A meta já está no mínimo
+de calorias." (diminuir no piso), "Escolha aumentar ou diminuir as calorias." ou "Preencha o perfil primeiro.".
+O perfil fica fixo depois do cadastro: o ajuste das calorias e o peso meta (`PUT /me/target-weight`) são o que
+muda a dieta depois dele.
+
+**Regras**
+
+- Cada botão muda **10% da meta em vigor** (composto: 2000 → 1800 → 1620), arredondado para dezenas, nunca abaixo
+  do piso (`minimum`: 1200 kcal para mulheres, 1500 para homens). `decreaseTo`/`increaseTo` = a meta depois do
+  botão.
+- `goal`: o objetivo de agora. O último peso meta salvo decide: acima do peso atual = `ganhar`, abaixo = `perder`
+  (ver `PUT /me/target-weight`); sem peso meta salvo depois do cadastro, o `profile.goal`.
+- `weeklyChangeKg`: da pesagem mais recente (dos últimos 7 dias) para a mais recente de pelo menos 6 dias antes
+  dela (quem se pesa no mesmo dia da semana), uma casa. Só contam pesagens do dia do último ajuste (ou da última
+  virada do objetivo) em diante: depois deles, a sugestão espera duas pesagens novas. `null` sem esse par.
+- `advice` (`null` = nada a sugerir; com `goal: "manter"`, nunca), na ordem:
+  - `reached`: a última pesagem chegou ao peso meta (≤ perdendo, ≥ ganhando). A pessoa escolhe um novo peso meta
+    (`PUT /me/target-weight`): acima do peso atual para ganhar peso, abaixo para continuar emagrecendo.
+  - o objetivo **acabou de virar** com o novo peso meta e as calorias ainda não foram ajustadas desde então →
+    `increase` ("Você escolheu ganhar peso", +10%) ou `decrease` ("Você escolheu perder peso", −10%; `floor` no piso).
+  - `decrease`: perdendo peso, caiu **menos de 0,2 kg** na semana → sugere −10%.
+  - `floor`: o mesmo, mas a meta já está no piso (não dá para diminuir; procurar um nutricionista).
+  - `increase`: ganhando peso, subiu **menos de 0,2 kg** na semana → sugere +10%.
+  - `title` e `text` vêm prontos em pt-BR. A mesma sugestão vem em `Me.calorieAdvice` (central de notificações).
+- Os botões sempre funcionam: o front pede confirmação, com um aviso, para o botão que não é o sugerido.
 
 ## Pesos 🔒
 

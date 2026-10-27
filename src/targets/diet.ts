@@ -45,22 +45,29 @@ const floorTwoDecimals = (value: number) =>
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), Math.max(min, max));
 
-/** Meta calórica por kg de peso. */
-function kcalPerKg(profile: Profile) {
-  return calculateTargets(profile).calories / profile.weightKg;
+/** Meta calórica por kg de peso (`calorieGoal`: a ajustada pelo usuário; `null` = a do perfil). */
+function kcalPerKg(profile: Profile, calorieGoal: number | null) {
+  return calculateTargets(profile, calorieGoal).calories / profile.weightKg;
 }
 
 /** Carboidrato (g/kg) que sobra da meta calórica com essa proteína e essa gordura. */
 function carbsPerKg(
   profile: Profile,
   { proteinPerKg, fatPerKg }: DietSettings,
+  calorieGoal: number | null,
 ) {
-  return (kcalPerKg(profile) - proteinPerKg * 4 - fatPerKg * 9) / 4;
+  return (
+    (kcalPerKg(profile, calorieGoal) - proteinPerKg * 4 - fatPerKg * 9) / 4
+  );
 }
 
 /** Até onde cada macro pode ir com o ajuste atual (os outros dois no lugar, o compensado no mínimo). */
-function limits(profile: Profile, settings: DietSettings) {
-  const kcal = kcalPerKg(profile);
+function limits(
+  profile: Profile,
+  settings: DietSettings,
+  calorieGoal: number | null,
+) {
+  const kcal = kcalPerKg(profile, calorieGoal);
   return {
     minPerKg: {
       proteinas: MIN_PROTEIN_PER_KG,
@@ -87,12 +94,15 @@ export function adjustMacro(
   settings: DietSettings,
   macro: MacroId,
   perKg: number,
+  calorieGoal: number | null = null,
 ): DietSettings {
-  const { minPerKg, maxPerKg } = limits(profile, settings);
+  const { minPerKg, maxPerKg } = limits(profile, settings, calorieGoal);
   const value = twoDecimals(clamp(perKg, minPerKg[macro], maxPerKg[macro]));
   if (macro === 'proteinas') return { ...settings, proteinPerKg: value };
   if (macro === 'gorduras') return { ...settings, fatPerKg: value };
-  const fat = (kcalPerKg(profile) - settings.proteinPerKg * 4 - value * 4) / 9;
+  const fat =
+    (kcalPerKg(profile, calorieGoal) - settings.proteinPerKg * 4 - value * 4) /
+    9;
   return {
     ...settings,
     fatPerKg: Math.max(MIN_FAT_PER_KG, twoDecimals(fat)),
@@ -103,12 +113,13 @@ export function adjustMacro(
 export function dietSettingsError(
   profile: Profile,
   settings: DietSettings,
+  calorieGoal: number | null = null,
 ): string | null {
   if (settings.proteinPerKg < MIN_PROTEIN_PER_KG)
     return 'A proteína deve ser de pelo menos 1,6 g/kg.';
   if (settings.fatPerKg < MIN_FAT_PER_KG)
     return 'A gordura deve ser de pelo menos 0,5 g/kg.';
-  if (carbsPerKg(profile, settings) < -TOLERANCE)
+  if (carbsPerKg(profile, settings, calorieGoal) < -TOLERANCE)
     return 'Proteína e gordura passam da meta de calorias.';
   if (
     !Number.isInteger(settings.eggUnitGrams) ||
@@ -123,18 +134,21 @@ export function dietSettingsError(
 export function dietAdjustment(
   profile: Profile,
   settings: DietSettings,
+  calorieGoal: number | null = null,
 ): DietAdjustment {
-  const grams = macroTargets(profile, settings);
+  const grams = macroTargets(profile, settings, calorieGoal);
   return {
     settings,
-    calories: calculateTargets(profile).calories,
+    calories: calculateTargets(profile, calorieGoal).calories,
     perKg: {
       proteinas: settings.proteinPerKg,
       gorduras: settings.fatPerKg,
-      carboidratos: twoDecimals(Math.max(0, carbsPerKg(profile, settings))),
+      carboidratos: twoDecimals(
+        Math.max(0, carbsPerKg(profile, settings, calorieGoal)),
+      ),
     },
     grams,
     split: macroSplit(grams),
-    ...limits(profile, settings),
+    ...limits(profile, settings, calorieGoal),
   };
 }

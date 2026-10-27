@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, Post, Put } from '@nestjs/common';
 import { CurrentUser } from '../common/auth.decorators.js';
 import { Clock, type UserClock } from '../common/timezone.js';
 import type {
+  CalorieAdjustment,
   DietAdjustment,
   DietPreview,
   Me,
@@ -11,6 +12,7 @@ import type {
 import { calculateTargets } from '../targets/targets.js';
 import { ProfileDto, TargetWeightDto, toProfile } from './profile.dto.js';
 import { RoutineDto, toRoutine } from './routine.dto.js';
+import { CalorieStepDto } from './calories.dto.js';
 import {
   DietEstimateDto,
   DietSettingsDto,
@@ -104,6 +106,26 @@ export class UsersController {
     @Body() body: DietSettingsDto,
   ): Promise<DietAdjustment> {
     return this.users.updateDiet(userId, toDietSettings(body));
+  }
+
+  /** Ajuste das calorias (±10%) com a sugestão do sistema pelas pesagens e pelo peso meta. */
+  @Get('me/calories')
+  calories(
+    @CurrentUser() userId: string,
+    @Clock() clock: UserClock,
+  ): Promise<CalorieAdjustment> {
+    return this.users.calories(userId, clock);
+  }
+
+  /** "+10%" ou "−10%" na meta calórica em vigor (salva). */
+  @Post('me/calories')
+  @HttpCode(200)
+  stepCalories(
+    @CurrentUser() userId: string,
+    @Body() body: CalorieStepDto,
+    @Clock() clock: UserClock,
+  ): Promise<CalorieAdjustment> {
+    return this.users.stepCalories(userId, body.direction, clock);
   }
 
   /** Metas de um perfil, sem salvar (o formulário mostra enquanto o usuário edita). */

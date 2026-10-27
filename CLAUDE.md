@@ -87,6 +87,16 @@ npx vitest run -t "não gosto"                     # por nome do teste
   settings)` vale para `/nutrition/today`, o histórico, o `macroWeights` do plano e o prompt do plano individual.
   Ovos de galinha inteiros (`isEggUnit` em `foods.ts`) vão no plano em unidades inteiras desse peso (`portionFood`,
   `PlanFood.units`), menos o extra com as gramas do usuário.
+- Ajuste das calorias (`src/targets/calorie-advice.ts`; `GET`/`POST /me/calories`, card em /ajuste-dieta): o perfil
+  é fixo depois do cadastro; o que muda a dieta são estes ajustes e o peso meta. −10% e +10% da meta em vigor
+  (`stepCalories`, dezenas, piso `MINIMUM_CALORIES`), gravada em `users.calorie_goal` (`null` = a do perfil).
+  `calculateTargets(profile, calorieGoal)` e o resto das contas da meta (`macroTargets`, `diet.ts`, `nutrientGoal`,
+  `projectWeight`) recebem a `calorieGoal` do usuário: passe-a em todo uso novo. O objetivo de agora é
+  `users.weight_goal ?? profile.goal`: `PUT /me/target-weight` grava `goalForTarget` (acima do peso atual, a última
+  pesagem, = ganhar; abaixo = perder) e, se virou, `weight_goal_set_at` (o chat, o plano individual e a projeção usam
+  esse objetivo). `calorieAdvice`: chegou ao peso meta → escolher um novo; virou e não ajustou depois → ±10% na
+  direção nova; parou de cair (< 0,2 kg/semana, `weeklyChange` só desde o último ajuste ou virada) → −10% (ou
+  `floor`); parou de subir → +10%. A mesma sugestão vai em `Me.calorieAdvice` (central de notificações do front).
 - Plano inicial: as refeições base cujo `slot` (`base_meals.slot`, uma por refeição do dia) está em
   `routine.meals`, e todas as
   porções multiplicadas pelo `goalFactor` do `Planner` (meta calórica ÷ kcal do plano inicial, ajustado para o

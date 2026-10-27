@@ -73,7 +73,9 @@ export class HistoryService {
       this.filledLogs(userId, dates),
       this.activityDays.find({ where: { userId, date: range } }),
     ]);
-    const targets = user.profile ? calculateTargets(user.profile) : null;
+    const targets = user.profile
+      ? calculateTargets(user.profile, user.calorieGoal)
+      : null;
     return {
       user,
       dates,
@@ -119,7 +121,12 @@ export class HistoryService {
       id: def.id,
       name: def.name,
       unit: def.unit,
-      meta: nutrientGoal(def, data.user.profile, data.user.dietSettings),
+      meta: nutrientGoal(
+        def,
+        data.user.profile,
+        data.user.dietSettings,
+        data.user.calorieGoal,
+      ),
       ...(def.limit ? { limit: true } : {}),
     });
   }

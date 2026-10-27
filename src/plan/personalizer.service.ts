@@ -82,23 +82,28 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
   private async run(userId: string): Promise<void> {
     let meals = null;
     try {
-      const [{ profile, routine, dietSettings }, catalog, state] =
-        await Promise.all([
-          this.users.get(userId),
-          this.catalog.catalog(),
-          this.dataSource
-            .getRepository(PlanStateEntity)
-            .findOneByOrFail({ userId }),
-        ]);
+      const [
+        { profile, routine, dietSettings, calorieGoal, weightGoal },
+        catalog,
+        state,
+      ] = await Promise.all([
+        this.users.get(userId),
+        this.catalog.catalog(),
+        this.dataSource
+          .getRepository(PlanStateEntity)
+          .findOneByOrFail({ userId }),
+      ]);
       if (profile && routine) {
         meals = await this.composer.composePersonalPlan(
           userId,
           personalPlanRequest(
-            profile,
+            // O objetivo de agora (o último peso meta pode ter virado o do cadastro).
+            { ...profile, goal: weightGoal ?? profile.goal },
             routine,
             catalog,
             Object.keys(state.foodFeedback),
             dietSettings,
+            calorieGoal,
           ),
           state.foodFeedback,
         );
@@ -145,9 +150,14 @@ export function personalPlanRequest(
   catalog: Catalog,
   restricted: string[],
   dietSettings: DietSettings | null = null,
+  calorieGoal: number | null = null,
 ): PersonalPlanRequest {
-  const { calories } = calculateTargets(profile);
-  const goals = macroTargets(profile, dietSettingsOf(dietSettings));
+  const { calories } = calculateTargets(profile, calorieGoal);
+  const goals = macroTargets(
+    profile,
+    dietSettingsOf(dietSettings),
+    calorieGoal,
+  );
   return {
     profile: {
       sex: profile.sex,
