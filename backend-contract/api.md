@@ -193,6 +193,7 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
   vegetariana: carnes e peixes; vegana: tudo de origem animal, inclusive ovos, laticínios e mel), pela origem
   animal de cada alimento do catálogo (categoria da TACO e nome, nos pratos prontos).
 - `weighInDue`: hoje (no fuso do usuário) é `routine.weighInDay` **e** não há pesagem registrada hoje.
+  O front mostra o lembrete na central de notificações ("Minha conta" → "Notificações").
 - `google`: conta Google conectada (`null` se não houver). `canDisconnect` é `false` quando a conta foi criada
   pelo Google (é o único jeito de entrar).
 
