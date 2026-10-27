@@ -17,6 +17,7 @@ import { LlmCalls1791300000000 } from './migrations/1791300000000-llm-calls.js';
 import { PlanVersions1791400000000 } from './migrations/1791400000000-plan-versions.js';
 import { PlanVersionChanges1791500000000 } from './migrations/1791500000000-plan-version-changes.js';
 import { ExtraFoodDate1791600000000 } from './migrations/1791600000000-extra-food-date.js';
+import { PlanVersionsPerAssembly1791700000000 } from './migrations/1791700000000-plan-versions-per-assembly.js';
 
 /** Migrations em ordem; as novas entram no fim da lista. */
 export const MIGRATIONS = [
@@ -37,6 +38,7 @@ export const MIGRATIONS = [
   PlanVersions1791400000000,
   PlanVersionChanges1791500000000,
   ExtraFoodDate1791600000000,
+  PlanVersionsPerAssembly1791700000000,
 ];
 
 export function dataSourceOptions(url: string): DataSourceOptions {

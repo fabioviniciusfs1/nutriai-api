@@ -380,18 +380,20 @@ export type PlanHistoryChange = {
   to: PlanHistoryFood | null;
 };
 
-/** Alteração feita no plano, com o horário: o histórico de planos lista uma por mudança do usuário. */
+/** Alteração feita no plano, com o dia e o horário: o histórico de planos lista uma por mudança do usuário. */
 export type PlanHistoryEdit = PlanHistoryChange & {
+  /** "AAAA-MM-DD": dia da alteração (o front pagina as alterações do plano por dia). */
+  date: string;
   /** ISO 8601; `null` nas alterações gravadas antes do horário existir. */
   at: string | null;
 };
 
-/** Um plano do histórico: o montado e, por dia, no máximo um alterado com as mudanças daquele dia. */
+/** Um plano do histórico: um por montagem, com as refeições como estão e as alterações feitas nele. */
 export type PlanHistoryEntry = {
   id: string;
-  /** "AAAA-MM-DD": dia em que o plano foi montado ou alterado. */
+  /** "AAAA-MM-DD": dia em que o plano foi montado. */
   date: string;
-  /** `false` = montado (pelo assistente); `true` = alterado pelo usuário nesse dia. */
+  /** `true` = o usuário alterou o plano depois de montado (`changes` não está vazio). */
   edited: boolean;
   /** O plano em vigor (o primeiro da lista). */
   current: boolean;
@@ -403,7 +405,7 @@ export type PlanHistoryEntry = {
     kcal: number;
     foods: PlanHistoryFood[];
   }[];
-  /** Alterações feitas nesse plano, da mais recente para a mais antiga; vazio no plano montado. */
+  /** Alterações feitas nesse plano, da mais recente para a mais antiga; vazio se não mudou. */
   changes: PlanHistoryEdit[];
 };
 

@@ -6,7 +6,7 @@ import { PlanVersionEntity } from '../database/entities/index.js';
 import { planNutrients } from './nutrients.js';
 import { appendEdits, nextPlanVersion, planVersion } from './plan-versions.js';
 
-/** Grava as versões do plano (base de `/history/plans`): a montada e uma alterada por dia. */
+/** Grava as versões do plano (base de `/history/plans`): uma por montagem, com as mudanças do usuário nela. */
 @Injectable()
 export class PlanVersionService {
   constructor(private readonly catalog: CatalogService) {}
@@ -17,43 +17,50 @@ export class PlanVersionService {
     today: string,
     meals: PlanMeal[],
     personalization: Personalization,
+    personalizationAt: Date | null,
   ) {
     // Enquanto o assistente monta, o plano é o base: a primeira versão tem de ser a dele.
     if (personalization === 'pending') return;
     const fiber = planNutrients(meals, await this.catalog.micros()).fibras ?? 0;
     const version = planVersion(meals, fiber);
-    const [last, previous] = await manager.find(PlanVersionEntity, {
+    const last = await manager.findOne(PlanVersionEntity, {
       where: { userId },
       order: { id: 'DESC' },
-      take: 2,
     });
-    const action = nextPlanVersion(
-      last ?? null,
-      previous ?? null,
-      version.fingerprint,
-      today,
-    );
-    // Cada mudança entra nas alterações da versão com o horário dela.
-    const at = new Date().toISOString();
+    const assembledAt = personalization === 'ready' ? personalizationAt : null;
+    const action = nextPlanVersion(last, version.fingerprint, assembledAt);
     if (action === 'insert')
       await manager.insert(PlanVersionEntity, {
         userId,
         date: today,
-        edited: last !== undefined,
+        edited: false,
+        assembledAt,
         ...version,
-        changes: last ? appendEdits(last.meals, version.meals, at) : [],
+        changes: [],
       });
-    else if (action === 'update') {
-      // Versão de antes do horário: as alterações dela entram sem horário.
-      const log =
-        last.changes ??
-        (previous ? appendEdits(previous.meals, last.meals, null) : []);
+    else if (action === 'replace')
+      // A primeira montagem do assistente fica no lugar do plano base.
       await manager.save(
-        Object.assign(last, {
+        Object.assign(last!, {
+          date: today,
+          assembledAt,
           ...version,
-          changes: appendEdits(last.meals, version.meals, at, log),
+          changes: [],
         }),
       );
-    } else if (action === 'delete') await manager.remove(last);
+    else if (action === 'update')
+      // Cada mudança entra nas alterações do plano com o dia e o horário dela.
+      await manager.save(
+        Object.assign(last!, {
+          ...version,
+          changes: appendEdits(
+            last!.meals,
+            version.meals,
+            today,
+            new Date().toISOString(),
+            last!.changes ?? [],
+          ),
+        }),
+      );
   }
 }

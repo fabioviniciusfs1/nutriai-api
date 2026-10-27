@@ -688,26 +688,27 @@ período. Dia sem registro vale 0. `averagePercent` = média em % da meta. `days
 Histórico de **planos** (não de dias), do mais recente para o mais antigo (até 50). O primeiro é o plano em vigor
 (`current: true`).
 
-- O primeiro plano é o **montado** (`edited: false`): o do assistente, ou o plano base quando não há assistente.
-  Enquanto o assistente monta (`personalization: "pending"`), nada é gravado.
-- Mudar alimentos ou quantidades (troca, alimento extra, porção, ajuste da dieta, plano remontado) gera um plano
-  **alterado** (`edited: true`) com o dia (`date`). **No máximo um por dia**: as outras mudanças do mesmo dia
-  editam esse plano. Se o usuário desfaz no dia tudo o que mudou, o alterado do dia some. Mudar só o horário de
-  uma refeição não conta (o plano guarda os horários do momento em que foi gravado).
+- Um plano por **montagem**: o do assistente, ou o plano base quando não há assistente. Enquanto o assistente
+  monta (`personalization: "pending"`), nada é gravado; a primeira montagem do assistente fica no lugar do plano
+  base. **Só refazer o plano** (`POST /plan/personalize`, em /rotina) cria outro plano no histórico. `date` é o
+  dia da montagem.
+- Mudar alimentos ou quantidades (troca, alimento extra, porção, ajuste da dieta) **não cria plano**: a mudança
+  entra no registro (`changes`) do plano em vigor, que passa a mostrar as refeições e os totais como ficaram.
+  `edited: true` quando o plano tem alterações. Mudar só o horário de uma refeição não conta (o plano guarda os
+  horários do momento em que foi gravado).
 - `totals`: kcal, proteína, carboidrato, gordura e fibra do plano, em gramas inteiras.
 - `changes`: as alterações feitas nesse plano, **uma por mudança do usuário**, da mais recente para a mais
   antiga, cada uma com a refeição, o tipo — `swap` (um alimento no lugar de outro), `added`, `removed` e `grams` (o
-  mesmo alimento com outra quantidade) — e o horário (`at`, ISO 8601). É um registro: trocar um alimento e depois
-  mudar as gramas dele no mesmo dia são duas alterações. Planos gravados antes do horário existir trazem o que
-  mudou em relação ao plano anterior, com `at: null`. Vazio no plano montado. O front mostra as alterações ao
-  abrir o plano, depois das refeições: uma página por dia com alterações (do dia do plano para os anteriores),
-  com o horário de cada uma.
+  mesmo alimento com outra quantidade) —, o dia (`date`) e o horário (`at`, ISO 8601). É um registro: trocar um
+  alimento e depois mudar as gramas dele são duas alterações. Alterações gravadas antes do horário existir vêm
+  com `at: null`. Vazio se o plano não mudou. O front mostra as alterações ao abrir o plano, depois das refeições:
+  uma página por dia com alterações (do mais recente para os anteriores), com o horário de cada uma.
 
 ```json
 [
   {
     "id": "p-12",
-    "date": "2026-10-26",
+    "date": "2026-10-24",
     "edited": true,
     "current": true,
     "totals": { "kcal": 1560, "protein": 128, "carbs": 142, "fat": 52, "fiber": 24 },
@@ -726,6 +727,7 @@ Histórico de **planos** (não de dias), do mais recente para o mais antigo (at�
         "kind": "swap",
         "from": { "name": "Pão, trigo, francês", "grams": 50 },
         "to": { "name": "Tapioca, goma hidratada", "grams": 60 },
+        "date": "2026-10-26",
         "at": "2026-10-26T17:32:00.000Z"
       }
     ]

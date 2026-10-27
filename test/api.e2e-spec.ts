@@ -1008,6 +1008,11 @@ describe('plano individual do assistente', () => {
       .expect(200);
     await personalizationIdle();
     expect(create).toHaveBeenCalledTimes(1);
+    const plans = async () =>
+      (await http('get', '/history/plans').expect(200))
+        .body as PlanHistoryEntry[];
+    // As mudanças ficam no plano montado: o histórico só tem ele.
+    expect(await plans()).toHaveLength(1);
 
     // "Refazer meu plano": monta de novo; horário fora das janelas → um em cada janela, no meio dos inícios possíveis.
     await http('put', '/plan/meals/1/time').send({ time: '09:00' }).expect(200);
@@ -1030,6 +1035,12 @@ describe('plano individual do assistente', () => {
       [2, '12:15'],
       [4, '15:30'],
       [3, '19:30'],
+    ]);
+    // O plano refeito é outro plano no histórico.
+    const history = await plans();
+    expect(history.map((plan) => [plan.current, plan.changes.length])).toEqual([
+      [true, 0],
+      [false, history[1].changes.length],
     ]);
     create.mockReset();
   });
@@ -1056,6 +1067,14 @@ describe('plano individual do assistente', () => {
     const ready = (await http('get', '/plan/today').expect(200))
       .body as TodayPlan;
     expect(ready.personalization).toBe('ready');
+    // A primeira montagem do assistente fica no lugar do plano padrão.
+    const plans = (await http('get', '/history/plans').expect(200))
+      .body as PlanHistoryEntry[];
+    expect(plans).toHaveLength(1);
+    expect(plans[0]).toMatchObject({ edited: false, changes: [] });
+    expect(plans[0].meals.map((meal) => meal.title)).toContain(
+      'Marmita de Tofu com Arroz e Feijão',
+    );
 
     // Substitutos também respeitam a dieta.
     create.mockResolvedValueOnce(
@@ -1254,11 +1273,12 @@ describe('histórico com dias sem o app aberto', () => {
 });
 
 describe('histórico de planos', () => {
-  it('guarda o plano montado e, por dia, um alterado com as mudanças do dia', async () => {
+  it('guarda o plano montado com as alterações do usuário dentro dele', async () => {
     const { http, username } = await newUser();
     const ARROZ = 'Arroz, integral, cozido';
     const ARROZ_BRANCO = 'Arroz, tipo 1, cozido';
     const BANANA = 'Banana, prata, crua';
+    const today = userClock('America/Sao_Paulo').today;
     const plans = async () =>
       (await http('get', '/history/plans').expect(200))
         .body as PlanHistoryEntry[];
@@ -1268,7 +1288,7 @@ describe('histórico de planos', () => {
     let list = await plans();
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
-      date: userClock('America/Sao_Paulo').today,
+      date: today,
       edited: false,
       current: true,
       changes: [],
@@ -1278,37 +1298,36 @@ describe('histórico de planos', () => {
 
     // Só o horário não conta.
     await http('put', '/plan/meals/1/time').send({ time: '09:30' }).expect(200);
-    expect(await plans()).toHaveLength(1);
+    expect((await plans())[0].changes).toEqual([]);
 
+    // A troca fica no plano, que passa a mostrar as refeições como ficaram.
     await http('post', '/plan/meals/2/swaps')
       .send({ foodName: ARROZ, reason: 'nao-gosto', substitute: ARROZ_BRANCO })
       .expect(200);
     list = await plans();
-    expect(list).toHaveLength(2);
-    expect(list[0]).toMatchObject({ edited: true, current: true });
-    expect(list[0].changes).toContainEqual(
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ date: today, edited: true, current: true });
+    expect(list[0].changes).toEqual([
       expect.objectContaining({
         meal: lunch,
         kind: 'swap',
         from: expect.objectContaining({ name: ARROZ }),
         to: expect.objectContaining({ name: ARROZ_BRANCO }),
+        date: today,
       }),
+    ]);
+    expect(list[0].meals[1].foods.map((food) => food.name)).toContain(
+      ARROZ_BRANCO,
     );
-    expect(list[1]).toMatchObject({ edited: false, current: false });
-    expect(list[1].meals[1].foods.map((food) => food.name)).toContain(ARROZ);
 
-    // Outra mudança no mesmo dia edita o plano alterado do dia.
+    // Uma alteração por mudança, com o horário, da mais recente para a mais antiga.
     const added = (
       await http('post', '/plan/meals/1/foods')
         .send({ foodName: BANANA, grams: 150 })
         .expect(200)
     ).body as TodayPlan;
     list = await plans();
-    expect(list).toHaveLength(2);
-    expect(list[0].changes.map((change) => change.kind)).toEqual(
-      expect.arrayContaining(['swap', 'added']),
-    );
-    // Uma alteração por mudança, com o horário, da mais recente para a mais antiga.
+    expect(list).toHaveLength(1);
     expect(list[0].changes[0]).toMatchObject({
       kind: 'added',
       to: expect.objectContaining({ name: BANANA, grams: 150 }),
@@ -1318,24 +1337,25 @@ describe('histórico de planos', () => {
     expect([...times].sort().reverse()).toEqual(times);
     expect(times[0] > times.at(-1)!).toBe(true);
 
-    // No dia seguinte, a mudança vira outro plano.
+    // Em outro dia, a mudança continua no mesmo plano, com o dia dela.
     await app
       .get(DataSource)
       .query(
-        `UPDATE plan_versions SET date = date - 1 WHERE edited AND user_id = (SELECT id FROM users WHERE username = $1)`,
+        `UPDATE plan_versions SET date = date - 1 WHERE user_id = (SELECT id FROM users WHERE username = $1)`,
         [username],
       );
     const extra = added.meals[0].foods.find((food) => food.extraId !== null)!;
     await http('delete', `/plan/meals/1/foods/${extra.extraId}`).expect(200);
     list = await plans();
-    expect(list).toHaveLength(3);
-    expect(list[0].changes).toEqual([
-      expect.objectContaining({
-        kind: 'removed',
-        from: expect.objectContaining({ name: BANANA }),
-        to: null,
-      }),
-    ]);
+    expect(list).toHaveLength(1);
+    expect(list[0].date).toBe(addDays(today, -1));
+    expect(list[0].changes).toHaveLength(3);
+    expect(list[0].changes[0]).toMatchObject({
+      kind: 'removed',
+      from: expect.objectContaining({ name: BANANA }),
+      to: null,
+      date: today,
+    });
   });
 });
 
@@ -1353,13 +1373,7 @@ describe('alimento extra', () => {
     const extra = added.meals[0].foods.find((food) => food.extraId !== null)!;
     expect(extra.name).toBe(BANANA);
 
-    // O dia virou: o extra e o plano alterado com ele passam a ser de ontem.
-    await app
-      .get(DataSource)
-      .query(
-        `UPDATE plan_versions SET date = date - 1 WHERE edited AND user_id = (SELECT id FROM users WHERE username = $1)`,
-        [username],
-      );
+    // O dia virou: o extra passa a ser de ontem.
     await app.get(DataSource).query(
       `UPDATE plan_states
          SET plan_changes = jsonb_set(plan_changes, '{extraFoods,1,0,date}', to_jsonb($2::text))
@@ -1374,7 +1388,7 @@ describe('alimento extra', () => {
     expect(today.meals).toEqual(before.meals);
     await http('delete', `/plan/meals/1/foods/${extra.extraId}`).expect(404);
 
-    // A saída fica no histórico de planos, como uma alteração do dia.
+    // A saída fica no histórico de planos, como uma alteração do plano.
     const plans = (await http('get', '/history/plans').expect(200))
       .body as PlanHistoryEntry[];
     expect(plans[0].changes[0]).toMatchObject({

@@ -14,38 +14,36 @@ const meal = (
 });
 
 describe('nextPlanVersion', () => {
-  const montado = { fingerprint: 'a', edited: false, date: '2026-10-26' };
-  const alterado = { fingerprint: 'b', edited: true, date: '2026-10-26' };
+  const montagem = new Date('2026-10-26T10:00:00.000Z');
+  const base = { fingerprint: 'a', assembledAt: null };
+  const montado = { fingerprint: 'a', assembledAt: montagem };
 
   it('sem versão grava a montada', () => {
-    expect(nextPlanVersion(null, null, 'a', '2026-10-26')).toBe('insert');
+    expect(nextPlanVersion(null, 'a', null)).toBe('insert');
+    expect(nextPlanVersion(null, 'a', montagem)).toBe('insert');
   });
 
   it('plano igual ao último não grava nada', () => {
-    expect(nextPlanVersion(montado, null, 'a', '2026-10-26')).toBe('none');
-    expect(nextPlanVersion(alterado, montado, 'b', '2026-10-26')).toBe('none');
+    expect(nextPlanVersion(base, 'a', null)).toBe('none');
+    expect(nextPlanVersion(montado, 'a', new Date(montagem))).toBe('none');
   });
 
-  it('a montada nunca é editada: a primeira mudança cria a alterada do dia', () => {
-    expect(nextPlanVersion(montado, null, 'b', '2026-10-26')).toBe('insert');
+  it('mudança do usuário, em qualquer dia, entra no plano em vigor', () => {
+    expect(nextPlanVersion(base, 'b', null)).toBe('update');
+    expect(nextPlanVersion(montado, 'b', montagem)).toBe('update');
   });
 
-  it('mais mudanças no mesmo dia editam a alterada do dia', () => {
-    expect(nextPlanVersion(alterado, montado, 'c', '2026-10-26')).toBe(
-      'update',
-    );
+  it('a primeira montagem do assistente fica no lugar do plano base', () => {
+    expect(nextPlanVersion(base, 'b', montagem)).toBe('replace');
   });
 
-  it('desfazer no mesmo dia tudo o que mudou apaga a alterada do dia', () => {
-    expect(nextPlanVersion(alterado, montado, 'a', '2026-10-26')).toBe(
-      'delete',
-    );
+  it('plano refeito cria outro plano', () => {
+    const refeito = new Date('2026-10-28T10:00:00.000Z');
+    expect(nextPlanVersion(montado, 'b', refeito)).toBe('insert');
   });
 
-  it('mudança em outro dia cria outra alterada', () => {
-    expect(nextPlanVersion(alterado, montado, 'c', '2026-10-27')).toBe(
-      'insert',
-    );
+  it('montagem que falhou não cria plano', () => {
+    expect(nextPlanVersion(montado, 'b', null)).toBe('update');
   });
 });
 
@@ -138,36 +136,46 @@ describe('appendEdits', () => {
         ['Banana', 60],
       ]),
     ];
-    const log = appendEdits([meal(1, [['Feijão', 80]])], before, null);
-    expect(appendEdits(before, after, '2026-10-26T14:32:00.000Z', log)).toEqual(
-      [
-        {
-          meal: 'Refeição 1',
-          kind: 'added',
-          from: null,
-          to: { name: 'Banana', grams: 60 },
-          at: '2026-10-26T14:32:00.000Z',
-        },
-        {
-          meal: 'Refeição 1',
-          kind: 'grams',
-          from: { name: 'Arroz', grams: 100 },
-          to: { name: 'Arroz', grams: 120 },
-          at: '2026-10-26T14:32:00.000Z',
-        },
-        {
-          meal: 'Refeição 1',
-          kind: 'swap',
-          from: { name: 'Feijão', grams: 80 },
-          to: { name: 'Arroz', grams: 100 },
-          at: null,
-        },
-      ],
+    const log = appendEdits(
+      [meal(1, [['Feijão', 80]])],
+      before,
+      '2026-10-25',
+      null,
     );
+    expect(
+      appendEdits(before, after, '2026-10-26', '2026-10-26T14:32:00.000Z', log),
+    ).toEqual([
+      {
+        meal: 'Refeição 1',
+        kind: 'added',
+        from: null,
+        to: { name: 'Banana', grams: 60 },
+        date: '2026-10-26',
+        at: '2026-10-26T14:32:00.000Z',
+      },
+      {
+        meal: 'Refeição 1',
+        kind: 'grams',
+        from: { name: 'Arroz', grams: 100 },
+        to: { name: 'Arroz', grams: 120 },
+        date: '2026-10-26',
+        at: '2026-10-26T14:32:00.000Z',
+      },
+      {
+        meal: 'Refeição 1',
+        kind: 'swap',
+        from: { name: 'Feijão', grams: 80 },
+        to: { name: 'Arroz', grams: 100 },
+        date: '2026-10-25',
+        at: null,
+      },
+    ]);
   });
 
   it('sem mudança não acrescenta nada', () => {
     const meals = [meal(1, [['Arroz', 100]])];
-    expect(appendEdits(meals, meals, '2026-10-26T14:32:00.000Z')).toEqual([]);
+    expect(
+      appendEdits(meals, meals, '2026-10-26', '2026-10-26T14:32:00.000Z'),
+    ).toEqual([]);
   });
 });

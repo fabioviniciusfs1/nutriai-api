@@ -1,4 +1,4 @@
-// Versões do plano para o histórico: o que gravar quando o plano muda e o que mudou entre duas versões.
+// Versões do plano para o histórico: uma por montagem, com o registro do que o usuário mudou nela.
 import type {
   MealSlot,
   PlanHistoryChange,
@@ -11,10 +11,13 @@ import type {
   PlanVersionTotals,
 } from '../database/entities/index.js';
 
-type VersionRef = { fingerprint: string; edited: boolean; date: string };
+type VersionRef = { fingerprint: string; assembledAt: Date | null };
 
-/** O que fazer com o plano de agora: nova versão, editar ou apagar a alterada do dia, ou nada. */
-export type VersionAction = 'insert' | 'update' | 'delete' | 'none';
+/**
+ * O que fazer com o plano de agora: novo plano montado, a versão vira a montada do assistente (`replace`),
+ * gravar a mudança na versão em vigor (`update`) ou nada.
+ */
+export type VersionAction = 'insert' | 'replace' | 'update' | 'none';
 
 /** Refeições, totais e fingerprint (títulos, alimentos e gramas, sem horários) do plano. */
 export function planVersion(
@@ -59,21 +62,19 @@ export function planVersion(
 }
 
 /**
- * Regra do histórico: a primeira versão é a montada; depois, por dia, no máximo uma alterada, que junta as
- * mudanças daquele dia. `last` é a versão mais recente e `previous` a de antes dela.
+ * Regra do histórico: um plano por montagem. `assembledAt` é a montagem do assistente de agora (`null` sem ela,
+ * no plano base). Uma montagem nova (o usuário pediu para refazer) cria outro plano; a primeira, depois do plano
+ * base, fica no lugar dele. As mudanças do usuário entram no plano em vigor (`update`).
  */
 export function nextPlanVersion(
   last: VersionRef | null,
-  previous: VersionRef | null,
   fingerprint: string,
-  today: string,
+  assembledAt: Date | null,
 ): VersionAction {
   if (!last) return 'insert';
-  if (last.fingerprint === fingerprint) return 'none';
-  if (last.edited && last.date === today)
-    // Desfez no mesmo dia tudo o que tinha mudado: a alterada do dia some.
-    return previous?.fingerprint === fingerprint ? 'delete' : 'update';
-  return 'insert';
+  if (assembledAt && assembledAt.getTime() !== last.assembledAt?.getTime())
+    return last.assembledAt ? 'insert' : 'replace';
+  return last.fingerprint === fingerprint ? 'none' : 'update';
 }
 
 /**
@@ -123,17 +124,18 @@ export function planChanges(
 }
 
 /**
- * As alterações de `before` para `after`, com o horário `at` (`null` = sem horário, versões de antes dele),
- * na frente do `log` da versão: a lista fica da mais recente para a mais antiga.
+ * As alterações de `before` para `after`, do dia `date` e com o horário `at` (`null` = sem horário, versões de
+ * antes dele), na frente do `log` da versão: a lista fica da mais recente para a mais antiga.
  */
 export function appendEdits(
   before: PlanVersionMeal[],
   after: PlanVersionMeal[],
+  date: string,
   at: string | null,
   log: PlanHistoryEdit[] = [],
 ): PlanHistoryEdit[] {
   return [
-    ...planChanges(before, after).map((change) => ({ ...change, at })),
+    ...planChanges(before, after).map((change) => ({ ...change, date, at })),
     ...log,
   ];
 }

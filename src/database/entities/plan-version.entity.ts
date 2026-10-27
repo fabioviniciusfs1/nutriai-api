@@ -32,8 +32,8 @@ export type PlanVersionTotals = {
 };
 
 /**
- * Versão do plano do usuário, base de `/history/plans`: a montada e, por dia, no máximo uma alterada com as
- * mudanças de alimentos e gramas daquele dia.
+ * Plano do usuário no histórico (`/history/plans`): um por montagem, com as refeições como estão agora e o
+ * registro das mudanças de alimentos e gramas feitas nele.
  */
 @Entity('plan_versions')
 @Index(['userId', 'id'])
@@ -44,13 +44,17 @@ export class PlanVersionEntity {
   @Column('uuid', { name: 'user_id' })
   userId: string;
 
-  /** "AAAA-MM-DD" no fuso do usuário: dia em que foi montada ou alterada. */
+  /** "AAAA-MM-DD" no fuso do usuário: dia em que foi montada. */
   @Column('date')
   date: string;
 
-  /** `false` = plano montado (assistente ou base); `true` = alterado pelo usuário. */
+  /** Das versões de antes de `assembledAt` (`true` = alterada pelo usuário); a regra não usa mais. */
   @Column('boolean')
   edited: boolean;
+
+  /** `plan_states.personalization_at` da montagem do assistente que gerou a versão; `null` no plano base. */
+  @Column('timestamptz', { name: 'assembled_at', nullable: true })
+  assembledAt: Date | null;
 
   /** Refeições com títulos, alimentos e gramas (sem horários): igual = mesma versão. */
   @Column('text')
@@ -62,7 +66,7 @@ export class PlanVersionEntity {
   @Column('jsonb')
   totals: PlanVersionTotals;
 
-  /** Alterações nessa versão, da mais recente para a mais antiga; `null` nas gravadas antes do horário. */
+  /** Alterações nessa versão, da mais recente para a mais antiga. */
   @Column('jsonb', { nullable: true })
   changes: PlanHistoryEdit[] | null;
 

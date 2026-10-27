@@ -22,7 +22,6 @@ import {
 } from '../database/entities/index.js';
 import { GOOGLE_SOURCE, HealthService } from '../health/health.service.js';
 import { nutrientGoal } from '../nutrition/nutrient-goals.js';
-import { appendEdits } from '../plan/plan-versions.js';
 import { PlanService } from '../plan/plan.service.js';
 import { calculateTargets, DEFAULT_CALORIE_GOAL } from '../targets/targets.js';
 import { UsersService } from '../users/users.service.js';
@@ -128,12 +127,11 @@ export class HistoryService {
   async plans(userId: string, clock: UserClock): Promise<PlanHistoryEntry[]> {
     // Lê o plano antes: a versão de agora fica gravada.
     await this.plan.read(userId, clock, () => null);
-    // Um a mais, para o mais antigo da lista também ter com quem comparar.
     const [versions, catalog] = await Promise.all([
       this.planVersions.find({
         where: { userId },
         order: { id: 'DESC' },
-        take: PLAN_HISTORY_LIMIT + 1,
+        take: PLAN_HISTORY_LIMIT,
       }),
       this.catalog.catalog(),
     ]);
@@ -141,12 +139,12 @@ export class HistoryService {
     const baseSlots = new Map(
       catalog.baseMeals.map((meal) => [meal.id, meal.slot]),
     );
-    return versions.slice(0, PLAN_HISTORY_LIMIT).map((version, index) => {
-      const previous = versions[index + 1];
+    return versions.map((version, index) => {
+      const changes = version.changes ?? [];
       return {
         id: `p-${version.id}`,
         date: version.date,
-        edited: version.edited,
+        edited: changes.length > 0,
         current: index === 0,
         totals: version.totals,
         meals: version.meals.map(({ id, slot, title, time, kcal, foods }) => ({
@@ -156,11 +154,7 @@ export class HistoryService {
           kcal,
           foods,
         })),
-        // Versões de antes do horário: as alterações calculadas, sem horário.
-        changes: !version.edited
-          ? []
-          : (version.changes ??
-            (previous ? appendEdits(previous.meals, version.meals, null) : [])),
+        changes,
       };
     });
   }

@@ -277,6 +277,7 @@ export class PlanService {
           today,
           after.plan,
           options.personalization ?? null,
+          entity.personalizationAt,
         );
         return result(after);
       });

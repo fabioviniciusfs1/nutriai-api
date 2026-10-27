@@ -142,13 +142,15 @@ npx vitest run -t "não gosto"                     # por nome do teste
   horário pelo perfil, a rotina e o plano do dia e devolve ok ou a explicação com um horário sugerido
   (`parseMealTimeAdvice` só aceita sugestão nos inícios de `mealStartWindows`). Fora desses inícios, o
   `outsideWindowsAdvice` responde sem o Claude, com `canKeep: false` (sem "Manter"). Sem o Claude ou se ele falhar, ok.
-- Histórico de planos (`plan_versions`, `GET /history/plans`): o `PlanVersionService` grava, junto da foto do dia
-  em `withPlanner`, a versão do plano quando os alimentos ou as gramas mudam (o horário não conta; nada enquanto a
-  personalização está `pending`). A primeira é a montada (`edited: false`); depois, no máximo uma alterada por dia,
-  que as outras mudanças do mesmo dia editam (`nextPlanVersion` em `src/plan/plan-versions.ts`). Cada mudança grava
-  as alterações dela com o horário em `plan_versions.changes` (`appendEdits`, sobre o `planChanges` entre o antes e
-  o depois; da mais recente para a mais antiga). Versões de antes do campo (`changes` `null`) mostram o
-  `planChanges` da anterior para ela, sem horário.
+- Histórico de planos (`plan_versions`, `GET /history/plans`): uma versão por montagem. O `PlanVersionService` grava,
+  junto da foto do dia em `withPlanner` (nada enquanto a personalização está `pending`), pela regra de
+  `nextPlanVersion` (`src/plan/plan-versions.ts`): `plan_versions.assembled_at` guarda o `personalization_at` da
+  montagem do assistente; uma montagem nova (refazer, `POST /plan/personalize`) cria outra versão, e a primeira, depois
+  do plano base (`assembled_at` `null`), fica no lugar dele. Mudanças de alimentos ou gramas (o horário não conta)
+  atualizam a versão em vigor (refeições como ficaram) e entram em `plan_versions.changes` com o dia e o horário
+  (`appendEdits`, sobre o `planChanges` entre o antes e o depois; da mais recente para a mais antiga). `edited` da
+  resposta = tem alterações; a coluna `edited` só serve às versões antigas, que a migration
+  `PlanVersionsPerAssembly` juntou na montada de cada usuário.
 
 ## Contrato com o front
 
