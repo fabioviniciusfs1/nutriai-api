@@ -228,7 +228,7 @@ Corpo: a `routine` inteira. Sem perfil → `400` "Preencha o perfil primeiro.".
 
 - `eatingWindows`: de 1 a 12 janelas `{ "start": "HH:MM", "end": "HH:MM" }` em que a pessoa pode comer, iguais
   todos os dias: início antes do fim, em ordem e sem sobreposição (uma pode começar quando a outra termina).
-  O front mostra as horas do dia todas disponíveis e a pessoa desmarca as que não pode; cada hora disponível vale
+  O front mostra as horas do dia e a pessoa marca as que pode comer; cada hora disponível vale
   até o minuto 59 dela (sem encostar na hora seguinte) e as vizinhas viram uma janela só (07, 08 e 12
   disponíveis → `07:00–08:59` e `12:00–12:59`).
   Erros: "Informe pelo menos um horário disponível para comer.", "Em cada horário disponível, o início deve ser
