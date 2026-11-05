@@ -84,7 +84,7 @@ const EVEN_WEIGHTS = [1, 1, 1];
  * Quanto o peso de um macronutriente pode se afastar da proporção direta (entre 1/x e x): segura as porções
  * em tamanhos realistas quando o plano está longe das metas.
  */
-export const MAX_MACRO_SHIFT = 1.5;
+export const MAX_MACRO_SHIFT = 2.5;
 
 /** Fração das calorias dos macronutrientes do alimento que vem de cada um; `null` sem nenhum. */
 function macroShares(food: Totals) {

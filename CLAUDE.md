@@ -101,7 +101,7 @@ npx vitest run -t "não gosto"                     # por nome do teste
   `routine.meals`, e todas as
   porções multiplicadas pelo `goalFactor` do `Planner` (meta calórica ÷ kcal do plano inicial, ajustado para o
   total arredondado ficar o mais perto da meta) e pelos `macroWeights`: um peso por macro (proteína, gordura,
-  carboidrato; mínimos quadrados do erro relativo às metas de `macroTargets`, entre 1/1,5 e 1,5) e cada alimento
+  carboidrato; mínimos quadrados do erro relativo às metas de `macroTargets`, entre 1/2,5 e 2,5) e cada alimento
   com a média dos pesos pelas frações das calorias dele, para os macros do dia irem para as metas. Os dois são
   recalculados a cada requisição pelo perfil e pela rotina (`PlanService.plannerOptions`). O alimento extra (`POST /plan/meals/{id}/foods` com `grams`) fica nas gramas
   do usuário, fora desse fator e dos fatores de porção (`ExtraFood.fixed`), e soma às calorias do dia; é a

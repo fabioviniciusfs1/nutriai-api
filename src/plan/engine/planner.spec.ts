@@ -5,6 +5,7 @@ import {
 } from './test-catalog.js';
 import { FoodCatalog, similarity, sumTotals } from './foods.js';
 import {
+  foodWeight,
   goalFactor,
   MAX_MACRO_SHIFT,
   macroWeights,
@@ -533,6 +534,67 @@ describe('metas de macronutrientes', () => {
       expect(weight).toBeGreaterThanOrEqual(1 / MAX_MACRO_SHIFT);
       expect(weight).toBeLessThanOrEqual(MAX_MACRO_SHIFT);
     }
+  });
+
+  it('num plano com proteína de sobra, baixar a meta de proteína baixa a do plano', () => {
+    // Plano individual com 172 g de proteína em 1.974 kcal, escalado para 2.290 kcal.
+    const food = (
+      name: string,
+      grams: number,
+      kcal: number,
+      protein: number,
+      carbs: number,
+      fat: number,
+    ) => ({ name, grams, kcal, protein, carbs, fat });
+    const rich = [
+      [
+        food('Ovo cozido', 150, 219, 20, 1, 14),
+        food('Pão francês', 50, 150, 4, 29, 2),
+        food('Iogurte desnatado', 170, 70, 6, 10, 1),
+        food('Banana prata', 100, 98, 1, 26, 0),
+      ],
+      [
+        food('Peito de frango grelhado', 170, 270, 54, 0, 4),
+        food('Arroz integral', 150, 186, 4, 39, 2),
+        food('Feijão carioca', 100, 76, 5, 14, 1),
+        food('Alface', 50, 6, 1, 1, 0),
+        food('Tomate', 80, 12, 1, 2, 0),
+        food('Azeite', 8, 71, 0, 0, 8),
+      ],
+      [
+        food('Patinho grelhado', 200, 438, 72, 0, 15),
+        food('Mandioca cozida', 150, 188, 1, 45, 0),
+        food('Brócolis', 100, 25, 2, 4, 1),
+        food('Abacate', 80, 77, 1, 5, 7),
+        food('Azeite', 10, 88, 0, 0, 10),
+      ],
+    ];
+    // Proteína do dia com os pesos, levada a 2.290 kcal (como faz o `goalFactor`).
+    const proteinFor = (protein: number) => {
+      const goals = {
+        protein,
+        fat: 89,
+        carbs: (2290 - protein * 4 - 89 * 9) / 4,
+      };
+      const weights = macroWeights(rich, goals);
+      const totals = sumTotals(
+        rich.flat().map((item) => {
+          const weight = foodWeight(item, weights);
+          return {
+            ...item,
+            protein: item.protein * weight,
+            fat: item.fat * weight,
+            carbs: item.carbs * weight,
+          };
+        }),
+      );
+      return (
+        (totals.protein * 2290) /
+        (totals.protein * 4 + totals.fat * 9 + totals.carbs * 4)
+      );
+    };
+    expect(Math.abs(proteinFor(178) - 178)).toBeLessThanOrEqual(3);
+    expect(Math.abs(proteinFor(160) - 160)).toBeLessThanOrEqual(3);
   });
 
   it('sem metas de macros, ou sem meta calórica, todas as porções crescem igual', () => {
