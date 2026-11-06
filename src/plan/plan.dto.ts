@@ -1,6 +1,7 @@
 import {
   IsIn,
   IsInt,
+  IsOptional,
   IsString,
   Matches,
   Max,
@@ -48,4 +49,11 @@ export class SwapDto {
   @ValidateIf((_, value) => value !== null)
   @IsString({ message: 'Escolha o substituto.' })
   substitute: string | null;
+}
+
+/** `POST /plan/personalize`: o plano a montar de novo (sem ele, todos). */
+export class PersonalizeDto {
+  @IsOptional()
+  @IsInt({ message: 'Plano não encontrado.' })
+  planId?: number;
 }

@@ -1,8 +1,34 @@
 // Regras e textos da rotina (funções puras).
-import type { MealSlot, Routine } from '../contract.js';
+import { weekday } from '../common/timezone.js';
+import type {
+  Diet,
+  MealSlot,
+  Routine,
+  RoutineSchedule,
+  Weekday,
+} from '../contract.js';
 
 /** O front manda horas cheias: marcadas uma sim, uma não, as 24 horas dão 12 janelas. */
 export const MAX_EATING_WINDOWS = 12;
+
+/** No máximo um grupo por dia da semana. */
+export const MAX_SCHEDULES = 7;
+
+/** Os dias da semana na ordem da tela (de segunda a domingo). */
+export const WEEK: Weekday[] = [1, 2, 3, 4, 5, 6, 0];
+
+const DAY_NAMES: Record<Weekday, string> = {
+  0: 'domingo',
+  1: 'segunda',
+  2: 'terça',
+  3: 'quarta',
+  4: 'quinta',
+  5: 'sexta',
+  6: 'sábado',
+};
+
+/** A rotina de um grupo de dias, com o tipo de alimentação (que vale para todos): o que monta um plano. */
+export type DayRoutine = RoutineSchedule & { diet: Diet };
 
 /** As refeições do dia, na ordem em que acontecem. */
 export const MEAL_SLOTS: MealSlot[] = [
@@ -45,6 +71,25 @@ function overlaps(
 
 /** Regras entre os campos da rotina: a mensagem do primeiro problema, ou `null` se está tudo certo. */
 export function routineError(routine: Routine): string | null {
+  const { schedules } = routine;
+  if (schedules.length === 0 || schedules.length > MAX_SCHEDULES)
+    return `Informe de 1 a ${MAX_SCHEDULES} grupos de dias.`;
+  if (schedules.some((schedule) => schedule.days.length === 0))
+    return 'Escolha os dias da semana de cada grupo.';
+  const days = schedules.flatMap((schedule) => schedule.days);
+  if (new Set(days).size !== days.length)
+    return 'Um dia não pode estar em dois grupos.';
+  if (WEEK.some((day) => !days.includes(day)))
+    return 'Cada dia da semana deve estar em um grupo.';
+  for (const schedule of schedules) {
+    const error = scheduleError(schedule);
+    if (error) return error;
+  }
+  return null;
+}
+
+/** Regras entre os campos de um grupo de dias. */
+function scheduleError(routine: RoutineSchedule): string | null {
   const windows = routine.eatingWindows;
   if (windows.length === 0)
     return 'Informe pelo menos um horário disponível para comer.';
@@ -72,12 +117,80 @@ export function routineError(routine: Routine): string | null {
   return null;
 }
 
-/** A rotina como linhas de prompt para o assistente. */
-export function routineLines(routine: Routine): string[] {
+/** Os dias por extenso: "segunda, quinta e sexta" ou "todos os dias". */
+export function daysText(days: Weekday[]): string {
+  if (days.length === WEEK.length) return 'todos os dias';
+  const names = WEEK.filter((day) => days.includes(day)).map(
+    (day) => DAY_NAMES[day],
+  );
+  return names.length > 1
+    ? `${names.slice(0, -1).join(', ')} e ${names.at(-1)}`
+    : names[0];
+}
+
+/** O grupo da rotina que tem o dia `day` ("AAAA-MM-DD"). */
+export function scheduleOn(routine: Routine, day: string): RoutineSchedule {
+  const today = weekday(day);
+  return (
+    routine.schedules.find((schedule) =>
+      schedule.days.includes(today as Weekday),
+    ) ?? routine.schedules[0]
+  );
+}
+
+/** O que monta o plano do grupo `schedule`. */
+export function dayRoutine(
+  routine: Routine,
+  schedule: RoutineSchedule,
+): DayRoutine {
+  return { ...schedule, diet: routine.diet };
+}
+
+/**
+ * Os números dos grupos: um grupo que veio com o número de um grupo de `previous` fica com ele (e com o plano dele);
+ * sem número conhecido, fica com o do grupo de `previous` que tem os mesmos dias; os outros ganham os próximos
+ * números, sem repetir os de `previous`.
+ */
+export function withScheduleIds(
+  routine: Routine,
+  previous: Routine | null,
+): Routine {
+  const old = previous?.schedules ?? [];
+  const known = new Set(old.map((schedule) => schedule.id));
+  const sameDays = (a: Weekday[], b: Weekday[]) =>
+    a.length === b.length && a.every((day) => b.includes(day));
+  const used = new Set<number>();
+  const kept = routine.schedules.map((schedule) => {
+    const id = known.has(schedule.id)
+      ? schedule.id
+      : old.find(
+          (item) =>
+            !routine.schedules.some((other) => other.id === item.id) &&
+            sameDays(item.days, schedule.days),
+        )?.id;
+    if (id === undefined || used.has(id)) return null;
+    used.add(id);
+    return id;
+  });
+  let next = Math.max(0, ...known) + 1;
+  return {
+    ...routine,
+    schedules: routine.schedules.map((schedule, index) => ({
+      ...schedule,
+      id: kept[index] ?? next++,
+    })),
+  };
+}
+
+/** Um grupo da rotina como linhas de prompt para o assistente. */
+export function routineLines(routine: RoutineSchedule): string[] {
   const windows = routine.eatingWindows
     .map(({ start, end }) => `${start}–${end}`)
     .join(', ');
   return [
+    ...(routine.days.length < WEEK.length
+      ? [`Dias da semana desta rotina: ${daysText(routine.days)}.`]
+      : []),
     `Refeições que faz no dia: ${routine.meals.map((slot) => MEAL_NAMES[slot]).join(', ')}.`,
     `Rotina: acorda às ${routine.wakeTime} e dorme às ${routine.sleepTime}; ` +
       (routine.trainingStart && routine.trainingEnd

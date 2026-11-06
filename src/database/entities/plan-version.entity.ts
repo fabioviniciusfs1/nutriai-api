@@ -37,12 +37,17 @@ export type PlanVersionTotals = {
  */
 @Entity('plan_versions')
 @Index(['userId', 'id'])
+@Index(['userId', 'scheduleId', 'id'])
 export class PlanVersionEntity {
   @PrimaryGeneratedColumn('increment')
   id: number;
 
   @Column('uuid', { name: 'user_id' })
   userId: string;
+
+  /** Grupo de dias da rotina do plano (`RoutineSchedule.id`). */
+  @Column('int', { name: 'schedule_id', default: 1 })
+  scheduleId: number;
 
   /** "AAAA-MM-DD" no fuso do usuário: dia em que foi montada. */
   @Column('date')
@@ -52,7 +57,7 @@ export class PlanVersionEntity {
   @Column('boolean')
   edited: boolean;
 
-  /** `plan_states.personalization_at` da montagem do assistente que gerou a versão; `null` no plano base. */
+  /** `schedule_plans.personalization_at` da montagem do assistente que gerou a versão; `null` no plano base. */
   @Column('timestamptz', { name: 'assembled_at', nullable: true })
   assembledAt: Date | null;
 

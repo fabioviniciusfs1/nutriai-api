@@ -4,10 +4,13 @@ import type {
   FoodFeedback,
   Goal,
   MealSlot,
-  Routine,
   Sex,
 } from '../../contract.js';
-import { MEAL_NAMES, routineLines } from '../../users/routine.js';
+import {
+  type DayRoutine,
+  MEAL_NAMES,
+  routineLines,
+} from '../../users/routine.js';
 import type { FoodCatalog } from '../engine/foods.js';
 import type { PersonalMeals } from '../engine/types.js';
 import {
@@ -100,7 +103,8 @@ export type PersonalPlanRequest = {
   day: Macros & { kcal: number };
   /** Refeições a montar (ids do plano base), na ordem do dia; o assistente escolhe o horário de cada uma. */
   meals: { id: number; slot: MealSlot }[];
-  routine: Routine;
+  /** A rotina do grupo de dias do plano. */
+  routine: DayRoutine;
   /** Alimentos restritos (não podem entrar). */
   restricted: string[];
 };
@@ -152,7 +156,7 @@ export function personalPlanPrompt(request: PersonalPlanRequest): string {
   return lines.join('\n');
 }
 
-type EatingWindow = Routine['eatingWindows'][number];
+type EatingWindow = DayRoutine['eatingWindows'][number];
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const minutes = (time: string) =>

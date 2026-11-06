@@ -160,16 +160,32 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
     "targetWeightKg": 60
   },
   "routine": {
-    "eatingWindows": [
-      { "start": "07:00", "end": "08:30" },
-      { "start": "12:00", "end": "13:30" },
-      { "start": "19:00", "end": "21:00" }
+    "schedules": [
+      {
+        "id": 1,
+        "days": [1, 2, 3, 4, 5],
+        "eatingWindows": [
+          { "start": "07:00", "end": "08:30" },
+          { "start": "12:00", "end": "13:30" },
+          { "start": "19:00", "end": "21:00" }
+        ],
+        "wakeTime": "06:30",
+        "sleepTime": "23:00",
+        "trainingStart": "18:00",
+        "trainingEnd": "19:00",
+        "meals": ["cafe-da-manha", "almoco", "lanche-da-tarde", "jantar"]
+      },
+      {
+        "id": 2,
+        "days": [6, 0],
+        "eatingWindows": [{ "start": "09:00", "end": "21:59" }],
+        "wakeTime": "08:30",
+        "sleepTime": "00:00",
+        "trainingStart": null,
+        "trainingEnd": null,
+        "meals": ["cafe-da-manha", "almoco", "jantar"]
+      }
     ],
-    "wakeTime": "06:30",
-    "sleepTime": "23:00",
-    "trainingStart": "18:00",
-    "trainingEnd": "19:00",
-    "meals": ["cafe-da-manha", "almoco", "lanche-da-tarde", "jantar"],
     "weighInDay": 1,
     "diet": "vegetariana"
   },
@@ -224,8 +240,20 @@ peso meta). Não muda as metas nem o plano. Sem perfil → `400` "Preencha o per
 
 Corpo: a `routine` inteira. Sem perfil → `400` "Preencha o perfil primeiro.".
 
+- `schedules`: os **grupos de dias da semana**, de 1 a 7 (`400` "Informe de 1 a 7 grupos de dias."), cada um com
+  a rotina dele e o **próprio plano** (ex.: seg, qui e sex com lanche da tarde; ter, qua, sáb e dom sem). Quem tem
+  a mesma rotina todos os dias manda um grupo só, com os 7 dias.
+  - `days`: os dias da semana do grupo (`0` = domingo … `6` = sábado), sem repetir ("Escolha os dias da semana de
+    cada grupo."). Todo dia fica em exatamente um grupo: "Cada dia da semana deve estar em um grupo.", "Um dia não
+    pode estar em dois grupos.". A resposta traz os dias em ordem, de segunda a domingo.
+  - `id`: o número do grupo, que é o do plano dele (`?plan=` nas rotas do plano). Um grupo que já existe vai com o
+    `id` dele, para continuar com o mesmo plano; um grupo novo vai sem `id` (ou com um desconhecido) e o backend
+    dá o próximo número. Sem `id`, um grupo com exatamente os mesmos dias de um grupo salvo fica com o número dele.
+    Um grupo que sai da rotina perde o plano.
+  - Os campos abaixo (`eatingWindows`, `wakeTime`, `sleepTime`, `trainingStart`, `trainingEnd`, `meals`) e as
+    regras deles valem para cada grupo.
 - `eatingWindows`: de 1 a 12 janelas `{ "start": "HH:MM", "end": "HH:MM" }` em que a pessoa pode comer, iguais
-  todos os dias: início antes do fim, em ordem e sem sobreposição (uma pode começar quando a outra termina).
+  em todos os dias do grupo: início antes do fim, em ordem e sem sobreposição (uma pode começar quando a outra termina).
   O front mostra as horas do dia e a pessoa marca as que pode comer; cada hora disponível vale
   até o minuto 59 dela (sem encostar na hora seguinte) e as vizinhas viram uma janela só (07, 08 e 12
   disponíveis → `07:00–08:59` e `12:00–12:59`).
@@ -238,16 +266,17 @@ Corpo: a `routine` inteira. Sem perfil → `400` "Preencha o perfil primeiro.".
 - As janelas de `eatingWindows` não podem ter nenhum minuto dentro do sono (de `sleepTime` até `wakeTime`) nem
   do treino: `400` "Os horários para comer não podem cair no horário de sono ou de treino.". Encostar pode (treino
   das 06:00 às 07:00 → janela `07:00–08:00`). O front já tira esses horários da grade.
-- `meals`: as refeições que a pessoa faz no dia, de `cafe-da-manha | lanche-da-manha | almoco |
+- `meals`: as refeições que a pessoa faz nos dias do grupo, de `cafe-da-manha | lanche-da-manha | almoco |
   lanche-da-tarde | jantar | ceia`, sem repetir nem valores de fora ("Escolha as refeições que você faz no dia.").
   `cafe-da-manha`, `almoco` e `jantar` sempre entram (o backend acrescenta se faltarem; `meals` pode vir vazio ou
   sem o campo): a pessoa escolhe só os lanches (`lanche-da-manha`, `lanche-da-tarde`, `ceia`). A resposta traz na
   ordem do dia.
-- `weighInDay`, `diet`: como em `GET /me`.
+- `weighInDay`, `diet`: como em `GET /me`; valem para todos os grupos.
 
 Na **primeira vez** (rotina era `null`) e com o assistente configurado, começa a montagem do **plano
-individual** em segundo plano (ver "Plano individual" em `GET /plan/today`); a resposta não espera por ela.
-Salvar a rotina de novo **não** monta outro plano: o front pergunta ao usuário e, se ele quiser, chama
+individual** de cada grupo em segundo plano, um depois do outro (ver "Plano individual" em `GET /plan/today`); a
+resposta não espera por ela. Salvar a rotina de novo **não** monta outro plano para os grupos que já existiam (só
+os grupos novos ganham o plano deles na hora): o front pergunta ao usuário e, se ele quiser, chama
 `POST /plan/personalize`. Sem refazer, a rotina nova vale para o que não depende do plano individual
 (refeições do plano padrão, tipo de alimentação nos substitutos, dia da pesagem).
 
@@ -414,11 +443,24 @@ lista completa atualizada. Depois o front busca `/me` de novo (para `weighInDue`
 
 ### `GET /plan/today` → `TodayPlan`
 
-O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por horário:
+O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por horário. O plano de hoje é o do grupo
+de dias da rotina que tem o dia de hoje (no fuso do `X-Timezone`).
+
+**Planos dos outros dias**: todas as rotas do plano (`/plan/today`, `/plan/personalize` e `/plan/meals/{id}/…`)
+aceitam `?plan=<id>` (o `id` do grupo, `RoutineSchedule.id`) para abrir o plano de outro grupo de dias; sem ele,
+vale o de hoje. Plano que não existe → `404` "Plano não encontrado.". O que muda num plano (horário, trocas "Não
+quero", porções) fica só nele; as restrições ("Não gosto/Não tenho/Não posso") e as trocas gerais valem em todos.
+O alimento extra só entra no plano de hoje: em outro → `400` "Só dá para acrescentar alimento no plano de hoje.".
+`/nutrition/today`, o histórico de dias e a prévia do ajuste da dieta usam o plano de hoje.
 
 ```json
 {
   "personalization": "ready",
+  "plan": { "id": 1, "days": [1, 2, 3, 4, 5], "active": true },
+  "plans": [
+    { "id": 1, "days": [1, 2, 3, 4, 5], "active": true, "personalization": "ready" },
+    { "id": 2, "days": [6, 0], "active": false, "personalization": "ready" }
+  ],
   "meals": [
     {
       "id": 1,
@@ -442,14 +484,16 @@ O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por h
 - `units`: só nos ovos de galinha inteiros (cozido, frito, poché…), quantas unidades; `grams` = `units` ×
   `eggUnitGrams` do ajuste da dieta (55 g por padrão). As porções desses ovos sempre ficam em unidades inteiras
   (pelo menos 1), menos no alimento extra com as gramas do usuário. O front mostra "2 ovos" com "55 g/unid." embaixo.
+- `plan`: o plano que veio (`active` = é o de hoje); `plans`: todos os planos, um por grupo de dias, em ordem de
+  `id` (o front mostra abas quando há mais de um, com o de hoje marcado).
 - `personalization`: montagem do plano individual — `pending` (montando; `meals` traz o plano atual, mas o front
   mostra só um card "Montando seu plano personalizado…" e pergunta de novo a cada poucos segundos), `ready` (aplicado), `failed` (não deu certo; o plano não muda) ou `null`
   (nunca pedido: sem assistente).
 
 **Todas as rotas de alteração do plano abaixo respondem `200` com o `TodayPlan` atualizado.**
 
-**Plano individual**: na primeira rotina, o assistente monta as refeições do plano base que o usuário marcou em
-`routine.meals` (mesmos ids; cada uma no seu papel: café da manhã, lanche, almoço…), com o perfil, as metas do dia, o tipo de alimentação, os restritos e a
+**Plano individual**: na primeira rotina, o assistente monta, para cada grupo de dias, as refeições do plano base
+que o usuário marcou no `meals` do grupo (mesmos ids; cada uma no seu papel: café da manhã, lanche, almoço…), com o perfil, as metas do dia, o tipo de alimentação, os restritos e a
 rotina. Ele escolhe o **horário** de cada refeição dentro de `eatingWindows` e monta as refeições pela rotina
 (uma refeição perto do treino, leve perto de dormir). A refeição dura até 30 minutos e termina pelo menos 30 minutos antes do fim da janela: o horário vai
 do início da janela até 1 hora antes da hora cheia em que ela acaba (janela `12:00–13:59` → de 12:00 a 13:00;
@@ -469,14 +513,15 @@ Sem o assistente, o plano padrão fica com os horários do plano base.
 ### `POST /plan/personalize` → `TodayPlan`
 
 Monta o plano individual de novo, com o perfil e a rotina atuais: é o "Refazer meu plano" depois de mudar a
-rotina e o "tentar de novo" depois de uma falha. Responde na hora, já com `pending`. Com uma montagem em
+rotina e o "tentar de novo" depois de uma falha. Corpo opcional `{ "planId": 2 }`: só o plano desse grupo (o
+"tentar de novo" de um plano); sem ele, todos os planos. `planId` que não existe → `404` "Plano não encontrado.". Responde na hora, já com `pending`. Com uma montagem em
 andamento → `409` "Seu plano já está sendo montado."; sem perfil ou rotina → `409` "Preencha o perfil e a
 rotina para montar o plano."; sem o assistente → `503` "O assistente está indisponível agora. Tente de novo em
 instantes.".
 
 **Plano inicial**, antes das mudanças do usuário:
 
-- Tem as refeições de `routine.meals` (as do plano individual, quando houver), uma do plano base para cada: café da
+- Tem as refeições do `meals` do grupo de dias do plano (as do plano individual, quando houver), uma do plano base para cada: café da
   manhã, lanche da manhã, almoço, lanche da tarde, jantar e ceia. Sem rotina: café da manhã, almoço e jantar.
   Para incluir ou tirar uma refeição, o usuário muda a rotina (`PUT /me/routine`); não há rota para criar nem
   remover refeição avulsa.
@@ -528,7 +573,7 @@ Corpo: `{ "time": "08:00" }`. Permanente.
 
 ### Incluir ou tirar refeição
 
-Não há rota para criar nem remover uma refeição avulsa: as refeições do dia vêm de `routine.meals`. Para
+Não há rota para criar nem remover uma refeição avulsa: as refeições do dia vêm do `meals` do grupo de dias. Para
 incluir ou tirar uma, o usuário muda a rotina (`PUT /me/routine`). Uma refeição incluída entra com a versão
 padrão do plano base (ou a do assistente, se ele refizer o plano com `POST /plan/personalize`).
 
@@ -749,8 +794,9 @@ Os dias começam, no máximo, no dia da criação da conta (ver o início da se�
 
 ### `GET /history/plans` → `PlanHistoryEntry[]`
 
-Histórico de **planos** (não de dias), do mais recente para o mais antigo (até 50). O primeiro é o plano em vigor
-(`current: true`).
+Histórico de **planos** (não de dias), do mais recente para o mais antigo (até 50). Cada grupo de dias da rotina tem
+os planos dele: o mais recente de cada grupo é o em vigor (`current: true`), e `days` traz os dias do grupo como
+estão na rotina agora (vazio se o grupo saiu da rotina).
 
 - Um plano por **montagem**: o do assistente, ou o plano base quando não há assistente. Enquanto o assistente
   monta (`personalization: "pending"`), nada é gravado; a primeira montagem do assistente fica no lugar do plano
@@ -775,6 +821,7 @@ Histórico de **planos** (não de dias), do mais recente para o mais antigo (at�
     "date": "2026-10-24",
     "edited": true,
     "current": true,
+    "days": [1, 2, 3, 4, 5],
     "totals": { "kcal": 1560, "protein": 128, "carbs": 142, "fat": 52, "fiber": 24 },
     "meals": [
       {

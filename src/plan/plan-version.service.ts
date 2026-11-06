@@ -6,7 +6,10 @@ import { PlanVersionEntity } from '../database/entities/index.js';
 import { planNutrients } from './nutrients.js';
 import { appendEdits, nextPlanVersion, planVersion } from './plan-versions.js';
 
-/** Grava as versões do plano (base de `/history/plans`): uma por montagem, com as mudanças do usuário nela. */
+/**
+ * Grava as versões do plano (base de `/history/plans`): uma por montagem de cada grupo de dias da rotina, com as
+ * mudanças do usuário nela.
+ */
 @Injectable()
 export class PlanVersionService {
   constructor(private readonly catalog: CatalogService) {}
@@ -14,6 +17,7 @@ export class PlanVersionService {
   async record(
     manager: EntityManager,
     userId: string,
+    scheduleId: number,
     today: string,
     meals: PlanMeal[],
     personalization: Personalization,
@@ -24,7 +28,7 @@ export class PlanVersionService {
     const fiber = planNutrients(meals, await this.catalog.micros()).fibras ?? 0;
     const version = planVersion(meals, fiber);
     const last = await manager.findOne(PlanVersionEntity, {
-      where: { userId },
+      where: { userId, scheduleId },
       order: { id: 'DESC' },
     });
     const assembledAt = personalization === 'ready' ? personalizationAt : null;
@@ -32,6 +36,7 @@ export class PlanVersionService {
     if (action === 'insert')
       await manager.insert(PlanVersionEntity, {
         userId,
+        scheduleId,
         date: today,
         edited: false,
         assembledAt,

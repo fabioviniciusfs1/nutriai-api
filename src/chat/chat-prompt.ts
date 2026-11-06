@@ -6,7 +6,7 @@ import type {
   TodayPlan,
 } from '../contract.js';
 import { DIET_NAMES } from '../plan/engine/diet.js';
-import { routineLines } from '../users/routine.js';
+import { daysText, routineLines, scheduleOn, WEEK } from '../users/routine.js';
 
 /** Instruções fixas do assistente (não mudam entre requisições: ficam em cache). */
 export const SYSTEM_PROMPT = `Você é o assistente nutricional do NutriAI, um app brasileiro de plano alimentar.
@@ -55,10 +55,16 @@ export function userContext(input: {
       `Metas: ${targets.calories} kcal por dia (gasto estimado ${targets.tdee} kcal), água ${targets.waterLiters} L.`,
     );
     if (routine) {
-      lines.push(
-        `Tipo de alimentação: ${DIET_NAMES[routine.diet]}.`,
-        ...routineLines(routine),
-      );
+      lines.push(`Tipo de alimentação: ${DIET_NAMES[routine.diet]}.`);
+      // Com grupos de dias, cada um tem a rotina e o plano dele; o de hoje vem marcado.
+      const today = scheduleOn(routine, input.today);
+      for (const schedule of routine.schedules) {
+        if (routine.schedules.length > 1)
+          lines.push(
+            `Rotina de ${daysText(schedule.days)}${schedule.id === today.id ? ' (a de hoje)' : ''}:`,
+          );
+        lines.push(...routineLines({ ...schedule, days: WEEK }));
+      }
     }
   } else {
     lines.push('Perfil ainda não preenchido.');

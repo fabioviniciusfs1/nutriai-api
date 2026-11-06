@@ -14,9 +14,7 @@ export class FoodsController {
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
   ): Promise<RestrictedFood[]> {
-    return this.plan.read(userId, clock, (planner) =>
-      planner.restrictedFoods(),
-    );
+    return this.plan.restrictedFoods(userId, clock);
   }
 
   /** "Liberar": só tira a restrição; as trocas já feitas continuam. */
@@ -29,8 +27,6 @@ export class FoodsController {
     await this.plan.update(userId, clock, (planner) =>
       planner.releaseFood(name),
     );
-    return this.plan.read(userId, clock, (planner) =>
-      planner.restrictedFoods(),
-    );
+    return this.plan.restrictedFoods(userId, clock);
   }
 }

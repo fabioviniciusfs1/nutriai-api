@@ -69,16 +69,23 @@ npx vitest run -t "não gosto"                     # por nome do teste
   `@Clock()` (o "hoje" pelo `X-Timezone`), `@Public()` e `@CurrentUser()`. O `AuthGuard` é global (`APP_GUARD`).
 - `src/plan/engine/`: regras do plano como funções puras (porte de `reference/MealPlan.tsx` e
   `food-substitution.ts`). `Planner` recebe o catálogo e o `PlanState` e devolve o novo estado ou uma prévia;
-  `PlanService` carrega/salva o estado (lock da linha em `plan_states`) e grava a foto do dia (`day_logs`),
-  que é a base de `/nutrition/today` e `/history/*`. Mude regras do plano no engine, com teste em `planner.spec.ts`.
+  `PlanService` carrega/salva o estado e grava a foto do dia (`day_logs`), que é a base de `/nutrition/today` e
+  `/history/*`. O estado tem duas linhas, travadas nessa ordem: `plan_states` (do usuário: restrições e trocas
+  gerais, `lockPlanState`) e `schedule_plans` (do plano de um grupo de dias: horários, porções, extras, trocas "Não
+  quero", plano individual e personalização, `lockSchedulePlan`); o `toPlanState` junta as duas no `PlanState`. Mude regras do plano no engine, com teste em `planner.spec.ts`.
 - Perfil e rotina (`src/users/`): o cadastro tem dois passos. `users.profile` tem o que a meta usa (sexo,
   idade, peso, altura, atividade, objetivo) e o peso meta (`targetWeightKg`, o único campo que muda depois do
   cadastro: `PUT /me/target-weight`; `projectWeight` em `src/targets/` faz a projeção pela regra de 7.700 kcal/kg, com datas a partir do dia em que o
-  peso meta foi salvo, `users.target_weight_set_on`); `users.routine` (`PUT /me/routine`, exige o perfil) tem as janelas
-  para comer (sempre fora do sono e do treino), sono, início e fim do treino, as refeições que a pessoa faz (`meals`:
-  café da manhã, almoço e jantar sempre, `MAIN_MEALS`, que o `toRoutine` acrescenta; a pessoa escolhe só os lanches:
-  lanche da manhã, lanche da tarde, ceia), dia da pesagem e tipo de alimentação. As regras entre os campos e as
-  linhas de prompt ficam em `routine.ts` (`routineError`, `routineLines`, `MEAL_SLOTS`). Sem rotina: café da manhã, almoço e jantar, sem restrição.
+  peso meta foi salvo, `users.target_weight_set_on`); `users.routine` (`PUT /me/routine`, exige o perfil) tem os
+  grupos de dias da semana (`schedules`, de 1 a 7; cada dia em exatamente um) e, para todos, o dia da pesagem e o
+  tipo de alimentação. Cada grupo (`RoutineSchedule`: `id`, `days`) tem as janelas para comer (sempre fora do sono
+  e do treino), sono, início e fim do treino e as refeições que a pessoa faz (`meals`: café da manhã, almoço e
+  jantar sempre, `MAIN_MEALS`, que o `toRoutine` acrescenta; a pessoa escolhe só os lanches: lanche da manhã, lanche
+  da tarde, ceia), e tem o próprio plano (`schedule_plans`, pelo `id`). `withScheduleIds` dá os números: o grupo
+  que veio com um número salvo fica com ele, sem número fica com o do grupo salvo de mesmos dias, os outros ganham
+  os próximos. As regras entre os campos e as linhas de prompt ficam em `routine.ts` (`routineError`,
+  `routineLines`, `MEAL_SLOTS`, `scheduleOn` = o grupo de um dia, `dayRoutine` = grupo + tipo de alimentação, o
+  que os prompts recebem). Sem rotina: café da manhã, almoço e jantar, sem restrição.
 - Ajuste da dieta (`src/targets/diet.ts`; `GET`/`PUT /me/diet`, `POST /me/diet/estimate` e `POST /me/diet/preview`,
   que não salvam; a prévia é o `PlanService.previewDiet`, com o plano de hoje pelas metas novas e o que muda):
   `users.diet_settings` tem proteína e gordura em g/kg e o peso da unidade do ovo (`null` = 2, 1 e 55 g). Mínimos
@@ -97,8 +104,12 @@ npx vitest run -t "não gosto"                     # por nome do teste
   esse objetivo). `calorieAdvice`: chegou ao peso meta → escolher um novo; virou e não ajustou depois → ±10% na
   direção nova; parou de cair (< 0,2 kg/semana, `weeklyChange` só desde o último ajuste ou virada) → −10% (ou
   `floor`); parou de subir → +10%. A mesma sugestão vai em `Me.calorieAdvice` (central de notificações do front).
-- Plano inicial: as refeições base cujo `slot` (`base_meals.slot`, uma por refeição do dia) está em
-  `routine.meals`, e todas as
+- Planos por grupo de dias: toda rota do plano aceita `?plan=<id>` (o `id` do grupo; sem ele, o do grupo de
+  hoje, `scheduleOn`); o `TodayPlan` traz `plan` e `plans` (as abas do front). A foto do dia (`day_logs`) só é
+  gravada pelo plano de hoje; o alimento extra só entra nele (`todayOnly`, 400 em outro). Sem rotina, um plano
+  só (`DEFAULT_SCHEDULE`, id 1). A página Alimentos procura os substitutos de "Não quero" em todos os planos.
+- Plano inicial: as refeições base cujo `slot` (`base_meals.slot`, uma por refeição do dia) está no `meals` do
+  grupo de dias do plano, e todas as
   porções multiplicadas pelos `goalFactors` do `Planner` (um por refeição: a meta calórica dividida 35% manhã, 40%
   tarde, 25% noite, `PERIOD_SHARES`, e, no período, em partes iguais entre a refeição principal e o lanche; o
   período vem do tipo da refeição, `SLOT_PERIODS`, não do horário; cada um é o `goalFactor` da refeição, ajustado
@@ -112,21 +123,23 @@ npx vitest run -t "não gosto"                     # por nome do teste
   única ação que aumenta o total. Extras antigos, sem `fixed`, seguem escalados com a refeição. O extra vale só no
   dia em que entrou (`ExtraFood.date`, o `today` do `PlannerOptions`): o construtor do `Planner` tira os de outro
   dia (os sem `fixed` como em `removeExtraFood`) e o `withPlanner` salva o estado limpo (`planner.expired`).
-- Não há rota para criar nem remover refeição: as refeições do dia são as de `routine.meals`. O que o usuário
-  muda no plano é permanente (`plan_states`): horários, trocas e fatores de porção (os alimentos extras, só no dia).
+- Não há rota para criar nem remover refeição: as refeições do dia são as do `meals` do grupo. O que o usuário
+  muda no plano é permanente (`schedule_plans`, só naquele plano): horários, trocas e fatores de porção (os
+  alimentos extras, só no dia); as restrições e trocas gerais (`plan_states`) valem em todos.
 - Plano individual (`src/plan/personalizer.service.ts`): no primeiro `PUT /me/routine`, o Claude monta as refeições
-  do plano base para o usuário em segundo plano (`composer/personal-plan.ts`, com o `CLAUDE_PLAN_MODEL`, Sonnet, e
+  do plano base de cada grupo de dias (uma chamada por grupo, uma depois da outra; depois, `routineChanged` só monta
+  os grupos novos e apaga o plano dos que saíram) em segundo plano (`composer/personal-plan.ts`, com o `CLAUDE_PLAN_MODEL`, Sonnet, e
   `fallbacks: 'default'` no endpoint beta), escolhendo o horário de cada uma dentro das janelas da rotina e
   distribuindo as calorias por ela. A refeição dura até 30 min e acaba 30 min antes do fim da janela: só começa
   até 1 h antes da hora cheia em que a janela acaba (`mealStartWindows`; `12:00–13:59` → 12:00 a 13:00), e é
-  nesses inícios que valem as regras abaixo. Ficam em `plan_states.personal_meals` (id da refeição base → título,
+  nesses inícios que valem as regras abaixo. Ficam em `schedule_plans.personal_meals` (id da refeição base → título,
   alimentos e horário) e o `Planner` usa no lugar das padrão. No máximo 6 h entre uma refeição e a seguinte, ou até o
   início da próxima janela se 6 h depois não pode comer (`nextMealDeadline`): `fitFastingLimit` adianta só as
   que passam do limite, mantendo os outros horários do Claude. Horário fora das janelas, repetido, ilegível ou
   fora da ordem do dia: `spreadMealTimes` espalha todas (uma por janela; as que sobram nas mais longas) e o
-  limite vale do mesmo jeito. Os ajustes vão para o log. Estado em `plan_states.personalization` (`pending` antigo vira
+  limite vale do mesmo jeito. Os ajustes vão para o log. Estado em `schedule_plans.personalization` (`pending` antigo vira
   `failed`); `POST /plan/personalize` monta de novo (depois de uma falha ou quando o usuário muda a rotina e pede
-  para refazer). Nos e2e, espere com `PlanPersonalizerService.whenIdle()` depois da primeira rotina (ele usa o
+  para refazer; `{ planId }` = só esse plano, sem ele todos). Nos e2e, espere com `PlanPersonalizerService.whenIdle()` depois da primeira rotina (ele usa o
   mock do Claude).
 - Tipo de alimentação (`routine.diet`): `src/plan/engine/diet.ts` marca a origem animal de cada alimento
   (`foods.animal`, pela categoria da TACO e por palavras do nome) e `allowedByDiet` filtra o plano individual
@@ -158,7 +171,8 @@ npx vitest run -t "não gosto"                     # por nome do teste
   `outsideWindowsAdvice` responde sem o Claude, com `canKeep: false` (sem "Manter"). Sem o Claude ou se ele falhar, ok.
 - Histórico (`src/history/`): `days` = 7, 30 ou `all` (`HistoryPeriod`); o `window()` do `HistoryService` nunca
   vai antes do dia da criação da conta (`users.created_at` no fuso do usuário, também em `Me.user.createdOn`).
-- Histórico de planos (`plan_versions`, `GET /history/plans`): uma versão por montagem. O `PlanVersionService` grava,
+- Histórico de planos (`plan_versions`, `GET /history/plans`): uma versão por montagem, por grupo de dias
+  (`plan_versions.schedule_id`; a versão de comparação é a última do mesmo grupo, e cada grupo tem a dele em vigor). O `PlanVersionService` grava,
   junto da foto do dia em `withPlanner` (nada enquanto a personalização está `pending`), pela regra de
   `nextPlanVersion` (`src/plan/plan-versions.ts`): `plan_versions.assembled_at` guarda o `personalization_at` da
   montagem do assistente; uma montagem nova (refazer, `POST /plan/personalize`) cria outra versão, e a primeira, depois

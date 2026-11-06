@@ -20,6 +20,7 @@ import { ExtraFoodDate1791600000000 } from './migrations/1791600000000-extra-foo
 import { PlanVersionsPerAssembly1791700000000 } from './migrations/1791700000000-plan-versions-per-assembly.js';
 import { CalorieGoal1791800000000 } from './migrations/1791800000000-calorie-goal.js';
 import { RoutineMainMeals1791900000000 } from './migrations/1791900000000-routine-main-meals.js';
+import { RoutineSchedules1792000000000 } from './migrations/1792000000000-routine-schedules.js';
 
 /** Migrations em ordem; as novas entram no fim da lista. */
 export const MIGRATIONS = [
@@ -43,6 +44,7 @@ export const MIGRATIONS = [
   PlanVersionsPerAssembly1791700000000,
   CalorieGoal1791800000000,
   RoutineMainMeals1791900000000,
+  RoutineSchedules1792000000000,
 ];
 
 export function dataSourceOptions(url: string): DataSourceOptions {

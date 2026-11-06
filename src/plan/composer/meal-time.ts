@@ -1,6 +1,10 @@
 // Partes puras da avaliação do novo horário de uma refeição pelo assistente: prompt, schema e validação.
-import type { MealSlot, Routine } from '../../contract.js';
-import { MEAL_NAMES, routineLines } from '../../users/routine.js';
+import type { MealSlot } from '../../contract.js';
+import {
+  type DayRoutine,
+  MEAL_NAMES,
+  routineLines,
+} from '../../users/routine.js';
 import {
   mealStartWindows,
   profileLine,
@@ -48,7 +52,8 @@ export const MEAL_TIME_SCHEMA = {
 export type MealTimeRequest = {
   profile: PersonalPlanRequest['profile'];
   /** `null` sem rotina: o prompt fica sem sono, treino e janelas. */
-  routine: Routine | null;
+  /** A rotina do grupo de dias do plano. */
+  routine: DayRoutine | null;
   /** O plano do dia, na ordem, com os horários de agora. */
   meals: {
     id: number;
@@ -155,7 +160,7 @@ export function outsideWindowsAdvice(
 export function parseMealTimeAdvice(
   text: string,
   time: string,
-  routine: Routine | null,
+  routine: DayRoutine | null,
 ): MealTimeAdvice | null {
   let data: unknown;
   try {

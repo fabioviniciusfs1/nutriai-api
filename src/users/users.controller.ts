@@ -58,16 +58,19 @@ export class UsersController {
     );
   }
 
-  /** Na primeira vez que a rotina é salva, o assistente começa a montar o plano individual (em segundo plano). */
+  /**
+   * Na primeira vez que a rotina é salva, o assistente começa a montar os planos individuais (em segundo plano); depois,
+   * só os dos grupos de dias novos.
+   */
   @Put('me/routine')
   async updateRoutine(
     @CurrentUser() userId: string,
     @Body() body: RoutineDto,
     @Clock() clock: UserClock,
   ): Promise<Me> {
-    const first = (await this.users.get(userId)).routine === null;
+    const previous = (await this.users.get(userId)).routine;
     const me = await this.users.updateRoutine(userId, toRoutine(body), clock);
-    if (first) await this.personalizer.start(userId);
+    await this.personalizer.routineChanged(userId, previous, me.routine!);
     return me;
   }
 

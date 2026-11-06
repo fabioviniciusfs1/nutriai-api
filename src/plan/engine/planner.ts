@@ -283,6 +283,19 @@ export function goalFactor(
   return best.factor;
 }
 
+/** Sem rotina por grupos de dias: um plano só, o de todos os dias. */
+const SINGLE_PLAN: Pick<TodayPlan, 'plan' | 'plans'> = {
+  plan: { id: 1, days: [1, 2, 3, 4, 5, 6, 0], active: true },
+  plans: [
+    {
+      id: 1,
+      days: [1, 2, 3, 4, 5, 6, 0],
+      active: true,
+      personalization: null,
+    },
+  ],
+};
+
 export const MEAL_NOT_FOUND = 'Refeição não encontrada.';
 /** Quantos substitutos oferecer ao trocar um alimento. */
 export const MAX_SUBSTITUTES = 8;
@@ -497,6 +510,7 @@ export class Planner {
         foods,
       })),
       personalization: this.options.personalization ?? null,
+      ...(this.options.plans ?? SINGLE_PLAN),
     };
   }
 
@@ -762,14 +776,20 @@ export class Planner {
   }
 
   /** Alimentos restritos, para a página Alimentos (em ordem alfabética). */
-  restrictedFoods(): RestrictedFood[] {
-    const { foodFeedback, foodSubstitutes, mealFoodSwaps } = this.state;
+  /** `otherSwaps`: as trocas por refeição dos outros planos do usuário (os substitutos de "Não quero"). */
+  restrictedFoods(
+    otherSwaps: Record<number, Record<string, string>>[] = [],
+  ): RestrictedFood[] {
+    const { foodFeedback, foodSubstitutes } = this.state;
+    const mealFoodSwaps = [this.state.mealFoodSwaps, ...otherSwaps].flatMap(
+      (swaps) => Object.values(swaps),
+    );
     return Object.entries(foodFeedback)
       .sort(([a], [b]) => a.localeCompare(b, 'pt-BR'))
       .map(([name, feedback]) => {
         const swap =
           foodSubstitutes[name] ??
-          Object.values(mealFoodSwaps)
+          mealFoodSwaps
             .map((swaps) => swaps[name])
             .find((value) => value !== undefined);
         return {

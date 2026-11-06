@@ -25,9 +25,10 @@ import {
   GRAMS_MESSAGE,
   MAX_EXTRA_GRAMS,
   MealTimeDto,
+  PersonalizeDto,
   SwapDto,
 } from './plan.dto.js';
-import { PlanService } from './plan.service.js';
+import { PLAN_NOT_FOUND, PlanService } from './plan.service.js';
 import { PlanPersonalizerService } from './personalizer.service.js';
 
 /** Id de refeição na URL; inválido = refeição inexistente. */
@@ -35,6 +36,16 @@ const MealId = () =>
   new ParseIntPipe({
     exceptionFactory: () => new NotFoundException(MEAL_NOT_FOUND),
   });
+
+/** `?plan=<id>`: o plano do grupo de dias (sem ele, o de hoje); inválido = plano inexistente. */
+const PlanId = () => ({
+  transform(value: string | undefined): number | undefined {
+    if (value === undefined || value === '') return undefined;
+    const id = Number(value);
+    if (!Number.isInteger(id)) throw new NotFoundException(PLAN_NOT_FOUND);
+    return id;
+  },
+});
 
 /** Quantos nomes já mostrados o "Ver mais" pode mandar. */
 const MAX_EXCLUDED = 64;
@@ -63,19 +74,35 @@ export class PlanController {
   today(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
+    @Query('plan', PlanId()) planId: number | undefined,
   ): Promise<TodayPlan> {
-    return this.plan.read(userId, clock, (planner) => planner.todayPlan());
+    return this.plan.read(
+      userId,
+      clock,
+      (planner) => planner.todayPlan(),
+      planId,
+    );
   }
 
-  /** Tenta de novo montar o plano individual, depois de uma falha (a montagem segue em segundo plano). */
+  /**
+   * Monta de novo o plano individual (depois de uma falha ou de mudar a rotina; segue em segundo plano): o do
+   * corpo `{ planId }`, ou todos sem ele. Responde o plano de hoje (ou o `?plan=`).
+   */
   @Post('personalize')
   @HttpCode(200)
   async personalize(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
+    @Query('plan', PlanId()) planId: number | undefined,
+    @Body() body: PersonalizeDto,
   ): Promise<TodayPlan> {
-    await this.personalizer.retry(userId);
-    return this.plan.read(userId, clock, (planner) => planner.todayPlan());
+    await this.personalizer.retry(userId, body.planId);
+    return this.plan.read(
+      userId,
+      clock,
+      (planner) => planner.todayPlan(),
+      planId,
+    );
   }
 
   /** O que o assistente acha do novo horário, antes de salvar (o `PUT` salva depois). */
@@ -84,21 +111,26 @@ export class PlanController {
   checkTime(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
+    @Query('plan', PlanId()) planId: number | undefined,
     @Param('id', MealId()) id: number,
     @Body() body: MealTimeDto,
   ): Promise<MealTimeCheck> {
-    return this.plan.checkMealTime(userId, clock, id, body.time);
+    return this.plan.checkMealTime(userId, clock, id, body.time, planId);
   }
 
   @Put('meals/:id/time')
   changeTime(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
+    @Query('plan', PlanId()) planId: number | undefined,
     @Param('id', MealId()) id: number,
     @Body() body: MealTimeDto,
   ): Promise<TodayPlan> {
-    return this.plan.update(userId, clock, (planner) =>
-      planner.changeMealTime(id, body.time),
+    return this.plan.update(
+      userId,
+      clock,
+      (planner) => planner.changeMealTime(id, body.time),
+      { planId },
     );
   }
 
@@ -106,12 +138,16 @@ export class PlanController {
   searchFood(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
+    @Query('plan', PlanId()) planId: number | undefined,
     @Param('id', MealId()) id: number,
     @Query('q') q: string | undefined,
   ): Promise<FoodSearchResult> {
     const query = requiredQuery(q, 'Informe o alimento.');
-    return this.plan.read(userId, clock, (planner) =>
-      planner.searchFoods(id, query),
+    return this.plan.read(
+      userId,
+      clock,
+      (planner) => planner.searchFoods(id, query),
+      planId,
     );
   }
 
@@ -120,11 +156,16 @@ export class PlanController {
   addFood(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
+    @Query('plan', PlanId()) planId: number | undefined,
     @Param('id', MealId()) id: number,
     @Body() body: AddFoodDto,
   ): Promise<TodayPlan> {
-    return this.plan.update(userId, clock, (planner) =>
-      planner.addFood(id, body.foodName, body.grams),
+    // O alimento extra vale só no dia em que entrou: só no plano de hoje.
+    return this.plan.update(
+      userId,
+      clock,
+      (planner) => planner.addFood(id, body.foodName, body.grams),
+      { planId, todayOnly: true },
     );
   }
 
@@ -133,14 +174,18 @@ export class PlanController {
   foodPortion(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
+    @Query('plan', PlanId()) planId: number | undefined,
     @Param('id', MealId()) id: number,
     @Query('food') food: string | undefined,
     @Query('grams') grams: string | undefined,
   ): Promise<PlanFood> {
     const foodName = requiredQuery(food, 'Informe o alimento.');
     const amount = gramsQuery(grams);
-    return this.plan.read(userId, clock, (planner) =>
-      planner.foodPortion(id, foodName, amount),
+    return this.plan.read(
+      userId,
+      clock,
+      (planner) => planner.foodPortion(id, foodName, amount),
+      planId,
     );
   }
 
@@ -148,11 +193,15 @@ export class PlanController {
   removeFood(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
+    @Query('plan', PlanId()) planId: number | undefined,
     @Param('id', MealId()) id: number,
     @Param('extraId') extraId: string,
   ): Promise<TodayPlan> {
-    return this.plan.update(userId, clock, (planner) =>
-      planner.removeExtraFood(id, extraId),
+    return this.plan.update(
+      userId,
+      clock,
+      (planner) => planner.removeExtraFood(id, extraId),
+      { planId },
     );
   }
 
@@ -160,6 +209,7 @@ export class PlanController {
   substitutes(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
+    @Query('plan', PlanId()) planId: number | undefined,
     @Param('id', MealId()) id: number,
     @Query('food') food: string | undefined,
     @Query('exclude') exclude: string | string[] | undefined,
@@ -169,8 +219,11 @@ export class PlanController {
     // Pesquisa de quem já sabe o que quer comer: só o catálogo, sem o assistente.
     const query = typeof q === 'string' ? q.trim() : '';
     if (query)
-      return this.plan.read(userId, clock, (planner) =>
-        planner.searchSubstitutes(id, foodName, query),
+      return this.plan.read(
+        userId,
+        clock,
+        (planner) => planner.searchSubstitutes(id, foodName, query),
+        planId,
       );
     // "Ver mais": os nomes já mostrados, um `exclude` por nome (os nomes da TACO têm vírgula).
     const shown = [exclude ?? []]
@@ -179,7 +232,7 @@ export class PlanController {
       .map((name) => name.trim())
       .filter(Boolean)
       .slice(0, MAX_EXCLUDED);
-    return this.plan.substitutes(userId, clock, id, foodName, shown);
+    return this.plan.substitutes(userId, clock, id, foodName, shown, planId);
   }
 
   @Post('meals/:id/swaps')
@@ -187,6 +240,7 @@ export class PlanController {
   swap(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
+    @Query('plan', PlanId()) planId: number | undefined,
     @Param('id', MealId()) id: number,
     @Body() body: SwapDto,
   ): Promise<TodayPlan> {
@@ -195,7 +249,7 @@ export class PlanController {
       clock,
       (planner) =>
         planner.swapFood(id, body.foodName, body.reason, body.substitute),
-      body.foodName,
+      { flaggedFood: body.foodName, planId },
     );
   }
 }

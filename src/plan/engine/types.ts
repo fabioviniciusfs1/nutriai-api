@@ -4,6 +4,7 @@ import type {
   FoodGroup,
   MealSlot,
   Personalization,
+  TodayPlan,
   Totals,
 } from '../../contract.js';
 import type { AnimalTag } from './diet.js';
@@ -104,6 +105,8 @@ export type PlannerOptions = {
   personalization?: Personalization;
   /** "AAAA-MM-DD" de hoje no fuso do usuário: os alimentos extras de outro dia saem do plano. Sem ele, nada expira. */
   today?: string;
+  /** O plano (grupo de dias da rotina) e todos os do usuário, devolvidos em `todayPlan()` (padrão: um só, ativo). */
+  plans?: Pick<TodayPlan, 'plan' | 'plans'>;
 };
 
 export const DEFAULT_PLANNER_OPTIONS: PlannerOptions = {

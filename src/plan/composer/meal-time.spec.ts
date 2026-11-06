@@ -1,4 +1,4 @@
-import type { Routine } from '../../contract.js';
+import { type DayRoutine, WEEK } from '../../users/routine.js';
 import {
   mealTimePrompt,
   outsideWindowsAdvice,
@@ -6,7 +6,9 @@ import {
   type MealTimeRequest,
 } from './meal-time.js';
 
-const routine: Routine = {
+const routine: DayRoutine = {
+  id: 1,
+  days: WEEK,
   eatingWindows: [
     { start: '07:00', end: '08:59' },
     { start: '12:00', end: '13:59' },
@@ -17,7 +19,6 @@ const routine: Routine = {
   trainingStart: null,
   trainingEnd: null,
   meals: ['cafe-da-manha', 'almoco', 'jantar'],
-  weighInDay: 1,
   diet: 'onivora',
 };
 

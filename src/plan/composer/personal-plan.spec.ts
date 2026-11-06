@@ -1,4 +1,4 @@
-import type { Routine } from '../../contract.js';
+import { type DayRoutine, WEEK } from '../../users/routine.js';
 import { allowedByDiet } from '../engine/diet.js';
 import { FoodCatalog } from '../engine/foods.js';
 import { testCatalog, testFoods } from '../engine/test-catalog.js';
@@ -303,14 +303,15 @@ describe('personalPlanPrompt e personalPlanRequest', () => {
     goal: 'perder',
     targetWeightKg: null,
   } as const;
-  const routine: Routine = {
+  const routine: DayRoutine = {
+    id: 1,
+    days: WEEK,
     eatingWindows: WINDOWS,
     wakeTime: '06:30',
     sleepTime: '23:00',
     trainingStart: '18:00',
     trainingEnd: '19:00',
     meals: ['cafe-da-manha', 'almoco', 'lanche-da-tarde', 'jantar'],
-    weighInDay: 1,
     diet: 'vegetariana',
   };
 

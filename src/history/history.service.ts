@@ -18,7 +18,7 @@ import {
 } from '../database/entities/index.js';
 import { GOOGLE_SOURCE, HealthService } from '../health/health.service.js';
 import { nutrientGoal } from '../nutrition/nutrient-goals.js';
-import { PlanService } from '../plan/plan.service.js';
+import { PlanService, schedulesOf } from '../plan/plan.service.js';
 import { calculateTargets, DEFAULT_CALORIE_GOAL } from '../targets/targets.js';
 import { UsersService } from '../users/users.service.js';
 import {
@@ -131,10 +131,16 @@ export class HistoryService {
     });
   }
 
-  /** Planos do mais recente (o em vigor) para o mais antigo, cada um com o que mudou do anterior. */
+  /**
+   * Planos do mais recente para o mais antigo, cada um com o que mudou do anterior; o em vigor de cada grupo de
+   * dias da rotina é o mais recente dele.
+   */
   async plans(userId: string, clock: UserClock): Promise<PlanHistoryEntry[]> {
-    // Lê o plano antes: a versão de agora fica gravada.
-    await this.plan.read(userId, clock, () => null);
+    // Lê os planos antes: a versão de agora de cada grupo fica gravada.
+    const { routine } = await this.users.get(userId);
+    const schedules = schedulesOf(routine);
+    for (const { id } of schedules)
+      await this.plan.read(userId, clock, () => null, id);
     const [versions, catalog] = await Promise.all([
       this.planVersions.find({
         where: { userId },
@@ -147,13 +153,19 @@ export class HistoryService {
     const baseSlots = new Map(
       catalog.baseMeals.map((meal) => [meal.id, meal.slot]),
     );
-    return versions.map((version, index) => {
+    const seen = new Set<number>();
+    return versions.map((version) => {
       const changes = version.changes ?? [];
+      const schedule = schedules.find((item) => item.id === version.scheduleId);
+      // A primeira (mais recente) de um grupo que ainda existe é a em vigor.
+      const current = !!schedule && !seen.has(version.scheduleId);
+      seen.add(version.scheduleId);
       return {
         id: `p-${version.id}`,
         date: version.date,
         edited: changes.length > 0,
-        current: index === 0,
+        current,
+        days: schedule?.days ?? [],
         totals: version.totals,
         meals: version.meals.map(({ id, slot, title, time, kcal, foods }) => ({
           slot: slot ?? baseSlots.get(id)!,

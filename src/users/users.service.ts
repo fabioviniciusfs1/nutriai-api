@@ -49,7 +49,7 @@ import {
   MIN_FAT_PER_KG,
   MIN_PROTEIN_PER_KG,
 } from '../targets/diet.js';
-import { routineError } from './routine.js';
+import { routineError, withScheduleIds } from './routine.js';
 
 @Injectable()
 export class UsersService {
@@ -217,7 +217,11 @@ export class UsersService {
     const user = await this.get(userId);
     if (!user.profile)
       throw new BadRequestException('Preencha o perfil primeiro.');
-    await this.users.update({ id: userId }, { routine });
+    // Os grupos que já existiam ficam com o número (e o plano) deles.
+    await this.users.update(
+      { id: userId },
+      { routine: withScheduleIds(routine, user.routine) },
+    );
     return this.me(userId, clock);
   }
 

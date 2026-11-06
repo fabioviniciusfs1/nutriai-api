@@ -42,8 +42,18 @@ export type Profile = {
 /** Refeição do dia que a pessoa faz (cada uma é uma refeição do plano). */
 export type MealSlot = "cafe-da-manha" | "lanche-da-manha" | "almoco" | "lanche-da-tarde" | "jantar" | "ceia";
 
-/** Rotina e preferências alimentares: o assistente monta o plano individual a partir dela. */
-export type Routine = {
+/** Dia da semana: 0 = domingo … 6 = sábado. */
+export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/** Rotina de um grupo de dias da semana: cada grupo tem o próprio plano. */
+export type RoutineSchedule = {
+  /**
+   * Número do grupo (e do plano dele). No `PUT /me/routine`, um grupo novo vai sem `id` (ou com um desconhecido) e o
+   * backend dá o próximo número; um grupo que já existe mantém o dele, para continuar com o mesmo plano.
+   */
+  id: number;
+  /** Dias da semana do grupo, sem repetir (o backend guarda em ordem, de segunda a domingo). */
+  days: Weekday[];
   /** Janelas em que dá para comer ("HH:MM"), em ordem, sem sobreposição e com início antes do fim. De 1 a 12. */
   eatingWindows: { start: string; end: string }[];
   /** "HH:MM" */
@@ -55,13 +65,19 @@ export type Routine = {
   /** "HH:MM"; pode ser antes de `trainingStart` (treino que passa da meia-noite). */
   trainingEnd: string | null;
   /**
-   * Refeições que a pessoa faz no dia, sem repetir. Café da manhã, almoço e jantar sempre fazem parte (o backend
-   * acrescenta se faltarem); a pessoa escolhe os lanches (lanche da manhã, lanche da tarde, ceia). O backend
-   * guarda na ordem do dia.
+   * Refeições que a pessoa faz nesses dias, sem repetir. Café da manhã, almoço e jantar sempre fazem parte (o
+   * backend acrescenta se faltarem); a pessoa escolhe os lanches (lanche da manhã, lanche da tarde, ceia). O
+   * backend guarda na ordem do dia.
    */
   meals: MealSlot[];
-  /** Dia da semana do lembrete de pesagem: 0 = domingo … 6 = sábado. */
-  weighInDay: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+};
+
+/** Rotina e preferências alimentares: o assistente monta o plano individual de cada grupo de dias a partir dela. */
+export type Routine = {
+  /** De 1 a 7 grupos; cada dia da semana fica em exatamente um. */
+  schedules: RoutineSchedule[];
+  /** Dia da semana do lembrete de pesagem. */
+  weighInDay: Weekday;
   diet: Diet;
 };
 
@@ -257,6 +273,18 @@ export type TodayPlan = {
    * se não deu certo, `ready` quando aplicado e `null` se nunca foi pedido.
    */
   personalization: Personalization;
+  /** O plano que veio: o de hoje, ou o pedido com `?plan=<id>`. */
+  plan: PlanSummary;
+  /** Todos os planos do usuário (um por grupo de dias da rotina), em ordem de `id`. */
+  plans: (PlanSummary & { personalization: Personalization })[];
+};
+
+/** Plano de um grupo de dias da rotina (`id` = `RoutineSchedule.id`). */
+export type PlanSummary = {
+  id: number;
+  days: Weekday[];
+  /** É o plano de hoje (o grupo tem o dia de hoje). */
+  active: boolean;
 };
 
 export type FoodSearchResult = {
@@ -408,8 +436,10 @@ export type PlanHistoryEntry = {
   date: string;
   /** `true` = o usuário alterou o plano depois de montado (`changes` não está vazio). */
   edited: boolean;
-  /** O plano em vigor (o primeiro da lista). */
+  /** O plano em vigor do grupo de dias dele (a versão mais recente do grupo). */
   current: boolean;
+  /** Dias da semana do grupo do plano, como estão na rotina agora (vazio se o grupo não existe mais). */
+  days: Weekday[];
   totals: Totals & { fiber: number };
   meals: { slot: MealSlot; title: string; time: string; kcal: number; foods: PlanHistoryFood[] }[];
   /** Alterações feitas nesse plano, da mais recente para a mais antiga; vazio se não mudou. */

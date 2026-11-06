@@ -13,7 +13,7 @@ import type {
   TodayPlan,
   WeightProjection,
 } from '../src/contract.js';
-import { addDays, userClock } from '../src/common/timezone.js';
+import { addDays, userClock, weekday } from '../src/common/timezone.js';
 import { PlanPersonalizerService } from '../src/plan/personalizer.service.js';
 import { createTestApp, FRONTEND } from './setup-app.js';
 
@@ -41,7 +41,9 @@ const PROFILE = {
   targetWeightKg: 60,
 };
 
-const ROUTINE = {
+/** Os horários da rotina (um grupo de dias, sem o número). */
+const SCHEDULE = {
+  days: [1, 2, 3, 4, 5, 6, 0],
   eatingWindows: [
     { start: '07:00', end: '08:30' },
     { start: '12:00', end: '13:30' },
@@ -53,9 +55,16 @@ const ROUTINE = {
   trainingStart: '18:00',
   trainingEnd: '19:00',
   meals: ['cafe-da-manha', 'almoco', 'lanche-da-tarde', 'jantar'],
+};
+
+/** Rotina com um grupo só (todos os dias), com `change` nos horários dele. */
+const routineWith = (change: object = {}) => ({
+  schedules: [{ ...SCHEDULE, ...change }],
   weighInDay: 1,
   diet: 'onivora',
-};
+});
+
+const ROUTINE = routineWith();
 
 /** Espera a montagem do plano individual (que roda em segundo plano depois da primeira rotina). */
 const personalizationIdle = () => app.get(PlanPersonalizerService).whenIdle();
@@ -281,11 +290,14 @@ describe('perfil e pesos', () => {
       .send({ ...ROUTINE, preferences: 'Almoço de marmita.' })
       .expect(200);
     await personalizationIdle();
-    expect((saved.body as Me).routine).toEqual(ROUTINE);
+    expect((saved.body as Me).routine).toEqual({
+      ...ROUTINE,
+      schedules: [{ id: 1, ...SCHEDULE }],
+    });
 
-    const invalid = (routine: object, error: string) =>
+    const invalid = (change: object, error: string) =>
       http('put', '/me/routine')
-        .send({ ...ROUTINE, ...routine })
+        .send(routineWith(change))
         .expect(400, { error });
     await invalid(
       { eatingWindows: [] },
@@ -332,26 +344,30 @@ describe('perfil e pesos', () => {
       { start: '12:00', end: '12:59' },
     ];
     const byHour = await http('put', '/me/routine')
-      .send({ ...ROUTINE, eatingWindows: hours })
+      .send(routineWith({ eatingWindows: hours }))
       .expect(200);
-    expect((byHour.body as Me).routine?.eatingWindows).toEqual(hours);
+    expect((byHour.body as Me).routine?.schedules[0].eatingWindows).toEqual(
+      hours,
+    );
     await personalizationIdle();
     // Café da manhã, almoço e jantar sempre entram; os lanches são os marcados (guardados na ordem do dia). Os
     // campos de fome de um front antigo são ignorados.
     const few = await http('put', '/me/routine')
-      .send({ ...ROUTINE, meals: ['ceia'], hungriestPeriod: 'noite' })
+      .send(routineWith({ meals: ['ceia'], hungriestPeriod: 'noite' }))
       .expect(200);
-    expect((few.body as Me).routine?.meals).toEqual([
+    expect((few.body as Me).routine?.schedules[0].meals).toEqual([
       'cafe-da-manha',
       'almoco',
       'jantar',
       'ceia',
     ]);
-    expect((few.body as Me).routine).not.toHaveProperty('hungriestPeriod');
+    expect((few.body as Me).routine?.schedules[0]).not.toHaveProperty(
+      'hungriestPeriod',
+    );
     const mains = await http('put', '/me/routine')
-      .send({ ...ROUTINE, meals: undefined })
+      .send(routineWith({ meals: undefined }))
       .expect(200);
-    expect((mains.body as Me).routine?.meals).toEqual([
+    expect((mains.body as Me).routine?.schedules[0].meals).toEqual([
       'cafe-da-manha',
       'almoco',
       'jantar',
@@ -362,16 +378,87 @@ describe('perfil e pesos', () => {
     expect(Math.abs(kcal(plan) - 1660)).toBeLessThanOrEqual(17);
     // Quem não treina manda os dois horários em branco.
     const idle = await http('put', '/me/routine')
-      .send({ ...ROUTINE, trainingStart: null, trainingEnd: null })
+      .send(routineWith({ trainingStart: null, trainingEnd: null }))
       .expect(200);
-    expect((idle.body as Me).routine).toMatchObject({
+    expect((idle.body as Me).routine?.schedules[0]).toMatchObject({
       trainingStart: null,
       trainingEnd: null,
     });
     // Dá para comer logo depois do treino.
     await http('put', '/me/routine')
-      .send({ ...ROUTINE, trainingStart: '06:30', trainingEnd: '07:00' })
+      .send(routineWith({ trainingStart: '06:30', trainingEnd: '07:00' }))
       .expect(200);
+  });
+
+  it('tem um plano por grupo de dias da rotina, e o de hoje é o ativo', async () => {
+    const { http } = await newUser();
+    await http('put', '/me/profile').send(PROFILE).expect(200);
+    // Hoje num grupo, com lanche da tarde; os outros dias em outro, sem lanche.
+    const today = weekday(userClock('America/Sao_Paulo').today);
+    const others = SCHEDULE.days.filter((day) => day !== today);
+    const saved = await http('put', '/me/routine')
+      .send({
+        ...ROUTINE,
+        schedules: [
+          { ...SCHEDULE, days: others, meals: [] },
+          { ...SCHEDULE, days: [today] },
+        ],
+      })
+      .expect(200);
+    await personalizationIdle();
+    const [rest, todays] = (saved.body as Me).routine!.schedules;
+    expect([rest.id, todays.id]).toEqual([1, 2]);
+
+    const active = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+    expect(active.plan).toEqual({ id: 2, days: [today], active: true });
+    expect(active.plans.map(({ id, active }) => ({ id, active }))).toEqual([
+      { id: 1, active: false },
+      { id: 2, active: true },
+    ]);
+    expect(active.meals.map((meal) => meal.slot)).toContain('lanche-da-tarde');
+    const other = (await http('get', '/plan/today?plan=1').expect(200))
+      .body as TodayPlan;
+    expect(other.plan.active).toBe(false);
+    expect(other.meals.map((meal) => meal.slot)).not.toContain(
+      'lanche-da-tarde',
+    );
+    await http('get', '/plan/today?plan=9').expect(404, {
+      error: 'Plano não encontrado.',
+    });
+
+    // O que muda num plano fica nele.
+    const changed = (
+      await http('put', '/plan/meals/1/time?plan=1')
+        .send({ time: '08:00' })
+        .expect(200)
+    ).body as TodayPlan;
+    expect(changed.meals.find((meal) => meal.id === 1)?.time).toBe('08:00');
+    const still = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+    expect(still.meals.find((meal) => meal.id === 1)?.time).not.toBe('08:00');
+    // O alimento extra só no plano de hoje.
+    await http('post', '/plan/meals/1/foods?plan=1')
+      .send({ foodName: 'Banana, prata, crua', grams: 100 })
+      .expect(400, {
+        error: 'Só dá para acrescentar alimento no plano de hoje.',
+      });
+
+    // O histórico tem o plano em vigor de cada grupo, com os dias.
+    const history = (await http('get', '/history/plans').expect(200))
+      .body as PlanHistoryEntry[];
+    expect(
+      history.filter((entry) => entry.current).map((entry) => entry.days),
+    ).toEqual(expect.arrayContaining([others, [today]]));
+
+    // Sem o grupo 2, o plano dele sai.
+    await http('put', '/me/routine')
+      .send({ ...ROUTINE, schedules: [{ ...SCHEDULE, id: 1 }] })
+      .expect(200);
+    await http('get', '/plan/today?plan=2').expect(404);
+    const single = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+    expect(single.plan).toMatchObject({ id: 1, active: true });
   });
 
   it('registra pesagens e recusa datas fora do intervalo', async () => {
@@ -1136,7 +1223,10 @@ describe('plano individual do assistente', () => {
       .send({ ...PROFILE, weightKg: 70 })
       .expect(200);
     await http('put', '/me/routine')
-      .send({ ...VEGETARIAN, trainingStart: null, trainingEnd: null })
+      .send({
+        ...routineWith({ trainingStart: null, trainingEnd: null }),
+        diet: 'vegetariana',
+      })
       .expect(200);
     await personalizationIdle();
     expect(create).toHaveBeenCalledTimes(1);
@@ -1542,7 +1632,7 @@ describe('alimento extra', () => {
 
     // O dia virou: o extra passa a ser de ontem.
     await app.get(DataSource).query(
-      `UPDATE plan_states
+      `UPDATE schedule_plans
          SET plan_changes = jsonb_set(plan_changes, '{extraFoods,1,0,date}', to_jsonb($2::text))
        WHERE user_id = (SELECT id FROM users WHERE username = $1)`,
       [username, addDays(userClock('America/Sao_Paulo').today, -1)],

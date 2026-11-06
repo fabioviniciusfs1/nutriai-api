@@ -11,6 +11,7 @@ import { LlmCallEntity } from './llm-call.entity.js';
 import { OAuthCodeEntity } from './oauth-code.entity.js';
 import { PlanStateEntity } from './plan-state.entity.js';
 import { PlanVersionEntity } from './plan-version.entity.js';
+import { SchedulePlanEntity } from './schedule-plan.entity.js';
 import { TacoFoodEntity } from './taco-food.entity.js';
 import { TbcaFoodEntity } from './tbca-food.entity.js';
 import { UserEntity } from './user.entity.js';
@@ -34,6 +35,7 @@ export {
   OAuthCodeEntity,
   PlanStateEntity,
   PlanVersionEntity,
+  SchedulePlanEntity,
   TacoFoodEntity,
   TbcaFoodEntity,
   UserEntity,
@@ -52,6 +54,7 @@ export const ENTITIES = [
   OAuthCodeEntity,
   PlanStateEntity,
   PlanVersionEntity,
+  SchedulePlanEntity,
   TacoFoodEntity,
   TbcaFoodEntity,
   UserEntity,

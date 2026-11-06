@@ -1,29 +1,38 @@
 import {
   ConflictException,
   Injectable,
+  NotFoundException,
   ServiceUnavailableException,
   Logger,
   type OnApplicationShutdown,
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import type { DataSource } from 'typeorm';
+import { type DataSource, In, Not } from 'typeorm';
 import { CatalogService } from '../catalog/catalog.service.js';
 import type { DietSettings, Profile, Routine } from '../contract.js';
-import { PlanStateEntity } from '../database/entities/index.js';
+import {
+  PlanStateEntity,
+  SchedulePlanEntity,
+} from '../database/entities/index.js';
 import { dietSettingsOf } from '../targets/diet.js';
 import { calculateTargets, macroTargets } from '../targets/targets.js';
-import { MEAL_SLOTS } from '../users/routine.js';
+import { type DayRoutine, dayRoutine, MEAL_SLOTS } from '../users/routine.js';
 import { UsersService } from '../users/users.service.js';
 import type { PersonalPlanRequest } from './composer/personal-plan.js';
 import { MealComposerService } from './composer/meal-composer.service.js';
 import { EMPTY_PLAN_CHANGES, type Catalog } from './engine/types.js';
-import { lockPlanState, personalizationStatus } from './plan.service.js';
+import {
+  lockSchedulePlan,
+  personalizationStatus,
+  PLAN_NOT_FOUND,
+} from './plan.service.js';
 
 /**
  * Plano individual: na primeira vez que a rotina é salva (e quando o usuário pede para refazer), o Claude monta
- * as refeições do plano base para o usuário, com os horários pela rotina, em segundo plano. Enquanto isso o
- * plano atual aparece com `personalization: 'pending'`; ao terminar, as refeições dele entram no lugar (e as
- * mudanças feitas no plano são zeradas, menos as restrições). Se falhar, fica `failed` e o plano não muda.
+ * as refeições do plano base para o usuário, com os horários pela rotina, em segundo plano: um plano por grupo de
+ * dias da rotina, um depois do outro. Enquanto isso o plano aparece com `personalization: 'pending'`; ao terminar,
+ * as refeições dele entram no lugar (e as mudanças feitas no plano são zeradas, menos as restrições). Se falhar,
+ * fica `failed` e o plano não muda.
  */
 @Injectable()
 export class PlanPersonalizerService implements OnApplicationShutdown {
@@ -38,26 +47,52 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
     private readonly composer: MealComposerService,
   ) {}
 
-  /** Começa a montagem em segundo plano (sem o assistente configurado, fica o plano padrão). */
-  async start(userId: string): Promise<void> {
+  /**
+   * Depois de salvar a rotina: os planos dos grupos que saíram são apagados; na primeira rotina, o assistente monta
+   * todos os planos, e depois, só os dos grupos novos (os outros, só se o usuário pedir para refazer).
+   */
+  async routineChanged(
+    userId: string,
+    previous: Routine | null,
+    routine: Routine,
+  ): Promise<void> {
+    const ids = routine.schedules.map((schedule) => schedule.id);
+    await this.dataSource
+      .getRepository(SchedulePlanEntity)
+      .delete({ userId, scheduleId: Not(In(ids)) });
+    const known = new Set(previous?.schedules.map((schedule) => schedule.id));
+    const added = previous ? ids.filter((id) => !known.has(id)) : ids;
+    if (added.length > 0) await this.start(userId, added);
+  }
+
+  /** Começa a montagem dos planos `scheduleIds` em segundo plano (sem o assistente configurado, fica o padrão). */
+  async start(userId: string, scheduleIds: number[]): Promise<void> {
     if (!this.composer.available) return;
     await this.dataSource.transaction(async (manager) => {
-      const entity = await lockPlanState(manager, userId);
-      if (personalizationStatus(entity) === 'pending')
+      const plans = [];
+      for (const id of scheduleIds)
+        plans.push(await lockSchedulePlan(manager, userId, id));
+      if (plans.some((plan) => personalizationStatus(plan) === 'pending'))
         throw new ConflictException('Seu plano já está sendo montado.');
-      await manager.save(
-        Object.assign(entity, {
-          personalization: 'pending',
-          personalizationAt: new Date(),
-        }),
-      );
+      for (const plan of plans)
+        await manager.save(
+          Object.assign(plan, {
+            personalization: 'pending',
+            personalizationAt: new Date(),
+          }),
+        );
     });
-    const job = this.run(userId).finally(() => this.running.delete(job));
+    const job = this.run(userId, scheduleIds).finally(() =>
+      this.running.delete(job),
+    );
     this.running.add(job);
   }
 
-  /** `POST /plan/personalize`: monta de novo (depois de uma falha ou de mudar a rotina). */
-  async retry(userId: string): Promise<void> {
+  /**
+   * `POST /plan/personalize`: monta de novo (depois de uma falha ou de mudar a rotina) o plano `planId`; sem ele,
+   * todos os planos.
+   */
+  async retry(userId: string, planId?: number): Promise<void> {
     if (!this.composer.available)
       throw new ServiceUnavailableException(
         'O assistente está indisponível agora. Tente de novo em instantes.',
@@ -67,7 +102,10 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
       throw new ConflictException(
         'Preencha o perfil e a rotina para montar o plano.',
       );
-    await this.start(userId);
+    const ids = routine.schedules.map((schedule) => schedule.id);
+    if (planId !== undefined && !ids.includes(planId))
+      throw new NotFoundException(PLAN_NOT_FOUND);
+    await this.start(userId, planId === undefined ? ids : [planId]);
   }
 
   /** Espera as montagens em andamento terminarem. */
@@ -79,7 +117,11 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
     await this.whenIdle();
   }
 
-  private async run(userId: string): Promise<void> {
+  private async run(userId: string, scheduleIds: number[]): Promise<void> {
+    for (const scheduleId of scheduleIds) await this.runOne(userId, scheduleId);
+  }
+
+  private async runOne(userId: string, scheduleId: number): Promise<void> {
     let meals = null;
     try {
       const [
@@ -89,23 +131,25 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
       ] = await Promise.all([
         this.users.get(userId),
         this.catalog.catalog(),
-        this.dataSource
-          .getRepository(PlanStateEntity)
-          .findOneByOrFail({ userId }),
+        this.dataSource.getRepository(PlanStateEntity).findOneBy({ userId }),
       ]);
-      if (profile && routine) {
+      const schedule = routine?.schedules.find(
+        (item) => item.id === scheduleId,
+      );
+      const feedback = state?.foodFeedback ?? {};
+      if (profile && routine && schedule) {
         meals = await this.composer.composePersonalPlan(
           userId,
           personalPlanRequest(
             // O objetivo de agora (o último peso meta pode ter virado o do cadastro).
             { ...profile, goal: weightGoal ?? profile.goal },
-            routine,
+            dayRoutine(routine, schedule),
             catalog,
-            Object.keys(state.foodFeedback),
+            Object.keys(feedback),
             dietSettings,
             calorieGoal,
           ),
-          state.foodFeedback,
+          feedback,
         );
       }
     } catch (error) {
@@ -115,7 +159,7 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
     }
     try {
       await this.dataSource.transaction(async (manager) => {
-        const entity = await lockPlanState(manager, userId);
+        const entity = await lockSchedulePlan(manager, userId, scheduleId);
         await manager.save(
           Object.assign(
             entity,
@@ -141,12 +185,12 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
 }
 
 /**
- * O que o assistente precisa para montar o plano: perfil, metas do dia (com o ajuste da dieta), a rotina (com o tipo de alimentação),
+ * O que o assistente precisa para montar o plano: perfil, metas do dia (com o ajuste da dieta), a rotina do grupo de dias (com o tipo de alimentação),
  * as refeições do plano base que o usuário faz (na ordem do dia) e os alimentos restritos.
  */
 export function personalPlanRequest(
   profile: Profile,
-  routine: Routine,
+  routine: DayRoutine,
   catalog: Catalog,
   restricted: string[],
   dietSettings: DietSettings | null = null,
