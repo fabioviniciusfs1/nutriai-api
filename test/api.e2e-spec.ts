@@ -906,6 +906,7 @@ describe('plano alimentar', () => {
     const ARROZ = 'Arroz, integral, cozido';
     const ARROZ_BRANCO = 'Arroz, tipo 1, cozido';
     const AZEITE = 'Azeite, de oliva, extra virgem';
+    const MANDIOCA = 'Mandioca, cozida';
 
     const substitutes = await http(
       'get',
@@ -936,10 +937,15 @@ describe('plano alimentar', () => {
     expect(lunch.foods.map((food) => food.name)).not.toContain(ARROZ);
     expect(lunch.foods.map((food) => food.name)).toContain(ARROZ_BRANCO);
 
+    // A troca exige um substituto.
+    await http('post', '/plan/meals/2/swaps')
+      .send({ foodName: AZEITE, reason: 'nao-quero', substitute: null })
+      .expect(400, { error: 'Escolha o substituto.' });
+
     // "Não quero" só no almoço: o jantar continua com azeite.
     const withoutOil = (
       await http('post', '/plan/meals/2/swaps')
-        .send({ foodName: AZEITE, reason: 'nao-quero', substitute: null })
+        .send({ foodName: AZEITE, reason: 'nao-quero', substitute: MANDIOCA })
         .expect(200)
     ).body as TodayPlan;
     expect(
@@ -967,7 +973,7 @@ describe('plano alimentar', () => {
         feedback: 'nao-quero',
         group: 'gorduras',
         onlyInMeal: true,
-        substitute: null,
+        substitute: MANDIOCA,
       },
     ]);
 
@@ -1007,7 +1013,11 @@ describe('não posso', () => {
     const AZEITE = 'Azeite, de oliva, extra virgem';
     const plan = (
       await http('post', '/plan/meals/2/swaps')
-        .send({ foodName: AZEITE, reason: 'nao-posso', substitute: null })
+        .send({
+          foodName: AZEITE,
+          reason: 'nao-posso',
+          substitute: 'Mandioca, cozida',
+        })
         .expect(200)
     ).body as TodayPlan;
     for (const meal of plan.meals)

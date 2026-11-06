@@ -222,7 +222,12 @@ describe('Planner', () => {
     });
 
     it('recusa alimento restrito ou desconhecido', () => {
-      const state = planner().swapFood(2, 'Guacamole', 'nao-gosto', null);
+      const state = planner().swapFood(
+        2,
+        'Guacamole',
+        'nao-gosto',
+        'Banana-prata',
+      );
       expect(() => planner(state).addFood(1, 'Guacamole', 50)).toThrow(
         PlanRuleError,
       );
@@ -240,12 +245,20 @@ describe('Planner', () => {
 
   describe('trocas', () => {
     it('não posso troca em todas as refeições e marca o alimento', () => {
-      const state = planner().swapFood(1, 'Azeite de oliva', 'nao-posso', null);
+      const state = planner().swapFood(
+        1,
+        'Azeite de oliva',
+        'nao-posso',
+        'Banana-prata',
+      );
       const p = planner(state);
       for (const id of [1, 3])
         expect(p.meal(id).foods.map((food) => food.name)).not.toContain(
           'Azeite de oliva',
         );
+      expect(p.meal(3).foods.map((food) => food.name)).toContain(
+        'Banana-prata',
+      );
       expect(state.foodFeedback['Azeite de oliva']).toBe('nao-posso');
     });
 
@@ -275,11 +288,17 @@ describe('Planner', () => {
     });
 
     it('não quero troca só nesta refeição e não sobrescreve a marcação', () => {
-      const state = planner().swapFood(1, 'Azeite de oliva', 'nao-quero', null);
+      const state = planner().swapFood(
+        1,
+        'Azeite de oliva',
+        'nao-quero',
+        'Abacate',
+      );
       const p = planner(state);
       expect(p.meal(1).foods.map((food) => food.name)).not.toContain(
         'Azeite de oliva',
       );
+      expect(p.meal(1).foods.map((food) => food.name)).toContain('Abacate');
       expect(p.meal(3).foods.map((food) => food.name)).toContain(
         'Azeite de oliva',
       );
@@ -289,7 +308,7 @@ describe('Planner', () => {
           feedback: 'nao-quero',
           group: 'gorduras',
           onlyInMeal: true,
-          substitute: null,
+          substitute: 'Abacate',
         },
       ]);
 
@@ -304,7 +323,12 @@ describe('Planner', () => {
     });
 
     it('substitutos do mesmo grupo, sem o próprio e sem restritos, com as mesmas calorias', () => {
-      const state = planner().swapFood(1, 'Azeite de oliva', 'nao-quero', null);
+      const state = planner().swapFood(
+        1,
+        'Azeite de oliva',
+        'nao-quero',
+        'Banana-prata',
+      );
       const options = planner(state).substitutes(2, 'Guacamole');
       const names = options.map((food) => food.name);
       expect(names).toContain('Abacate');
@@ -352,7 +376,12 @@ describe('Planner', () => {
           .searchSubstitutes(2, 'Guacamole', 'guaca')
           .map((food) => food.name),
       ).not.toContain('Guacamole');
-      const state = planner().swapFood(1, 'Abacate', 'nao-posso', null);
+      const state = planner().swapFood(
+        1,
+        'Abacate',
+        'nao-posso',
+        'Banana-prata',
+      );
       expect(
         planner(state)
           .searchSubstitutes(2, 'Guacamole', 'abacate')
@@ -365,7 +394,12 @@ describe('Planner', () => {
     });
 
     it('com os nomes do assistente: na ordem dele, de qualquer grupo, só os válidos', () => {
-      const state = planner().swapFood(1, 'Azeite de oliva', 'nao-quero', null);
+      const state = planner().swapFood(
+        1,
+        'Azeite de oliva',
+        'nao-quero',
+        'Banana-prata',
+      );
       const options = planner(state).substitutes(2, 'Guacamole', [
         'Banana-prata',
         'Não existe',
@@ -381,6 +415,20 @@ describe('Planner', () => {
       expect(options.every((food) => Math.abs(food.kcal - 65) <= 3)).toBe(true);
     });
 
+    it('troca antiga sem substituto continua tirando o alimento', () => {
+      const p = planner({
+        ...EMPTY_STATE,
+        foodFeedback: { 'Azeite de oliva': 'nao-quero' },
+        mealFoodSwaps: { 1: { 'Azeite de oliva': '' } },
+      });
+      expect(p.meal(1).foods.map((food) => food.name)).not.toContain(
+        'Azeite de oliva',
+      );
+      expect(p.restrictedFoods()).toEqual([
+        expect.objectContaining({ name: 'Azeite de oliva', substitute: null }),
+      ]);
+    });
+
     it('troca por alimento de outro grupo; recusa restrito, o próprio e inexistente', () => {
       const swapped = planner(
         planner().swapFood(2, 'Guacamole', 'nao-gosto', 'Banana-prata'),
@@ -392,7 +440,7 @@ describe('Planner', () => {
         1,
         'Azeite de oliva',
         'nao-quero',
-        null,
+        'Abacate',
       );
       for (const substitute of ['Azeite de oliva', 'Guacamole', 'Não existe'])
         expect(() =>

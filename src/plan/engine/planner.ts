@@ -731,31 +731,29 @@ export class Planner {
   /**
    * "Não gosto" / "Não tenho" / "Não posso": troca permanente em todas as refeições e o alimento fica restrito.
    * "Não quero": troca permanente só nesta refeição; fica restrito só se ainda não tiver marcação.
-   * `substitute` `null` = sai sem substituto.
+   * O substituto é obrigatório (trocas antigas sem substituto, `''` no estado, continuam valendo).
    */
   swapFood(
     mealId: number,
     foodName: string,
     reason: FoodFeedback,
-    substitute: string | null,
+    substitute: string,
   ): PlanState {
     const food = this.mealFood(mealId, foodName);
     // Qualquer alimento do catálogo serve (o assistente sugere de qualquer grupo), menos o próprio e os restritos.
-    if (substitute !== null) {
-      const valid =
-        this.allowed(substitute) &&
-        this.foods.substitute(
-          substitute,
-          foodName,
-          food.kcal,
-          this.state.foodFeedback,
-        );
-      if (!valid)
-        throw new PlanRuleError(
-          'invalid',
-          'Esse substituto não está disponível para este alimento.',
-        );
-    }
+    const valid =
+      this.allowed(substitute) &&
+      this.foods.substitute(
+        substitute,
+        foodName,
+        food.kcal,
+        this.state.foodFeedback,
+      );
+    if (!valid)
+      throw new PlanRuleError(
+        'invalid',
+        'Esse substituto não está disponível para este alimento.',
+      );
     const { foodFeedback, foodSubstitutes, mealFoodSwaps } = this.state;
     if (reason === 'nao-quero') {
       return this.withState({
@@ -765,13 +763,13 @@ export class Planner {
         },
         mealFoodSwaps: {
           ...mealFoodSwaps,
-          [mealId]: { ...mealFoodSwaps[mealId], [foodName]: substitute ?? '' },
+          [mealId]: { ...mealFoodSwaps[mealId], [foodName]: substitute },
         },
       });
     }
     return this.withState({
       foodFeedback: { ...foodFeedback, [foodName]: reason },
-      foodSubstitutes: { ...foodSubstitutes, [foodName]: substitute ?? '' },
+      foodSubstitutes: { ...foodSubstitutes, [foodName]: substitute },
     });
   }
 

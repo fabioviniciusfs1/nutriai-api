@@ -632,7 +632,7 @@ com as **mesmas calorias** do alimento como aparece na refeição, sem o própri
   primeiro os da mesma família (mesmo começo do nome, ex. "Arroz, …"), sem preferir os crus, e pela proporção
   de proteína, gordura e carboidrato.
 - Alimentos fora do tipo de alimentação do perfil nunca entram (nem são aceitos no `POST /swaps`).
-- Lista vazia: não há substitutos (o usuário ainda pode escolher "Sem substituto").
+- Lista vazia: não há substitutos.
 - **"Ver mais"**: a mesma rota com um `exclude` para cada nome já mostrado
   (`?food=Guacamole&exclude=Abacate&exclude=Azeite%20de%20oliva`; um parâmetro por nome, porque os nomes têm
   vírgula) devolve até 8 opções **novas**, sem nenhum dos excluídos. Lista vazia = não há mais opções. Vale
@@ -641,8 +641,8 @@ com as **mesmas calorias** do alimento como aparece na refeição, sem o própri
 - **Pesquisa** (quem já sabe o que quer comer): `?food=Guacamole&q=banana` devolve, sem chamar o assistente, até
   **20** alimentos do catálogo achados como na busca do "Acrescentar alimento extra" (todas as palavras, em
   qualquer ordem; se nenhum bate, os mais parecidos), de **qualquer grupo**, com as mesmas calorias, sem o próprio, sem os
-  restritos e sem os de fora do tipo de alimentação. O diálogo de troca abre só com a pesquisa e o card "Sem
-  substituto"; as sugestões vêm quando o usuário clica em "Sugerir".
+  restritos e sem os de fora do tipo de alimentação. O diálogo de troca abre só com a pesquisa;
+  as sugestões vêm quando o usuário clica em "Sugerir".
 
 `POST /plan/meals/{id}/swaps` com:
 
@@ -650,8 +650,8 @@ com as **mesmas calorias** do alimento como aparece na refeição, sem o própri
 { "foodName": "Guacamole", "reason": "nao-gosto", "substitute": "Abacate" }
 ```
 
-- `substitute: null` = o alimento sai sem substituto.
-- `substitute`: qualquer alimento do catálogo com calorias, que não seja o próprio nem esteja restrito
+- `substitute` é obrigatório (o alimento sempre sai com outro no lugar; sem ele, `400` "Escolha o substituto."):
+  qualquer alimento do catálogo com calorias, que não seja o próprio nem esteja restrito
   (senão `400` "Esse substituto não está disponível para este alimento.").
 - `nao-gosto` / `nao-tenho` / `nao-posso`: troca **permanente em todas as refeições**, e o alimento fica restrito com essa
   marcação.
@@ -668,7 +668,7 @@ com as **mesmas calorias** do alimento como aparece na refeição, sem o própri
 [{ "name": "Guacamole", "feedback": "nao-gosto", "group": "gorduras", "onlyInMeal": false, "substitute": "Abacate" }]
 ```
 
-`onlyInMeal: true` para `nao-quero`. `substitute: null` = removido sem substituto. `group`:
+`onlyInMeal: true` para `nao-quero`. `substitute: null` = troca antiga, de quando o alimento podia sair sem substituto. `group`:
 `carboidratos | proteinas | laticinios | gorduras | frutas | vegetais | adocantes | acidos` (ou `null`).
 
 `DELETE /foods/restricted/{name}` ("Liberar") → `RestrictedFood[]` atualizada. Só tira a restrição (o

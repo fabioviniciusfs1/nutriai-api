@@ -321,7 +321,7 @@ export type RestrictedFood = {
   group: FoodGroup | null;
   /** "Não quero": a troca vale só na refeição marcada. */
   onlyInMeal: boolean;
-  /** Substituto nas refeições; `null` = removido sem substituto. */
+  /** Substituto nas refeições; `null` = troca antiga, sem substituto. */
   substitute: string | null;
 };
 

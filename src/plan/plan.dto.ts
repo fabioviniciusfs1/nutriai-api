@@ -7,7 +7,6 @@ import {
   Max,
   Min,
   MinLength,
-  ValidateIf,
 } from 'class-validator';
 import type { FoodFeedback } from '../contract.js';
 
@@ -45,10 +44,9 @@ export class SwapDto {
   })
   reason: FoodFeedback;
 
-  /** `null` = o alimento sai sem substituto. */
-  @ValidateIf((_, value) => value !== null)
   @IsString({ message: 'Escolha o substituto.' })
-  substitute: string | null;
+  @MinLength(1, { message: 'Escolha o substituto.' })
+  substitute: string;
 }
 
 /** `POST /plan/personalize`: o plano a montar de novo (sem ele, todos). */
