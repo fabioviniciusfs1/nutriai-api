@@ -444,6 +444,22 @@ describe('perfil e pesos', () => {
         error: 'Só dá para acrescentar alimento no plano de hoje.',
       });
 
+    // A prévia do ajuste da dieta abre o plano de cada grupo.
+    const diet = { proteinPerKg: 1.8, fatPerKg: 1, eggUnitGrams: 55 };
+    const previewToday = (
+      await http('post', '/me/diet/preview').send(diet).expect(200)
+    ).body as DietPreview;
+    const previewOther = (
+      await http('post', '/me/diet/preview?plan=1').send(diet).expect(200)
+    ).body as DietPreview;
+    expect(previewToday.meals.map((meal) => meal.slot)).toContain(
+      'lanche-da-tarde',
+    );
+    expect(previewOther.meals.map((meal) => meal.slot)).not.toContain(
+      'lanche-da-tarde',
+    );
+    await http('post', '/me/diet/preview?plan=9').send(diet).expect(404);
+
     // O histórico tem o plano em vigor de cada grupo, com os dias.
     const history = (await http('get', '/history/plans').expect(200))
       .body as PlanHistoryEntry[];

@@ -38,7 +38,7 @@ const MealId = () =>
   });
 
 /** `?plan=<id>`: o plano do grupo de dias (sem ele, o de hoje); inválido = plano inexistente. */
-const PlanId = () => ({
+export const PlanId = () => ({
   transform(value: string | undefined): number | undefined {
     if (value === undefined || value === '') return undefined;
     const id = Number(value);

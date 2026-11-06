@@ -354,7 +354,9 @@ primeiro." sem ele) e respondem `DietAdjustment`:
   mesmas trocas e extras do usuário, porções pelas metas novas). `current`/`next` são os totais do plano atual e
   do novo (kcal, proteína, carboidrato, gordura e fibra); `meals` é o plano novo; `changes` é o que muda, no mesmo
   formato de `/history/plans` (quase sempre `grams`). Valida igual ao `PUT` (mesmos erros 400). O front mostra
-  em "Ver prévia" e só salva quando o usuário aprova.
+  em "Ver prévia" e só salva quando o usuário aprova. O ajuste vale para todos os planos (um por grupo de dias da
+  rotina): `?plan=<id>` mostra a prévia do plano de outro grupo (com mais de um, o front tem uma aba por plano);
+  plano que não existe → `404` "Plano não encontrado.".
 - `PUT /me/diet` (`DietSettings`): salva. Vale na hora para as metas de `/nutrition/today` e do histórico, para
   as porções de `/plan/today` e para o próximo plano individual.
 
@@ -451,7 +453,7 @@ aceitam `?plan=<id>` (o `id` do grupo, `RoutineSchedule.id`) para abrir o plano 
 vale o de hoje. Plano que não existe → `404` "Plano não encontrado.". O que muda num plano (horário, trocas "Não
 quero", porções) fica só nele; as restrições ("Não gosto/Não tenho/Não posso") e as trocas gerais valem em todos.
 O alimento extra só entra no plano de hoje: em outro → `400` "Só dá para acrescentar alimento no plano de hoje.".
-`/nutrition/today`, o histórico de dias e a prévia do ajuste da dieta usam o plano de hoje.
+`/nutrition/today` e o histórico de dias usam o plano de hoje; a prévia do ajuste da dieta também, sem `?plan=`.
 
 ```json
 {

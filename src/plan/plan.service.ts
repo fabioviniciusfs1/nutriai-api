@@ -424,22 +424,28 @@ export class PlanService {
   }
 
   /**
-   * O plano de hoje com o ajuste da dieta `settings`, sem salvar: mesmas mudanças do usuário, porções pelas
-   * metas novas. Devolve os totais dos dois planos e o que muda.
+   * O plano `planId` (sem ele, o de hoje) com o ajuste da dieta `settings`, sem salvar: mesmas mudanças do
+   * usuário, porções pelas metas novas. Devolve os totais dos dois planos e o que muda.
    */
   async previewDiet(
     userId: string,
     clock: UserClock,
     settings: DietSettings,
+    planId?: number,
   ): Promise<DietPreview> {
     const micros = await this.catalog.micros();
-    const before = await this.read(userId, clock, (planner) => planner.plan);
+    const before = await this.read(
+      userId,
+      clock,
+      (planner) => planner.plan,
+      planId,
+    );
     // O mesmo plano com as metas novas: só lê (o `change` não devolve estado), então nada é salvo.
     const after = await this.withPlanner(
       userId,
       clock,
       (planner) => ({ state: null, result: () => planner.plan }),
-      { settings, dryRun: true },
+      { settings, dryRun: true, planId },
     );
     const version = (meals: PlanMeal[]) =>
       planVersion(meals, planNutrients(meals, micros).fibras ?? 0);

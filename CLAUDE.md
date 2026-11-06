@@ -87,7 +87,7 @@ npx vitest run -t "não gosto"                     # por nome do teste
   `routineLines`, `MEAL_SLOTS`, `scheduleOn` = o grupo de um dia, `dayRoutine` = grupo + tipo de alimentação, o
   que os prompts recebem). Sem rotina: café da manhã, almoço e jantar, sem restrição.
 - Ajuste da dieta (`src/targets/diet.ts`; `GET`/`PUT /me/diet`, `POST /me/diet/estimate` e `POST /me/diet/preview`,
-  que não salvam; a prévia é o `PlanService.previewDiet`, com o plano de hoje pelas metas novas e o que muda):
+  que não salvam; a prévia é o `PlanService.previewDiet`, com o plano de hoje, ou o do `?plan=`, pelas metas novas e o que muda):
   `users.diet_settings` tem proteína e gordura em g/kg e o peso da unidade do ovo (`null` = 2, 1 e 55 g). Mínimos
   de 1,6 g/kg de proteína e 0,5 g/kg de gordura; a meta calórica não muda: proteína e gordura compensam no
   carboidrato, o carboidrato compensa na gordura (`adjustMacro`, que prende nos limites). `macroTargets(profile,

@@ -1,4 +1,12 @@
-import { Body, Controller, Get, HttpCode, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { CurrentUser } from '../common/auth.decorators.js';
 import { Clock, type UserClock } from '../common/timezone.js';
 import type {
@@ -20,6 +28,7 @@ import {
 } from './diet.dto.js';
 import { UsersService } from './users.service.js';
 import { PlanPersonalizerService } from '../plan/personalizer.service.js';
+import { PlanId } from '../plan/plan.controller.js';
 import { PlanService } from '../plan/plan.service.js';
 
 @Controller()
@@ -90,17 +99,21 @@ export class UsersController {
     return this.users.estimateDiet(userId, body);
   }
 
-  /** O plano de hoje com o ajuste, sem salvar ("Ver prévia"). */
+  /**
+   * O plano de hoje com o ajuste, sem salvar ("Ver prévia"); `?plan=<id>`: o de outro grupo de dias (o ajuste vale
+   * para todos os planos).
+   */
   @Post('me/diet/preview')
   @HttpCode(200)
   async previewDiet(
     @CurrentUser() userId: string,
     @Body() body: DietSettingsDto,
     @Clock() clock: UserClock,
+    @Query('plan', PlanId()) planId: number | undefined,
   ): Promise<DietPreview> {
     const settings = toDietSettings(body);
     await this.users.checkDiet(userId, settings);
-    return this.plan.previewDiet(userId, clock, settings);
+    return this.plan.previewDiet(userId, clock, settings, planId);
   }
 
   @Put('me/diet')
