@@ -33,9 +33,9 @@ Regras:
   horas; se 6 horas depois de uma refeição o usuário não puder comer, a próxima fica no início do próximo horário
   em que ele pode começar uma refeição. Cada id é a refeição indicada no pedido (café
   da manhã, lanche, almoço, jantar, ceia): monte um prato próprio dela, no horário que combine com ela.
-- Distribua as calorias do dia pela rotina: refeições maiores no período em que o usuário disse sentir mais fome
-  e menores no período em que disse sentir menos. Se ele não tem um período com mais ou menos fome, mantenha
-  o tamanho usual de cada tipo de refeição (principais maiores que lanches e ceia), sem concentrar o dia numa só.
+- As calorias do dia ficam 35% de manhã (café da manhã e lanche da manhã), 40% à tarde (almoço e lanche da
+  tarde) e 25% à noite (jantar e ceia). Quando o usuário faz o lanche do período, ele divide o período em partes
+  iguais com a refeição principal. O app ajusta as porções para isso.
   Se ele treina, deixe uma refeição com carboidrato e proteína até 2 horas antes ou depois do treino. Perto da
   hora de dormir, a refeição deve ser leve.
 - Use de 2 a 6 alimentos por refeição, em gramas de porções caseiras realistas.

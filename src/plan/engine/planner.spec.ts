@@ -9,8 +9,10 @@ import {
   goalFactor,
   MAX_MACRO_SHIFT,
   macroWeights,
+  PERIOD_SHARES,
   Planner,
   PlanRuleError,
+  SLOT_PERIODS,
 } from './planner.js';
 import {
   DEFAULT_PLANNER_OPTIONS,
@@ -520,10 +522,10 @@ describe('metas de macronutrientes', () => {
     const even = withMacros(null);
     const weighted = withMacros(goals);
     expect(distance(weighted)).toBeLessThan(distance(even) / 2);
-    // O ovo em unidades inteiras tira o ajuste fino de alguns gramas.
+    // O ovo em unidades inteiras e a divisão das calorias pelos períodos tiram o ajuste fino de alguns gramas.
     expect(
       Math.abs(dayTotals(weighted).protein - goals.protein),
-    ).toBeLessThanOrEqual(3);
+    ).toBeLessThanOrEqual(5);
     expect(Math.abs(weighted.dayKcal() - 2290)).toBeLessThanOrEqual(23);
   });
 
@@ -682,7 +684,42 @@ describe('meta calórica e refeições da rotina', () => {
 
   it('sem meta, as porções originais', () => {
     expect(kcalOf(withGoal(null))).toEqual([357, 375, 435]);
-    expect(withGoal(null).goalFactor).toBe(1);
+    expect(Object.values(withGoal(null).goalFactors)).toEqual([1, 1, 1]);
+  });
+
+  it.each([3, 6])(
+    'divide a meta em 35%% de manhã, 40%% à tarde e 25%% à noite (%i refeições)',
+    (count) => {
+      const p = withGoal(2290, count);
+      const kcal = (period: string) =>
+        p.plan
+          .filter((meal) => SLOT_PERIODS[meal.slot] === period)
+          .reduce((sum, meal) => sum + meal.totals.kcal, 0);
+      for (const [period, share] of Object.entries(PERIOD_SHARES))
+        expect(Math.abs(kcal(period) - 2290 * share)).toBeLessThanOrEqual(23);
+    },
+  );
+
+  it('o lanche divide o período com a refeição principal, em partes iguais', () => {
+    const p = withGoal(2290, 6);
+    for (const meal of p.plan) {
+      const half = (2290 * PERIOD_SHARES[SLOT_PERIODS[meal.slot]]) / 2;
+      expect(Math.abs(meal.totals.kcal - half)).toBeLessThanOrEqual(23);
+    }
+  });
+
+  it('sem refeição num período, a parte dele vai para os outros', () => {
+    const p = new Planner(catalog, EMPTY_STATE, {
+      calorieGoal: 2000,
+      meals: ['almoco', 'jantar'],
+    });
+    const [lunch, dinner] = p.plan;
+    expect(Math.abs(lunch.totals.kcal - (2000 * 40) / 65)).toBeLessThanOrEqual(
+      20,
+    );
+    expect(Math.abs(dinner.totals.kcal - (2000 * 25) / 65)).toBeLessThanOrEqual(
+      20,
+    );
   });
 
   it.each([

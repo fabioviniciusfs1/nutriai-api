@@ -3,6 +3,7 @@
 import type {
   FoodFeedback,
   FoodSearchResult,
+  MealSlot,
   PlanMeal,
   RestrictedFood,
   TodayPlan,
@@ -11,6 +12,7 @@ import type {
 import {
   DEFAULT_EGG_UNIT_GRAMS,
   FoodCatalog,
+  isEggUnit,
   portionFood,
   sumTotals,
 } from './foods.js';
@@ -39,6 +41,23 @@ export function mealPeriod(time: string): MealPeriod {
   if (time < '17:00') return 'tarde';
   return 'noite';
 }
+
+/** Parte das calorias do dia em cada período (nutrient timing). */
+export const PERIOD_SHARES: Record<MealPeriod, number> = {
+  manha: 0.35,
+  tarde: 0.4,
+  noite: 0.25,
+};
+
+/** Período de cada refeição do dia, pelo tipo (não pelo horário): a refeição principal e o lanche dela. */
+export const SLOT_PERIODS: Record<MealSlot, MealPeriod> = {
+  'cafe-da-manha': 'manha',
+  'lanche-da-manha': 'manha',
+  almoco: 'tarde',
+  'lanche-da-tarde': 'tarde',
+  jantar: 'noite',
+  ceia: 'noite',
+};
 
 /**
  * Multiplica as porções de `meals` por `factor` e, se os valores arredondados passarem de
@@ -99,6 +118,18 @@ export function foodWeight(food: Totals, weights: number[]) {
   return shares
     ? shares.reduce((sum, share, index) => sum + share * weights[index], 0)
     : 1;
+}
+
+/** Os valores de `food` multiplicados por `factor` (sem arredondar). */
+function scaleTotals<T extends PlanFood>(food: T, factor: number): T {
+  return {
+    ...food,
+    grams: food.grams * factor,
+    kcal: food.kcal * factor,
+    protein: food.protein * factor,
+    carbs: food.carbs * factor,
+    fat: food.fat * factor,
+  };
 }
 
 /** Porções de `foods` multiplicadas por `factor` e pelo fator de cada alimento em `weights` (ovos em unidades). */
@@ -271,10 +302,12 @@ export class Planner {
   /** Pesos de proteína, gordura e carboidrato nas porções, para os macros do dia irem para as metas. */
   readonly macroWeights: number[];
   /**
-   * Multiplica todas as porções (com os pesos dos macros) para o plano inicial (sem mudanças do usuário) ficar
-   * perto da meta calórica. As ações do usuário mudam os fatores de porção por cima dele.
+   * Por refeição (id), multiplica as porções (com os pesos dos macros) para o plano inicial (sem mudanças do
+   * usuário) ficar perto da meta calórica, dividida pelos períodos em `PERIOD_SHARES` (e, no período, em partes
+   * iguais entre a refeição principal e o lanche). As ações do usuário mudam
+   * os fatores de porção por cima dele.
    */
-  readonly goalFactor: number;
+  readonly goalFactors: Record<number, number>;
   /** Peso da unidade do ovo (g). */
   private readonly eggUnitGrams: number;
   /** O estado do usuário, sem os alimentos extras de outros dias. */
@@ -295,18 +328,62 @@ export class Planner {
       .map((meal) =>
         personal[meal.id] ? { ...meal, ...personal[meal.id] } : meal,
       );
-    const baseFoods = this.baseMeals.map((meal) => meal.foods);
+    this.eggUnitGrams = options.eggUnitGrams ?? DEFAULT_EGG_UNIT_GRAMS;
+    // A parte de cada refeição na meta do dia: a do período dela, dividida em partes iguais entre a refeição
+    // principal e o lanche (se a pessoa faz). Um período sem refeição (rotina antiga) passa a parte dele para os
+    // outros, na mesma proporção.
+    // Na ordem do dia (`SLOT_PERIODS`): a última refeição é a que fecha a meta.
+    const slots = Object.keys(SLOT_PERIODS) as MealSlot[];
+    const meals = [...this.baseMeals].sort(
+      (a, b) => slots.indexOf(a.slot) - slots.indexOf(b.slot),
+    );
+    const mealShare = (slot: MealSlot) =>
+      PERIOD_SHARES[SLOT_PERIODS[slot]] /
+      meals.filter((meal) => SLOT_PERIODS[meal.slot] === SLOT_PERIODS[slot])
+        .length;
+    // Os pesos dos macros saem das refeições já nessas partes (sem os pesos), que é como o dia fica.
     this.macroWeights =
       options.calorieGoal === null
         ? EVEN_WEIGHTS
-        : macroWeights(baseFoods, options.macroGoals);
-    this.eggUnitGrams = options.eggUnitGrams ?? DEFAULT_EGG_UNIT_GRAMS;
-    this.goalFactor = goalFactor(
-      baseFoods,
-      options.calorieGoal,
-      this.macroWeights,
-      this.eggUnitGrams,
-    );
+        : macroWeights(
+            meals.map((meal) => {
+              const kcal = sumTotals(meal.foods).kcal;
+              const factor = kcal > 0 ? mealShare(meal.slot) / kcal : 1;
+              return meal.foods.map((food) => scaleTotals(food, factor));
+            }),
+            options.macroGoals,
+          );
+    // Cada refeição com a parte dela do que falta da meta: o arredondamento de uma fica com as seguintes. As com
+    // ovos (em unidades, que não chegam à parte exata) vão primeiro, para as outras compensarem.
+    const withEggs = (meal: (typeof meals)[number]) =>
+      meal.foods.some((food) => isEggUnit(food.name));
+    const order = [
+      ...meals.filter(withEggs),
+      ...meals.filter((meal) => !withEggs(meal)),
+    ];
+    let shares = meals.reduce((sum, meal) => sum + mealShare(meal.slot), 0);
+    let remaining = options.calorieGoal;
+    this.goalFactors = {};
+    for (const meal of order) {
+      const share = mealShare(meal.slot);
+      const factor = goalFactor(
+        [meal.foods],
+        remaining === null ? null : (remaining * share) / shares,
+        this.macroWeights,
+        this.eggUnitGrams,
+      );
+      this.goalFactors[meal.id] = factor;
+      shares -= share;
+      if (remaining !== null)
+        remaining -= sumTotals(
+          scaleWeighted(
+            meal.foods,
+            this.macroWeights,
+            factor,
+            this.eggUnitGrams,
+          ),
+        ).kcal;
+    }
     // O alimento extra vale só no dia em que entrou. O nas gramas do usuário só sai; o antigo (sem `fixed`)
     // sai como em `removeExtraFood`, com as calorias voltando para as refeições do dia.
     const expired = Object.entries(state.planChanges.extraFoods).flatMap(
@@ -394,7 +471,8 @@ export class Planner {
                   this.eggUnitGrams,
                 ),
           );
-        const foods = scaled(this.goalFactor * scale);
+        const goal = this.goalFactors[meal.id] ?? 1;
+        const foods = scaled(goal * scale);
         return {
           id: meal.id,
           slot: meal.slot,
@@ -402,8 +480,7 @@ export class Planner {
           time: mealTimes[meal.id] ?? meal.time,
           totals: sumTotals(foods),
           foods,
-          totalsAt: (nextScale: number) =>
-            sumTotals(scaled(this.goalFactor * nextScale)),
+          totalsAt: (nextScale: number) => sumTotals(scaled(goal * nextScale)),
         };
       })
       .sort((a, b) => a.time.localeCompare(b.time));

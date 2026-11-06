@@ -310,8 +310,6 @@ describe('personalPlanPrompt e personalPlanRequest', () => {
     trainingStart: '18:00',
     trainingEnd: '19:00',
     meals: ['cafe-da-manha', 'almoco', 'lanche-da-tarde', 'jantar'],
-    hungriestPeriod: 'noite',
-    leastHungryPeriod: 'manha',
     weighInDay: 1,
     diet: 'vegetariana',
   };
@@ -338,7 +336,7 @@ describe('personalPlanPrompt e personalPlanRequest', () => {
     expect(prompt).toContain(
       'Horários em que pode começar uma refeição: 07:00–08:00, 12:00–13:00, 19:00–20:00.',
     );
-    expect(prompt).toContain('Sente mais fome de noite e menos fome de manhã.');
+    expect(prompt).not.toContain('fome');
     expect(prompt).toContain(
       [
         'Refeições a montar:',

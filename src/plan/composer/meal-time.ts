@@ -15,8 +15,7 @@ olhando a rotina e as outras refeições:
 - a distância até a hora de dormir (refeição grande, como almoço ou jantar, logo antes de dormir não é boa);
 - o tempo até a refeição anterior e até a seguinte (refeições muito próximas, ou mais de 6 horas sem comer);
 - o treino (não marque uma refeição grande para logo antes de treinar);
-- a ordem do dia (o café da manhã antes do almoço, o jantar depois do lanche da tarde etc.);
-- os períodos em que a pessoa sente mais ou menos fome.
+- a ordem do dia (o café da manhã antes do almoço, o jantar depois do lanche da tarde etc.).
 
 O app já conferiu que o novo horário está dentro dos horários em que a pessoa pode começar uma refeição: não
 use isso como motivo para reprovar.

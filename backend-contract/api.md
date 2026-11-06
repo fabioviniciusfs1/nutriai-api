@@ -170,8 +170,6 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
     "trainingStart": "18:00",
     "trainingEnd": "19:00",
     "meals": ["cafe-da-manha", "almoco", "lanche-da-tarde", "jantar"],
-    "hungriestPeriod": "noite",
-    "leastHungryPeriod": "manha",
     "weighInDay": 1,
     "diet": "vegetariana"
   },
@@ -240,12 +238,11 @@ Corpo: a `routine` inteira. Sem perfil → `400` "Preencha o perfil primeiro.".
 - As janelas de `eatingWindows` não podem ter nenhum minuto dentro do sono (de `sleepTime` até `wakeTime`) nem
   do treino: `400` "Os horários para comer não podem cair no horário de sono ou de treino.". Encostar pode (treino
   das 06:00 às 07:00 → janela `07:00–08:00`). O front já tira esses horários da grade.
-- `hungriestPeriod`, `leastHungryPeriod`: `manha | tarde | noite` (manhã até 10:59, tarde até 16:59) ou `null`
-  (na tela, "Não sinto": a pessoa não tem um período com mais, ou com menos, fome). Quando os dois são períodos,
-  têm de ser diferentes ("O período de mais fome e o de menos fome devem ser diferentes.").
 - `meals`: as refeições que a pessoa faz no dia, de `cafe-da-manha | lanche-da-manha | almoco |
-  lanche-da-tarde | jantar | ceia` — qualquer combinação com pelo menos uma ("Marque pelo menos uma refeição."),
-  sem repetir nem valores de fora ("Escolha as refeições que você faz no dia."). A resposta traz na ordem do dia.
+  lanche-da-tarde | jantar | ceia`, sem repetir nem valores de fora ("Escolha as refeições que você faz no dia.").
+  `cafe-da-manha`, `almoco` e `jantar` sempre entram (o backend acrescenta se faltarem; `meals` pode vir vazio ou
+  sem o campo): a pessoa escolhe só os lanches (`lanche-da-manha`, `lanche-da-tarde`, `ceia`). A resposta traz na
+  ordem do dia.
 - `weighInDay`, `diet`: como em `GET /me`.
 
 Na **primeira vez** (rotina era `null`) e com o assistente configurado, começa a montagem do **plano
@@ -453,9 +450,8 @@ O plano de hoje com **todas** as mudanças do usuário aplicadas, ordenado por h
 
 **Plano individual**: na primeira rotina, o assistente monta as refeições do plano base que o usuário marcou em
 `routine.meals` (mesmos ids; cada uma no seu papel: café da manhã, lanche, almoço…), com o perfil, as metas do dia, o tipo de alimentação, os restritos e a
-rotina. Ele escolhe o **horário** de cada refeição dentro de `eatingWindows` e distribui as calorias pela rotina
-(refeições maiores no período de mais fome, menores no de menos, uma refeição perto do treino, leve perto de
-dormir). A refeição dura até 30 minutos e termina pelo menos 30 minutos antes do fim da janela: o horário vai
+rotina. Ele escolhe o **horário** de cada refeição dentro de `eatingWindows` e monta as refeições pela rotina
+(uma refeição perto do treino, leve perto de dormir). A refeição dura até 30 minutos e termina pelo menos 30 minutos antes do fim da janela: o horário vai
 do início da janela até 1 hora antes da hora cheia em que ela acaba (janela `12:00–13:59` → de 12:00 a 13:00;
 `07:00–07:59` → só 07:00); os limites abaixo usam esses horários. Entre uma refeição e a seguinte, **no máximo 6 horas** (o sono da noite não conta), salvo quando as
 janelas não permitem: se 6 horas depois de uma refeição o usuário não pode comer, a próxima vem no início da
@@ -484,8 +480,11 @@ instantes.".
   manhã, lanche da manhã, almoço, lanche da tarde, jantar e ceia. Sem rotina: café da manhã, almoço e jantar.
   Para incluir ou tirar uma refeição, o usuário muda a rotina (`PUT /me/routine`); não há rota para criar nem
   remover refeição avulsa.
-- As porções de todas as refeições são escaladas na mesma proporção para o total do dia ficar o mais perto
-  possível de `targets.calories`. Sem perfil, ficam as porções de referência. Se a meta mudar, o plano todo
+- As porções são escaladas para o total do dia ficar o mais perto possível de `targets.calories`, dividido pelos
+  períodos: **35% de manhã** (café da manhã e lanche da manhã), **40% à tarde** (almoço e lanche da tarde) e
+  **25% à noite** (jantar e ceia). O período é o da refeição, não o do horário (mudar o horário não muda as
+  porções). Com o lanche do período, ele e a refeição principal dividem o período em partes iguais (tarde com
+  lanche: ~20% o almoço e ~20% o lanche). Sem perfil, ficam as porções de referência. Se a meta mudar, o plano todo
   acompanha, menos os alimentos extras (ficam nas gramas que o usuário escolheu).
 
 **Como o plano de hoje é montado** (o que o usuário muda é permanente, até ele desfazer: horários escolhidos,
@@ -501,7 +500,7 @@ trocas de alimentos e um fator de porção por refeição; os alimentos acrescen
 ### `POST /plan/meals/{id}/time-check` → `MealTimeCheck`
 
 Corpo: `{ "time": "22:30" }`. **Não salva.** O front chama ao confirmar o novo horário, antes do `PUT`. O
-assistente (Claude Haiku) olha o perfil, a rotina (sono, treino, janelas, fome) e o plano do dia, e diz se o
+assistente (Claude Haiku) olha o perfil, a rotina (sono, treino, janelas) e o plano do dia, e diz se o
 horário é adequado:
 
 ```json

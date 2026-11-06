@@ -17,8 +17,6 @@ const routine: Routine = {
   trainingStart: null,
   trainingEnd: null,
   meals: ['cafe-da-manha', 'almoco', 'jantar'],
-  hungriestPeriod: null,
-  leastHungryPeriod: null,
   weighInDay: 1,
   diet: 'onivora',
 };

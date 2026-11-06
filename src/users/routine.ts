@@ -1,6 +1,5 @@
 // Regras e textos da rotina (funções puras).
 import type { MealSlot, Routine } from '../contract.js';
-import { PERIOD_NAMES } from '../plan/composer/composition.js';
 
 /** O front manda horas cheias: marcadas uma sim, uma não, as 24 horas dão 12 janelas. */
 export const MAX_EATING_WINDOWS = 12;
@@ -14,6 +13,9 @@ export const MEAL_SLOTS: MealSlot[] = [
   'jantar',
   'ceia',
 ];
+
+/** As refeições que todo plano tem, uma por período do dia; a pessoa escolhe só os lanches. */
+export const MAIN_MEALS: MealSlot[] = ['cafe-da-manha', 'almoco', 'jantar'];
 
 export const MEAL_NAMES: Record<MealSlot, string> = {
   'cafe-da-manha': 'café da manhã',
@@ -43,7 +45,6 @@ function overlaps(
 
 /** Regras entre os campos da rotina: a mensagem do primeiro problema, ou `null` se está tudo certo. */
 export function routineError(routine: Routine): string | null {
-  if (routine.meals.length === 0) return 'Marque pelo menos uma refeição.';
   const windows = routine.eatingWindows;
   if (windows.length === 0)
     return 'Informe pelo menos um horário disponível para comer.';
@@ -68,23 +69,7 @@ export function routineError(routine: Routine): string | null {
       overlaps(window, trainingStart, trainingEnd));
   if (windows.some(busy))
     return 'Os horários para comer não podem cair no horário de sono ou de treino.';
-  if (
-    routine.hungriestPeriod !== null &&
-    routine.hungriestPeriod === routine.leastHungryPeriod
-  )
-    return 'O período de mais fome e o de menos fome devem ser diferentes.';
   return null;
-}
-
-/** O que a pessoa disse sobre a fome ao longo do dia (cada período é opcional). */
-function hungerLine({ hungriestPeriod, leastHungryPeriod }: Routine): string {
-  const parts = [
-    hungriestPeriod && `mais fome de ${PERIOD_NAMES[hungriestPeriod]}`,
-    leastHungryPeriod && `menos fome de ${PERIOD_NAMES[leastHungryPeriod]}`,
-  ].filter(Boolean);
-  return parts.length > 0
-    ? `Sente ${parts.join(' e ')}.`
-    : 'Não tem um período do dia com mais ou menos fome.';
 }
 
 /** A rotina como linhas de prompt para o assistente. */
@@ -99,6 +84,5 @@ export function routineLines(routine: Routine): string[] {
         ? `treina das ${routine.trainingStart} às ${routine.trainingEnd}.`
         : 'não treina.'),
     `Horários em que pode comer: ${windows}.`,
-    hungerLine(routine),
   ];
 }

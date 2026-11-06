@@ -75,10 +75,10 @@ npx vitest run -t "não gosto"                     # por nome do teste
   idade, peso, altura, atividade, objetivo) e o peso meta (`targetWeightKg`, o único campo que muda depois do
   cadastro: `PUT /me/target-weight`; `projectWeight` em `src/targets/` faz a projeção pela regra de 7.700 kcal/kg, com datas a partir do dia em que o
   peso meta foi salvo, `users.target_weight_set_on`); `users.routine` (`PUT /me/routine`, exige o perfil) tem as janelas
-  para comer (sempre fora do sono e do treino), sono, início e fim do treino, períodos de mais e menos fome, as refeições que a pessoa faz (`meals`: café da
-  manhã, lanche da manhã, almoço, lanche da tarde, jantar, ceia; pelo menos uma), dia da pesagem e tipo de
-  alimentação. As regras entre os campos e as linhas de prompt ficam em `routine.ts` (`routineError`,
-  `routineLines`, `MEAL_SLOTS`). Sem rotina: café da manhã, almoço e jantar, sem restrição.
+  para comer (sempre fora do sono e do treino), sono, início e fim do treino, as refeições que a pessoa faz (`meals`:
+  café da manhã, almoço e jantar sempre, `MAIN_MEALS`, que o `toRoutine` acrescenta; a pessoa escolhe só os lanches:
+  lanche da manhã, lanche da tarde, ceia), dia da pesagem e tipo de alimentação. As regras entre os campos e as
+  linhas de prompt ficam em `routine.ts` (`routineError`, `routineLines`, `MEAL_SLOTS`). Sem rotina: café da manhã, almoço e jantar, sem restrição.
 - Ajuste da dieta (`src/targets/diet.ts`; `GET`/`PUT /me/diet`, `POST /me/diet/estimate` e `POST /me/diet/preview`,
   que não salvam; a prévia é o `PlanService.previewDiet`, com o plano de hoje pelas metas novas e o que muda):
   `users.diet_settings` tem proteína e gordura em g/kg e o peso da unidade do ovo (`null` = 2, 1 e 55 g). Mínimos
@@ -99,9 +99,13 @@ npx vitest run -t "não gosto"                     # por nome do teste
   `floor`); parou de subir → +10%. A mesma sugestão vai em `Me.calorieAdvice` (central de notificações do front).
 - Plano inicial: as refeições base cujo `slot` (`base_meals.slot`, uma por refeição do dia) está em
   `routine.meals`, e todas as
-  porções multiplicadas pelo `goalFactor` do `Planner` (meta calórica ÷ kcal do plano inicial, ajustado para o
-  total arredondado ficar o mais perto da meta) e pelos `macroWeights`: um peso por macro (proteína, gordura,
-  carboidrato; mínimos quadrados do erro relativo às metas de `macroTargets`, entre 1/2,5 e 2,5) e cada alimento
+  porções multiplicadas pelos `goalFactors` do `Planner` (um por refeição: a meta calórica dividida 35% manhã, 40%
+  tarde, 25% noite, `PERIOD_SHARES`, e, no período, em partes iguais entre a refeição principal e o lanche; o
+  período vem do tipo da refeição, `SLOT_PERIODS`, não do horário; cada um é o `goalFactor` da refeição, ajustado
+  para o total arredondado ficar perto da parte dela do que falta da meta, e o arredondamento passa para a
+  refeição seguinte) e pelos `macroWeights`: um peso por macro (proteína, gordura,
+  carboidrato; mínimos quadrados do erro relativo às metas de `macroTargets`, entre 1/2,5 e 2,5, sobre as refeições
+  já nessas partes) e cada alimento
   com a média dos pesos pelas frações das calorias dele, para os macros do dia irem para as metas. Os dois são
   recalculados a cada requisição pelo perfil e pela rotina (`PlanService.plannerOptions`). O alimento extra (`POST /plan/meals/{id}/foods` com `grams`) fica nas gramas
   do usuário, fora desse fator e dos fatores de porção (`ExtraFood.fixed`), e soma às calorias do dia; é a

@@ -40,9 +40,6 @@ export type Profile = {
   targetWeightKg: number | null;
 };
 
-/** Período do dia: manhã até 10:59, tarde até 16:59, noite depois. */
-export type DayPeriod = 'manha' | 'tarde' | 'noite';
-
 /** Refeição do dia que a pessoa faz (cada uma é uma refeição do plano). */
 export type MealSlot =
   | 'cafe-da-manha'
@@ -64,12 +61,12 @@ export type Routine = {
   trainingStart: string | null;
   /** "HH:MM"; pode ser antes de `trainingStart` (treino que passa da meia-noite). */
   trainingEnd: string | null;
-  /** Refeições que a pessoa faz no dia: pelo menos uma, sem repetir (o backend guarda na ordem do dia). */
+  /**
+   * Refeições que a pessoa faz no dia, sem repetir. Café da manhã, almoço e jantar sempre fazem parte (o backend
+   * acrescenta se faltarem); a pessoa escolhe os lanches (lanche da manhã, lanche da tarde, ceia). O backend
+   * guarda na ordem do dia.
+   */
   meals: MealSlot[];
-  /** Período do dia em que sente mais fome; `null` = não sente mais fome em nenhum ("Não sinto"). */
-  hungriestPeriod: DayPeriod | null;
-  /** Período do dia em que sente menos fome (diferente de `hungriestPeriod`); `null` = "Não sinto". */
-  leastHungryPeriod: DayPeriod | null;
   /** Dia da semana do lembrete de pesagem: 0 = domingo … 6 = sábado. */
   weighInDay: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   diet: Diet;

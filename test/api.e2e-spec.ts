@@ -53,8 +53,6 @@ const ROUTINE = {
   trainingStart: '18:00',
   trainingEnd: '19:00',
   meals: ['cafe-da-manha', 'almoco', 'lanche-da-tarde', 'jantar'],
-  hungriestPeriod: 'noite',
-  leastHungryPeriod: 'manha',
   weighInDay: 1,
   diet: 'onivora',
 };
@@ -310,10 +308,6 @@ describe('perfil e pesos', () => {
       { eatingWindows: [{ start: '7h', end: '12:00' }] },
       'Informe os horários no formato HH:MM.',
     );
-    await invalid(
-      { leastHungryPeriod: 'noite' },
-      'O período de mais fome e o de menos fome devem ser diferentes.',
-    );
     await invalid({ trainingStart: '25:00' }, 'Informe o início do treino.');
     await invalid({ trainingEnd: null }, 'Informe o início e o fim do treino.');
     await invalid(
@@ -324,7 +318,6 @@ describe('perfil e pesos', () => {
       'Os horários para comer não podem cair no horário de sono ou de treino.';
     await invalid({ trainingStart: '20:00', trainingEnd: '21:30' }, busy);
     await invalid({ wakeTime: '07:30' }, busy);
-    await invalid({ meals: [] }, 'Marque pelo menos uma refeição.');
     await invalid(
       { meals: ['almoco', 'brunch'] },
       'Escolha as refeições que você faz no dia.',
@@ -343,27 +336,30 @@ describe('perfil e pesos', () => {
       .expect(200);
     expect((byHour.body as Me).routine?.eatingWindows).toEqual(hours);
     await personalizationIdle();
-    // Qualquer combinação vale, e o plano tem só as refeições marcadas (guardadas na ordem do dia).
+    // Café da manhã, almoço e jantar sempre entram; os lanches são os marcados (guardados na ordem do dia). Os
+    // campos de fome de um front antigo são ignorados.
     const few = await http('put', '/me/routine')
-      .send({ ...ROUTINE, meals: ['ceia', 'almoco'] })
+      .send({ ...ROUTINE, meals: ['ceia'], hungriestPeriod: 'noite' })
       .expect(200);
-    expect((few.body as Me).routine?.meals).toEqual(['almoco', 'ceia']);
+    expect((few.body as Me).routine?.meals).toEqual([
+      'cafe-da-manha',
+      'almoco',
+      'jantar',
+      'ceia',
+    ]);
+    expect((few.body as Me).routine).not.toHaveProperty('hungriestPeriod');
+    const mains = await http('put', '/me/routine')
+      .send({ ...ROUTINE, meals: undefined })
+      .expect(200);
+    expect((mains.body as Me).routine?.meals).toEqual([
+      'cafe-da-manha',
+      'almoco',
+      'jantar',
+    ]);
     const plan = (await http('get', '/plan/today').expect(200))
       .body as TodayPlan;
-    expect(plan.meals.map((meal) => meal.id)).toEqual([2, 6]);
+    expect(plan.meals.map((meal) => meal.id)).toEqual([1, 2, 3]);
     expect(Math.abs(kcal(plan) - 1660)).toBeLessThanOrEqual(17);
-    await invalid(
-      { hungriestPeriod: 'madrugada' },
-      'Escolha o período em que sente mais fome.',
-    );
-    // "Não sinto": os períodos de fome em branco.
-    const steady = await http('put', '/me/routine')
-      .send({ ...ROUTINE, hungriestPeriod: null, leastHungryPeriod: null })
-      .expect(200);
-    expect((steady.body as Me).routine).toMatchObject({
-      hungriestPeriod: null,
-      leastHungryPeriod: null,
-    });
     // Quem não treina manda os dois horários em branco.
     const idle = await http('put', '/me/routine')
       .send({ ...ROUTINE, trainingStart: null, trainingEnd: null })

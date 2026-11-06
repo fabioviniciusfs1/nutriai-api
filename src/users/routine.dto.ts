@@ -3,18 +3,18 @@ import {
   ArrayUnique,
   IsArray,
   IsIn,
+  IsOptional,
   IsString,
   Matches,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import type { DayPeriod, Diet, MealSlot, Routine } from '../contract.js';
-import { MEAL_SLOTS } from './routine.js';
+import type { Diet, MealSlot, Routine } from '../contract.js';
+import { MAIN_MEALS, MEAL_SLOTS } from './routine.js';
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const TIME_MESSAGE = 'Informe os horários no formato HH:MM.';
 const WINDOWS_MESSAGE = 'Informe os horários disponíveis para comer.';
-const PERIODS = ['manha', 'tarde', 'noite'];
 const MEALS_MESSAGE = 'Escolha as refeições que você faz no dia.';
 
 class EatingWindowDto {
@@ -52,18 +52,12 @@ export class RoutineDto implements Routine {
   @Matches(TIME, { message: 'Informe o fim do treino.' })
   trainingEnd: string | null;
 
+  /** Os lanches; as refeições principais entram sempre (`toRoutine`). */
+  @IsOptional()
   @IsArray({ message: MEALS_MESSAGE })
   @ArrayUnique({ message: MEALS_MESSAGE })
   @IsIn(MEAL_SLOTS, { each: true, message: MEALS_MESSAGE })
-  meals: MealSlot[];
-
-  @ValidateIf((_, value) => value !== null)
-  @IsIn(PERIODS, { message: 'Escolha o período em que sente mais fome.' })
-  hungriestPeriod: DayPeriod | null;
-
-  @ValidateIf((_, value) => value !== null)
-  @IsIn(PERIODS, { message: 'Escolha o período em que sente menos fome.' })
-  leastHungryPeriod: DayPeriod | null;
+  meals: MealSlot[] = [];
 
   @IsIn([0, 1, 2, 3, 4, 5, 6], { message: 'Escolha o dia da pesagem.' })
   weighInDay: 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -82,10 +76,10 @@ export function toRoutine(dto: RoutineDto): Routine {
     sleepTime: dto.sleepTime,
     trainingStart: dto.trainingStart,
     trainingEnd: dto.trainingEnd,
-    // Na ordem do dia, não na que veio.
-    meals: MEAL_SLOTS.filter((slot) => dto.meals.includes(slot)),
-    hungriestPeriod: dto.hungriestPeriod,
-    leastHungryPeriod: dto.leastHungryPeriod,
+    // Com as refeições principais sempre, na ordem do dia (não na que veio).
+    meals: MEAL_SLOTS.filter(
+      (slot) => MAIN_MEALS.includes(slot) || dto.meals.includes(slot),
+    ),
     weighInDay: dto.weighInDay,
     diet: dto.diet,
   };

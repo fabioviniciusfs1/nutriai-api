@@ -11,8 +11,6 @@ const routine: Routine = {
   trainingStart: '18:00',
   trainingEnd: '19:00',
   meals: ['cafe-da-manha', 'almoco', 'jantar'],
-  hungriestPeriod: 'tarde',
-  leastHungryPeriod: 'manha',
   weighInDay: 1,
   diet: 'onivora',
 };
@@ -50,11 +48,6 @@ describe('routineError', () => {
         ],
       }),
     ).toBeNull();
-  });
-
-  it('pelo menos uma refeição', () => {
-    expect(error({ meals: [] })).toBe('Marque pelo menos uma refeição.');
-    expect(error({ meals: ['ceia'] })).toBeNull();
   });
 
   it('treino com início e fim diferentes', () => {
@@ -101,29 +94,6 @@ describe('routineError', () => {
       error({ ...lateTraining, ...windows(['22:00', '23:00']) }),
     ).toBeNull();
   });
-
-  it('"Não sinto" (null) vale em um ou nos dois períodos de fome', () => {
-    expect(error({ hungriestPeriod: null })).toBeNull();
-    expect(error({ leastHungryPeriod: null })).toBeNull();
-    expect(
-      error({ hungriestPeriod: null, leastHungryPeriod: null }),
-    ).toBeNull();
-    const hunger = (change: Partial<Routine>) =>
-      routineLines({ ...routine, ...change }).at(-1);
-    expect(hunger({ leastHungryPeriod: null })).toBe(
-      'Sente mais fome de tarde.',
-    );
-    expect(hunger({ hungriestPeriod: null })).toBe(
-      'Sente menos fome de manhã.',
-    );
-    expect(hunger({ hungriestPeriod: null, leastHungryPeriod: null })).toBe(
-      'Não tem um período do dia com mais ou menos fome.',
-    );
-  });
-
-  it('os períodos de mais e de menos fome são diferentes', () => {
-    expect(error({ leastHungryPeriod: 'tarde' })).toContain('diferentes');
-  });
 });
 
 describe('routineLines', () => {
@@ -132,7 +102,6 @@ describe('routineLines', () => {
       'Refeições que faz no dia: café da manhã, almoço, jantar.',
       'Rotina: acorda às 06:30 e dorme às 00:30; treina das 18:00 às 19:00.',
       'Horários em que pode comer: 07:00–08:30, 12:00–13:30.',
-      'Sente mais fome de tarde e menos fome de manhã.',
     ]);
   });
 });
