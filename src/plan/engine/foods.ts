@@ -372,16 +372,7 @@ export class FoodCatalog {
   /** O alimento `name` numa porção de `grams` gramas, com os nutrientes do catálogo. */
   portion(name: string, grams: number): PlanFood | null {
     const entry = this.entry(name);
-    if (!entry) return null;
-    const factor = grams / 100;
-    return {
-      name,
-      grams,
-      carbs: Math.round(entry.per100g.carbs * factor),
-      protein: Math.round(entry.per100g.protein * factor),
-      fat: Math.round(entry.per100g.fat * factor),
-      kcal: Math.round(entry.per100g.kcal * factor),
-    };
+    return entry ? portionOf(name, entry.per100g, grams) : null;
   }
 
   /** O alimento `name` numa porção com as mesmas calorias de `kcal`. */
@@ -566,6 +557,23 @@ export class FoodCatalog {
       candidates,
     };
   }
+}
+
+/** `grams` gramas de um alimento com os nutrientes `per100g`. */
+export function portionOf(
+  name: string,
+  per100g: Totals,
+  grams: number,
+): PlanFood {
+  const factor = grams / 100;
+  return {
+    name,
+    grams,
+    carbs: Math.round(per100g.carbs * factor),
+    protein: Math.round(per100g.protein * factor),
+    fat: Math.round(per100g.fat * factor),
+    kcal: Math.round(per100g.kcal * factor),
+  };
 }
 
 /** Compara nomes sem diferenciar maiúsculas, acentos nem pontuação ("feijao" encontra "Feijão"). */

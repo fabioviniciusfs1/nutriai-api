@@ -23,3 +23,6 @@ lerna-debug.log*
 .temp
 .tmp
 *.tsbuildinfo
+
+# Dump filtrado do Open Food Facts (grande, não versionar)
+/data/off/

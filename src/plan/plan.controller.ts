@@ -19,9 +19,12 @@ import type {
   PlanFood,
   TodayPlan,
 } from '../contract.js';
-import { MEAL_NOT_FOUND } from './engine/planner.js';
+import { OffProductsService } from '../foods/off-products.service.js';
+import { FOOD_NOT_FOUND, MEAL_NOT_FOUND } from './engine/planner.js';
+import { isBarcode, type Product } from './engine/products.js';
 import {
   AddFoodDto,
+  BARCODE_MESSAGE,
   GRAMS_MESSAGE,
   MAX_EXTRA_GRAMS,
   MealTimeDto,
@@ -68,7 +71,23 @@ export class PlanController {
   constructor(
     private readonly plan: PlanService,
     private readonly personalizer: PlanPersonalizerService,
+    private readonly products: OffProductsService,
   ) {}
+
+  /**
+   * O alimento extra pedido: o produto do código de barras (404 se não existe) ou o nome do alimento da base.
+   */
+  private async extraFood(
+    foodName: string | undefined,
+    barcode: string | undefined,
+  ): Promise<string | Product> {
+    if (barcode === undefined || barcode === '')
+      return requiredQuery(foodName, 'Escolha o alimento.');
+    if (!isBarcode(barcode)) throw new BadRequestException(BARCODE_MESSAGE);
+    const product = await this.products.byCode(barcode);
+    if (!product) throw new NotFoundException(FOOD_NOT_FOUND);
+    return product;
+  }
 
   @Get('today')
   today(
@@ -135,7 +154,7 @@ export class PlanController {
   }
 
   @Get('meals/:id/food-search')
-  searchFood(
+  async searchFood(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
     @Query('plan', PlanId()) planId: number | undefined,
@@ -143,48 +162,59 @@ export class PlanController {
     @Query('q') q: string | undefined,
   ): Promise<FoodSearchResult> {
     const query = requiredQuery(q, 'Informe o alimento.');
+    // Produtos do Open Food Facts: pelo código de barras ou pelo nome.
+    const products = isBarcode(query)
+      ? [await this.products.byCode(query)].filter(
+          (product): product is Product => product !== null,
+        )
+      : await this.products.search(query);
     return this.plan.read(
       userId,
       clock,
-      (planner) => planner.searchFoods(id, query),
+      (planner) => planner.searchFoods(id, query, products),
       planId,
     );
   }
 
   @Post('meals/:id/foods')
   @HttpCode(200)
-  addFood(
+  async addFood(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
     @Query('plan', PlanId()) planId: number | undefined,
     @Param('id', MealId()) id: number,
     @Body() body: AddFoodDto,
   ): Promise<TodayPlan> {
+    const food = await this.extraFood(body.foodName, body.barcode);
     // O alimento extra vale só no dia em que entrou: só no plano de hoje.
     return this.plan.update(
       userId,
       clock,
-      (planner) => planner.addFood(id, body.foodName, body.grams),
+      (planner) => planner.addFood(id, food, body.grams),
       { planId, todayOnly: true },
     );
   }
 
-  /** Prévia do alimento extra: `grams` gramas de `food`, com os nutrientes calculados. */
+  /** Prévia do alimento extra: `grams` gramas de `food` (ou do produto `barcode`), com os nutrientes calculados. */
   @Get('meals/:id/food-portion')
-  foodPortion(
+  async foodPortion(
     @CurrentUser() userId: string,
     @Clock() clock: UserClock,
     @Query('plan', PlanId()) planId: number | undefined,
     @Param('id', MealId()) id: number,
     @Query('food') food: string | undefined,
+    @Query('barcode') barcode: string | undefined,
     @Query('grams') grams: string | undefined,
   ): Promise<PlanFood> {
-    const foodName = requiredQuery(food, 'Informe o alimento.');
     const amount = gramsQuery(grams);
+    const item =
+      barcode === undefined || barcode === ''
+        ? requiredQuery(food, 'Informe o alimento.')
+        : await this.extraFood(undefined, barcode);
     return this.plan.read(
       userId,
       clock,
-      (planner) => planner.foodPortion(id, foodName, amount),
+      (planner) => planner.foodPortion(id, item, amount),
       planId,
     );
   }

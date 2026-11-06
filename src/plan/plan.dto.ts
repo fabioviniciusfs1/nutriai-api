@@ -9,6 +9,7 @@ import {
   MinLength,
 } from 'class-validator';
 import type { FoodFeedback } from '../contract.js';
+import { BARCODE } from './engine/products.js';
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const TIME_MESSAGE = 'Informe o horário no formato HH:MM.';
@@ -23,10 +24,19 @@ export class MealTimeDto {
   time: string;
 }
 
+export const BARCODE_MESSAGE = 'Código de barras inválido.';
+
+/** Alimento extra: `foodName` (da base) ou `barcode` (produto do Open Food Facts). */
 export class AddFoodDto {
+  @IsOptional()
   @IsString({ message: 'Escolha o alimento.' })
   @MinLength(1, { message: 'Escolha o alimento.' })
-  foodName: string;
+  foodName?: string;
+
+  @IsOptional()
+  @IsString({ message: BARCODE_MESSAGE })
+  @Matches(BARCODE, { message: BARCODE_MESSAGE })
+  barcode?: string;
 
   @IsInt({ message: GRAMS_MESSAGE })
   @Min(1, { message: GRAMS_MESSAGE })

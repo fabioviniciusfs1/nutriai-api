@@ -16,6 +16,7 @@ cp .env.example .env   # e preencha JWT_SECRET, TOKEN_ENCRYPTION_KEY, Google e A
 docker compose up -d   # Postgres na porta 5433 (bancos nutriai e nutriai_test)
 npm run db:import-taco -- data/taco/tabela-taco.ods   # catálogo (TACO) + semente; reinicie a API depois
 npm run db:import-tbca -- data/tbca/TBCA_20223103.csv # catálogo (TBCA), depois da TACO; reinicie a API
+npm run db:import-off -- data/off/off-products.jsonl.gz # produtos do Open Food Facts (alimento extra)
 npm run db:seed        # só a semente (plano base, nutrientes); exige a TACO importada
 npm run start:dev      # servidor em watch mode (porta: env PORT; o .env.example usa 3001)
 npm run build          # nest build → dist/
@@ -60,6 +61,15 @@ npx vitest run -t "não gosto"                     # por nome do teste
 - O plano base (`src/database/seed-data.ts`) lista só `{ name, grams }` com nomes exatos do
   catálogo; o seed calcula os nutrientes (`seed-plan.ts`). O `CatalogService` guarda o catálogo em memória:
   depois de importar, reinicie a API.
+- Open Food Facts (produtos industrializados, só para o alimento extra): `scripts/filter-off.mjs` reduz o dump
+  JSONL do OFF (~84 GB, fora do repositório) a `data/off/off-products.jsonl.gz` (fora do git: código, nome,
+  marca, porção, países, kcal/macros por 100 g; ~3,2 mi de produtos); `db:import-off` troca a tabela
+  `off_products` inteira numa transação (`sources/off/`, ~3 min; a busca de produtos espera até o fim). Fica
+  **fora** de `foods` e do engine: o `OffProductsService` (`src/foods/`) acha o produto pelo código
+  (`barcodeVariants`: UPC-A ↔ EAN-13) ou pelo nome (`LIKE` por palavra no `search_name`, índice trigram
+  `pg_trgm`; primeiro os vendidos no Brasil). As rotas do alimento extra aceitam `barcode` no lugar do nome e
+  passam o `Product` (`src/plan/engine/products.ts`) ao `Planner` (`searchFoods`, `foodPortion`, `addFood`); o
+  extra guarda os macros como sempre (sem micronutrientes).
 - Os testes do engine usam um catálogo fixo (`src/plan/engine/test-catalog.ts`, os dados do mock antigo).
 
 ## Arquitetura

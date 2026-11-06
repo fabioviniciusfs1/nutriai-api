@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { FoodsController } from '../foods/foods.controller.js';
+import { OffProductsService } from '../foods/off-products.service.js';
 import { MealComposerService } from './composer/meal-composer.service.js';
 import { DayLogService } from './day-log.service.js';
 import { PlanVersionService } from './plan-version.service.js';
@@ -15,6 +16,7 @@ import { PlanPersonalizerService } from './personalizer.service.js';
     PlanVersionService,
     MealComposerService,
     PlanPersonalizerService,
+    OffProductsService,
   ],
   exports: [PlanService, PlanPersonalizerService],
 })

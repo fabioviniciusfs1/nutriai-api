@@ -4,6 +4,7 @@ import {
   testFoods as foodCatalog,
 } from './test-catalog.js';
 import { FoodCatalog, similarity, sumTotals } from './foods.js';
+import type { Product } from './products.js';
 import {
   foodWeight,
   goalFactor,
@@ -113,6 +114,84 @@ describe('Planner', () => {
       expect(result.options.map((option) => option.food.name)).not.toContain(
         'Guacamole',
       );
+    });
+
+    describe('produtos (Open Food Facts)', () => {
+      const MOCA: Product = {
+        name: 'Leite Condensado (Moça)',
+        barcode: '7891000100103',
+        brand: 'Moça',
+        per100g: { kcal: 325, protein: 7, carbs: 55, fat: 8 },
+        servingG: 20,
+      };
+      const NO_SERVING: Product = {
+        ...MOCA,
+        name: 'Doce de leite',
+        barcode: '7890000000017',
+        servingG: null,
+      };
+
+      it('código de barras: só os produtos, na porção da embalagem', () => {
+        const result = planner().searchFoods(1, '7891000100103', [MOCA]);
+        expect(result).toEqual({
+          found: true,
+          restricted: null,
+          options: [
+            {
+              food: {
+                name: 'Leite Condensado (Moça)',
+                grams: 20,
+                kcal: 65,
+                protein: 1,
+                carbs: 11,
+                fat: 2,
+              },
+              barcode: '7891000100103',
+              brand: 'Moça',
+            },
+          ],
+        });
+        expect(planner().searchFoods(1, '7891000100103').found).toBe(false);
+      });
+
+      it('nome: a base primeiro, depois os produtos; sem porção da embalagem, a média da refeição', () => {
+        const result = planner().searchFoods(1, 'banana prata', [NO_SERVING]);
+        expect(result.found).toBe(true);
+        expect(
+          result.options.map(({ food, barcode }) => [food.name, barcode]),
+        ).toEqual([
+          ['Banana-prata', null],
+          ['Doce de leite', '7890000000017'],
+        ]);
+        // 70 kcal (a média da refeição) ÷ 325 kcal/100 g = 22 g.
+        expect(result.options[1].food.grams).toBe(22);
+      });
+
+      it('sem alimento da base, os produtos no lugar das sugestões parecidas', () => {
+        const result = planner().searchFoods(1, 'leite condensado', [MOCA]);
+        expect(result.found).toBe(true);
+        expect(result.options.map((option) => option.barcode)).toEqual([
+          '7891000100103',
+        ]);
+      });
+
+      it('acrescenta o produto nas gramas do usuário, somando ao dia', () => {
+        const before = planner();
+        const added = planner(before.addFood(1, MOCA, 40));
+        const extra = added
+          .meal(1)
+          .foods.find((food) => food.extraId !== null)!;
+        expect(extra).toEqual({
+          name: 'Leite Condensado (Moça)',
+          grams: 40,
+          kcal: 130,
+          protein: 3,
+          carbs: 22,
+          fat: 3,
+          extraId: 'x-1',
+        });
+        expect(added.dayKcal()).toBe(before.dayKcal() + 130);
+      });
     });
 
     it('acrescenta o extra nas gramas do usuário, somando ao dia, e remove sem mexer no resto', () => {

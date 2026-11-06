@@ -292,8 +292,18 @@ export type FoodSearchResult = {
   found: boolean;
   /** O alimento digitado existe, mas está restrito pelo usuário. */
   restricted: { name: string; feedback: FoodFeedback } | null;
-  /** Cada opção na porção sugerida para a refeição (o valor inicial das gramas do alimento extra). */
-  options: { food: PlanFood }[];
+  /**
+   * Cada opção na porção sugerida para a refeição (o valor inicial das gramas do alimento extra). `barcode`:
+   * produto industrializado (Open Food Facts), que a prévia e o `POST` pedem pelo código; `null` = alimento da
+   * base (TACO/TBCA), pedido pelo nome. `brand`: marca do produto, quando houver.
+   */
+  options: FoodSearchOption[];
+};
+
+export type FoodSearchOption = {
+  food: PlanFood;
+  barcode: string | null;
+  brand: string | null;
 };
 
 /** Alimento marcado pelo usuário, listado na página Alimentos. */

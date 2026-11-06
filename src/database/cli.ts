@@ -1,10 +1,11 @@
-// Tarefas de banco: `npm run db:migrate`, `db:revert`, `db:seed`, `db:import-taco` e `db:import-tbca` (rodam o
-// build em dist/).
+// Tarefas de banco: `npm run db:migrate`, `db:revert`, `db:seed`, `db:import-taco`, `db:import-tbca` e
+// `db:import-off` (rodam o build em dist/).
 import 'reflect-metadata';
 import { loadEnvFile } from 'node:process';
 import { DataSource } from 'typeorm';
 import { dataSourceOptions } from './data-source.js';
 import { seedCatalog } from './seed.js';
+import { importOff } from './sources/off/import.js';
 import { importTaco } from './sources/taco/import.js';
 import { importTbca } from './sources/tbca/import.js';
 
@@ -58,9 +59,21 @@ try {
     console.log(
       `TBCA importada: ${result.tbcaFoods} alimentos em tbca_alimentos, ${result.catalogFoods} no catálogo do app.`,
     );
+  } else if (command === 'import-off') {
+    const file = process.argv[3];
+    if (!file)
+      throw new Error(
+        'Informe o arquivo: npm run db:import-off -- data/off/off-products.jsonl.gz',
+      );
+    const result = await importOff(dataSource, file, (rows) =>
+      console.log(`${rows} produtos gravados…`),
+    );
+    console.log(
+      `Open Food Facts importado: ${result.rows} produtos em off_products (${result.skipped} linhas ignoradas).`,
+    );
   } else {
     throw new Error(
-      `Comando desconhecido: ${command ?? '(nenhum)'}. Use migrate, revert, seed, import-taco ou import-tbca.`,
+      `Comando desconhecido: ${command ?? '(nenhum)'}. Use migrate, revert, seed, import-taco, import-tbca ou import-off.`,
     );
   }
 } finally {

@@ -2,6 +2,7 @@
 // Tudo puro: recebe o estado do usuário e devolve o novo estado ou uma prévia, sem I/O.
 import type {
   FoodFeedback,
+  FoodSearchOption,
   FoodSearchResult,
   MealSlot,
   PlanMeal,
@@ -14,8 +15,10 @@ import {
   FoodCatalog,
   isEggUnit,
   portionFood,
+  portionOf,
   sumTotals,
 } from './foods.js';
+import { isBarcode, type Product } from './products.js';
 import type {
   Catalog,
   ExtraFood,
@@ -303,6 +306,9 @@ export const MAX_SUBSTITUTES = 8;
 export const MAX_SEARCH_SUBSTITUTES = 20;
 export const FOOD_NOT_FOUND = 'Alimento não encontrado.';
 
+/** Teto da porção sugerida de um produto (o mesmo das gramas do alimento extra). */
+const MAX_SUGGESTED_GRAMS = 2000;
+
 export class Planner {
   private readonly foods: FoodCatalog;
   /** O que o usuário vê hoje. */
@@ -551,50 +557,99 @@ export class Planner {
   // ---------------------------------------------------------------------------------------------
   // Acrescentar e remover alimento
 
-  /** Porção sugerida de `foodName` na refeição (valor inicial das gramas): a média dos alimentos dela em kcal. */
-  private suggestedPortion(mealId: number, foodName: string) {
+  /** Calorias da porção sugerida na refeição (valor inicial das gramas): a média dos alimentos dela. */
+  private suggestedKcal(mealId: number) {
     const meal = this.meal(mealId);
-    const portionKcal =
-      Math.round(meal.totals.kcal / (meal.foods.length + 1)) || 100;
-    return this.foods.convert(foodName, portionKcal);
+    return Math.round(meal.totals.kcal / (meal.foods.length + 1)) || 100;
   }
 
-  searchFoods(mealId: number, query: string): FoodSearchResult {
+  /** Porção sugerida de um produto: a porção da embalagem; sem ela, a média dos alimentos da refeição. */
+  private suggestedProduct(mealId: number, product: Product): PlanFood {
+    const grams =
+      product.servingG !== null
+        ? Math.round(product.servingG)
+        : product.per100g.kcal > 0
+          ? Math.round(
+              (this.suggestedKcal(mealId) / product.per100g.kcal) * 100,
+            )
+          : 100;
+    return portionOf(
+      product.name,
+      product.per100g,
+      Math.min(MAX_SUGGESTED_GRAMS, Math.max(1, grams)),
+    );
+  }
+
+  /**
+   * Opções do alimento extra: os alimentos da base que batem com `query` e os `products` (Open Food Facts) achados
+   * pelo mesmo texto. Código de barras: só os produtos. Sem alimento da base, os produtos no lugar das sugestões
+   * parecidas.
+   */
+  searchFoods(
+    mealId: number,
+    query: string,
+    products: Product[] = [],
+  ): FoodSearchResult {
     this.meal(mealId);
+    const fromProducts: FoodSearchOption[] = products.map((product) => ({
+      food: this.suggestedProduct(mealId, product),
+      barcode: product.barcode,
+      brand: product.brand,
+    }));
+    if (isBarcode(query))
+      return {
+        found: fromProducts.length > 0,
+        restricted: null,
+        options: fromProducts,
+      };
+
     const { found, restricted, candidates } = this.foods.search(
       query,
       this.state.foodFeedback,
     );
+    if (!found && fromProducts.length > 0)
+      return { found: true, restricted, options: fromProducts };
+    const portionKcal = this.suggestedKcal(mealId);
     return {
       found,
       restricted,
-      options: candidates.flatMap((food) => {
-        const suggested = this.suggestedPortion(mealId, food.name);
-        return suggested ? [{ food: suggested }] : [];
-      }),
+      options: [
+        ...candidates.flatMap((food) => {
+          const suggested = this.foods.convert(food.name, portionKcal);
+          return suggested
+            ? [{ food: suggested, barcode: null, brand: null }]
+            : [];
+        }),
+        ...fromProducts,
+      ],
     };
   }
 
-  /** `grams` gramas de `foodName` (prévia do alimento extra); erro se restrito ou fora do catálogo. */
-  foodPortion(mealId: number, foodName: string, grams: number): PlanFood {
+  /**
+   * `grams` gramas do alimento (prévia do alimento extra): pelo nome, da base (erro se restrito ou fora dela), ou
+   * um produto já achado pelo código de barras.
+   */
+  foodPortion(mealId: number, food: string | Product, grams: number): PlanFood {
     this.meal(mealId);
-    if (this.state.foodFeedback[foodName]) {
+    if (typeof food !== 'string')
+      return portionOf(food.name, food.per100g, grams);
+    if (this.state.foodFeedback[food]) {
       throw new PlanRuleError(
         'invalid',
         'Esse alimento está restrito. Libere-o na página Alimentos para usá-lo.',
       );
     }
-    const food = this.foods.portion(foodName, grams);
-    if (!food) throw new PlanRuleError('not-found', FOOD_NOT_FOUND);
-    return food;
+    const portion = this.foods.portion(food, grams);
+    if (!portion) throw new PlanRuleError('not-found', FOOD_NOT_FOUND);
+    return portion;
   }
 
   /**
-   * Acrescenta `grams` gramas de `foodName` à refeição, como alimento extra: as gramas ficam fixas (fora dos
+   * Acrescenta `grams` gramas do alimento (da base ou produto) à refeição, como alimento extra: as gramas ficam fixas (fora dos
    * fatores de porção) e as calorias somam às do dia; as outras refeições não mudam.
    */
-  addFood(mealId: number, foodName: string, grams: number): PlanState {
-    const food = this.foodPortion(mealId, foodName, grams);
+  addFood(mealId: number, item: string | Product, grams: number): PlanState {
+    const food = this.foodPortion(mealId, item, grams);
     const { extraFoods } = this.state.planChanges;
     const extra = {
       ...food,

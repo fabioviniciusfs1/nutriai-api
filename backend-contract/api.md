@@ -589,7 +589,9 @@ padrão do plano base (ou a do assistente, se ele refizer o plano com `POST /pla
   "restricted": null,
   "options": [
     {
-      "food": { "name": "Banana-prata", "grams": 60, "carbs": 16, "protein": 1, "fat": 0, "kcal": 60 }
+      "food": { "name": "Banana-prata", "grams": 60, "carbs": 16, "protein": 1, "fat": 0, "kcal": 60 },
+      "barcode": null,
+      "brand": null
     }
   ]
 }
@@ -607,15 +609,29 @@ padrão do plano base (ou a do assistente, se ele refizer o plano com `POST /pla
 - Porção sugerida de cada opção (o valor inicial das gramas no diálogo): as calorias médias por alimento da
   refeição (`kcal da refeição ÷ (nº de alimentos + 1)`, ou 100 kcal se der 0), convertidas em gramas pelo
   catálogo.
+- **Produtos industrializados (Open Food Facts):** a busca também procura na base de produtos (só o alimento
+  extra usa essa base). Cada produto vem com `barcode` (o código de barras) e `brand` (a marca ou `null`); os
+  alimentos da base vêm com os dois `null`. O nome do produto leva a marca entre parênteses quando ela não está
+  nele ("Leite Condensado Integral (Moça)").
+  - `q` só com dígitos (8 a 14, o código lido pela câmera ou digitado): só o produto desse código (o UPC-A de
+    12 dígitos também acha o EAN-13 com um zero na frente); sem ele, `found: false` e `options: []`.
+  - Texto: até 10 produtos com todas as palavras do texto (de 3 letras ou mais) no nome ou na marca, primeiro os
+    vendidos no Brasil, **depois** dos alimentos da base. Sem alimento da base, os produtos entram no lugar das
+    sugestões parecidas (`found: true`).
+  - Porção sugerida do produto: a porção da embalagem, quando informada; senão, a mesma conta acima.
 
 `GET /plan/meals/{id}/food-portion?food=Banana-prata&grams=150` → `PlanFood`: prévia da quantidade que o
 usuário digitou (gramas e nutrientes calculados). `grams`: inteiro de 1 a 2000; fora disso, `400`
 "Informe a quantidade em gramas (1 a 2000).". Alimento restrito ou fora do catálogo: o mesmo erro do `POST`.
+Produto: `?barcode=7891000100103&grams=40` no lugar de `food`; código que não existe → `404` "Alimento não
+encontrado.", código fora do formato → `400` "Código de barras inválido.".
 
 `POST /plan/meals/{id}/foods` com `{ "foodName": "Banana-prata", "grams": 150 }` acrescenta o alimento extra
 nas gramas do usuário, **só para hoje** (o dia do `X-Timezone`): no dia seguinte ele sai do plano, e quem comer
 de novo acrescenta outra vez. A saída conta como mudança do plano (`removed` no histórico de planos do dia). `grams` como na prévia. As gramas ficam **fixas** (não acompanham o fator
 da refeição nem a meta), as outras refeições não mudam e as calorias do extra **somam** às do dia.
+Produto: `{ "barcode": "7891000100103", "grams": 40 }` no lugar de `foodName` (erros como na prévia); entra no
+plano com o nome da busca. Sem `foodName` nem `barcode`: `400` "Escolha o alimento.".
 
 `DELETE /plan/meals/{id}/foods/{extraId}` remove um alimento extra de hoje; as outras refeições não mudam. Um
 extra de outro dia já saiu: `404`.

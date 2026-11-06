@@ -25,6 +25,7 @@
     "db:seed": "nest build && node dist/database/cli.js seed",
     "db:import-taco": "nest build && node dist/database/cli.js import-taco",
     "db:import-tbca": "nest build && node dist/database/cli.js import-tbca",
+    "db:import-off": "nest build && node dist/database/cli.js import-off",
     "release": "bash scripts/release.sh"
   },
   "dependencies": {

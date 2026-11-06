@@ -9,6 +9,7 @@ import { DayLogEntity } from './day-log.entity.js';
 import { GoogleAccountEntity } from './google-account.entity.js';
 import { LlmCallEntity } from './llm-call.entity.js';
 import { OAuthCodeEntity } from './oauth-code.entity.js';
+import { OffProductEntity } from './off-product.entity.js';
 import { PlanStateEntity } from './plan-state.entity.js';
 import { PlanVersionEntity } from './plan-version.entity.js';
 import { SchedulePlanEntity } from './schedule-plan.entity.js';
@@ -33,6 +34,7 @@ export {
   LlmCallEntity,
   NutrientDefEntity,
   OAuthCodeEntity,
+  OffProductEntity,
   PlanStateEntity,
   PlanVersionEntity,
   SchedulePlanEntity,
@@ -52,6 +54,7 @@ export const ENTITIES = [
   LlmCallEntity,
   NutrientDefEntity,
   OAuthCodeEntity,
+  OffProductEntity,
   PlanStateEntity,
   PlanVersionEntity,
   SchedulePlanEntity,

@@ -887,6 +887,105 @@ describe('plano alimentar', () => {
       .expect(400, { error: 'Informe o horário no formato HH:MM.' });
   });
 
+  it('acha produtos do Open Food Facts pelo código de barras e pelo nome e os acrescenta', async () => {
+    const db = app.get(DataSource);
+    await db.query(`
+      INSERT INTO off_products (code, name, brand, serving_g, countries, kcal, protein, carbs, fat, search_name)
+      VALUES ('7891000100103', 'Leite Condensado Integral', 'Moça', 20, '{en:brazil}', 325, 7, 55, 8,
+              'leite condensado integral moca'),
+             ('0016000487956', 'Chex rice', 'General Mills', NULL, '{en:united-states}', 400, 7.5, 87.5, 0,
+              'chex rice general mills')
+      ON CONFLICT DO NOTHING`);
+    const { http } = await newUser();
+    const today = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+
+    const byCode = await http(
+      'get',
+      '/plan/meals/1/food-search?q=7891000100103',
+    ).expect(200);
+    expect(byCode.body).toEqual({
+      found: true,
+      restricted: null,
+      options: [
+        {
+          food: {
+            name: 'Leite Condensado Integral (Moça)',
+            grams: 20,
+            kcal: 65,
+            protein: 1,
+            carbs: 11,
+            fat: 2,
+          },
+          barcode: '7891000100103',
+          brand: 'Moça',
+        },
+      ],
+    });
+    // UPC-A (12 dígitos) acha o EAN-13 com zero na frente.
+    const upc = await http(
+      'get',
+      '/plan/meals/1/food-search?q=016000487956',
+    ).expect(200);
+    expect(
+      upc.body.options.map(
+        (option: { barcode: string | null }) => option.barcode,
+      ),
+    ).toEqual(['0016000487956']);
+    const missing = await http(
+      'get',
+      '/plan/meals/1/food-search?q=7890000000000',
+    ).expect(200);
+    expect(missing.body).toEqual({
+      found: false,
+      restricted: null,
+      options: [],
+    });
+
+    const byName = await http(
+      'get',
+      '/plan/meals/1/food-search?q=leite condensado',
+    ).expect(200);
+    expect(byName.body.found).toBe(true);
+    expect(
+      byName.body.options.some(
+        (option: { barcode: string | null }) =>
+          option.barcode === '7891000100103',
+      ),
+    ).toBe(true);
+
+    const preview = (
+      await http(
+        'get',
+        '/plan/meals/1/food-portion?barcode=7891000100103&grams=40',
+      ).expect(200)
+    ).body as { name: string; grams: number; kcal: number };
+    expect(preview).toMatchObject({
+      name: 'Leite Condensado Integral (Moça)',
+      grams: 40,
+      kcal: 130,
+    });
+    await http(
+      'get',
+      '/plan/meals/1/food-portion?barcode=7890000000000&grams=40',
+    ).expect(404, { error: 'Alimento não encontrado.' });
+    await http('post', '/plan/meals/1/foods')
+      .send({ barcode: 'abc', grams: 40 })
+      .expect(400, { error: 'Código de barras inválido.' });
+    await http('post', '/plan/meals/1/foods')
+      .send({ grams: 40 })
+      .expect(400, { error: 'Escolha o alimento.' });
+
+    const added = (
+      await http('post', '/plan/meals/1/foods')
+        .send({ barcode: '7891000100103', grams: 40 })
+        .expect(200)
+    ).body as TodayPlan;
+    const extra = added.meals[0].foods.find((food) => food.extraId !== null)!;
+    expect(extra).toMatchObject({ ...preview, extraId: expect.any(String) });
+    expect(kcal(added)).toBe(kcal(today) + 130);
+  });
+
   it('não cria nem remove refeição avulsa (as refeições vêm da rotina)', async () => {
     const { http } = await newUser();
     await http('get', '/plan/meals/1/removal-options').expect(404);
