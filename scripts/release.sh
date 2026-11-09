@@ -16,7 +16,7 @@ done
 
 # O API_DOMAIN vai para o JavaScript do front; as outras duas só precisam existir para o compose aceitar o arquivo
 # (os valores reais ficam no .env da VPS).
-export API_DOMAIN="${API_DOMAIN:-nutriai.duckdns.org}"
+export API_DOMAIN="${API_DOMAIN:-alere.duckdns.org}"
 export POSTGRES_PASSWORD=build JWT_SECRET=build
 
 if [[ " ${services[*]} " == *" api "* ]]; then
