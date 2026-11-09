@@ -9,9 +9,16 @@ import { LlmLogService } from '../../ai/llm-log.service.js';
 import { CatalogService } from '../../catalog/catalog.service.js';
 import type { Diet, FoodFeedback } from '../../contract.js';
 import type { LlmTask } from '../../database/entities/index.js';
+import {
+  genericFood,
+  needsOffFood,
+  offSearchWords,
+} from '../../database/sources/off/generic.js';
+import { OffProductsService } from '../../foods/off-products.service.js';
 import { allowedByDiet } from '../engine/diet.js';
 import { FoodCatalog } from '../engine/foods.js';
 import type { PersonalMeals } from '../engine/types.js';
+import type { CitedFood } from './composition.js';
 import {
   MEAL_TIME_INSTRUCTIONS,
   MEAL_TIME_SCHEMA,
@@ -22,6 +29,8 @@ import {
 } from './meal-time.js';
 import {
   parsePersonalPlan,
+  personalPlanCitedFoods,
+  planAllows,
   PERSONAL_PLAN_INSTRUCTIONS,
   PERSONAL_PLAN_SCHEMA,
   personalPlanPrompt,
@@ -29,6 +38,7 @@ import {
 } from './personal-plan.js';
 import {
   parseSubstitutes,
+  substituteCitedFoods,
   SUBSTITUTE_INSTRUCTIONS,
   SUBSTITUTES_SCHEMA,
   substitutePrompt,
@@ -54,7 +64,7 @@ function dietFilter(catalog: FoodCatalog, diet: Diet) {
 
 /**
  * Monta o plano individual e sugere substitutos de alimentos com o Claude, conferindo no catálogo (TACO e
- * TBCA) os alimentos que ele cita. Sem cliente, ou se a chamada falhar, devolve `null` e o plano usa as refeições padrão / os substitutos do
+ * TBCA, e os genéricos do Open Food Facts para o que falta nelas) os alimentos que ele cita. Sem cliente, ou se a chamada falhar, devolve `null` e o plano usa as refeições padrão / os substitutos do
  * mesmo grupo.
  */
 @Injectable()
@@ -65,6 +75,7 @@ export class MealComposerService {
     @Inject(ANTHROPIC_CLIENT) private readonly anthropic: Anthropic | null,
     private readonly catalog: CatalogService,
     private readonly llmLog: LlmLogService,
+    private readonly products: OffProductsService,
   ) {}
 
   get available() {
@@ -93,7 +104,7 @@ export class MealComposerService {
       timeout: SUBSTITUTES_TIMEOUT_MS,
     });
     if (text === null) return null;
-    const catalog = new FoodCatalog((await this.catalog.catalog()).foods);
+    const catalog = await this.catalogWithOffFoods(substituteCitedFoods(text));
     const inDiet = dietFilter(catalog, request.diet);
     const excluded = new Set(request.exclude);
     const names = parseSubstitutes(
@@ -159,12 +170,14 @@ export class MealComposerService {
       plan: true,
     });
     if (text === null) return null;
-    const catalog = new FoodCatalog((await this.catalog.catalog()).foods);
+    const catalog = await this.catalogWithOffFoods(
+      personalPlanCitedFoods(text),
+    );
     const meals = parsePersonalPlan(
       text,
       catalog,
       feedback,
-      dietFilter(catalog, request.routine.diet),
+      planAllows(catalog, dietFilter(catalog, request.routine.diet)),
       request.meals.map((meal) => meal.id),
       request.routine.eatingWindows,
       (from, to) =>
@@ -175,6 +188,43 @@ export class MealComposerService {
     if (!meals)
       this.logger.warn('Plano individual sem todas as refeições válidas.');
     return meals;
+  }
+
+  /**
+   * O catálogo para conferir os alimentos `cited`, com os genéricos do Open Food Facts dos que não existem na TACO
+   * nem na TBCA (`needsOffFood`): cada um pela mediana dos produtos brasileiros com as palavras do nome
+   * (`genericFood`), gravado em `foods` para as próximas vezes. Falha no Open Food Facts só vai para o log.
+   */
+  private async catalogWithOffFoods(cited: CitedFood[]): Promise<FoodCatalog> {
+    const catalog = new FoodCatalog((await this.catalog.catalog()).foods);
+    const missing = new Map<string, CitedFood>();
+    for (const food of cited)
+      if (
+        !missing.has(food.name) &&
+        needsOffFood(catalog, food.name, food.approx)
+      )
+        missing.set(food.name, food);
+    if (missing.size === 0) return catalog;
+    try {
+      const added = [];
+      for (const { name, approx } of missing.values()) {
+        const stats = await this.products.medians(offSearchWords(name));
+        const food = genericFood(catalog, name, approx, stats);
+        if (!food) continue;
+        added.push(food);
+        this.logger.log(
+          `Alimento do Open Food Facts: ${food.name} (${stats.count} produtos).`,
+        );
+      }
+      if (added.length === 0) return catalog;
+      await this.catalog.addFoods(added);
+      return new FoodCatalog((await this.catalog.catalog()).foods);
+    } catch (error) {
+      this.logger.warn(
+        `Open Food Facts: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return catalog;
+    }
   }
 
   /**

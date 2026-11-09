@@ -1,4 +1,10 @@
-import { FoodCatalog, isEggUnit, isSameFood } from './foods.js';
+import {
+  FoodCatalog,
+  isEggUnit,
+  isRawStaple,
+  isSameFood,
+  isWholeGrain,
+} from './foods.js';
 import type { CatalogFood } from './types.js';
 
 const food = (
@@ -108,6 +114,27 @@ describe('FoodCatalog.match', () => {
       'Mandioca, cozida',
     );
     expect(catalog.match('Mandioca frita', { kcal: 900 })).toBeNull();
+  });
+});
+
+describe('FoodCatalog.match com "sem"', () => {
+  const sugar = new FoodCatalog([
+    food('Açúcar, refinado', 387, 'adocantes'),
+    food('Frango, peito, sem pele, grelhado', 159, 'proteinas'),
+  ]);
+
+  it('a palavra depois de "sem" não vale para a família', () => {
+    expect(sugar.match('Granola, sem açúcar', { kcal: 400 })).toBeNull();
+    expect(sugar.match('Frango, peito, sem pele, assado')).toBe(
+      'Frango, peito, sem pele, grelhado',
+    );
+  });
+
+  it('unknownWords: as palavras que o catálogo não tem (sem as de preparo)', () => {
+    expect(catalog.unknownWords('Queijo, cottage, cozido')).toEqual([
+      'cottage',
+    ]);
+    expect(catalog.unknownWords('Arroz, tipo 1, cozido')).toEqual([]);
   });
 });
 
@@ -248,6 +275,58 @@ describe('FoodCatalog.substituteOptions', () => {
     // Faltando opção, vêm mais da família (mas nunca a própria batata-doce).
     expect(names).toContain('Batata, yacon, crua');
     expect(names.some((name) => name.startsWith('Batata, doce'))).toBe(false);
+  });
+});
+
+describe('isRawStaple e isWholeGrain', () => {
+  it.each([
+    ['Macarrão, trigo, cru', true],
+    ['Arroz, tipo 1, cru', true],
+    ['Feijão, carioca, cru', true],
+    ['Arroz, tipo 1, cozido', false],
+    ['Aveia, flocos, crua', false],
+    ['Banana, prata, crua', false],
+  ])('%s é grão/massa crua: %s', (name, expected) => {
+    expect(isRawStaple(name)).toBe(expected);
+  });
+
+  it('integral só nos carboidratos (leite integral não)', () => {
+    expect(isWholeGrain(food('Pão, trigo, forma, integral', 253))).toBe(true);
+    expect(isWholeGrain(food('Arroz, integral, cozido', 124))).toBe(true);
+    expect(isWholeGrain(food('Pão, trigo, francês', 300))).toBe(false);
+    expect(
+      isWholeGrain(food('Leite, de vaca, integral', 61, 'laticinios')),
+    ).toBe(false);
+    expect(isWholeGrain(undefined)).toBe(false);
+  });
+
+  it('match: integral só se o nome citado diz integral', () => {
+    const pasta = new FoodCatalog([
+      food('Macarrão, trigo, integral, cozido, drenado, s/ sal', 123),
+      food('Macarrão, trigo, cozido, drenado, s/ óleo, c/ sal', 125),
+    ]);
+    expect(pasta.match('Macarrão, trigo, cozido', { kcal: 102 })).toBe(
+      'Macarrão, trigo, cozido, drenado, s/ óleo, c/ sal',
+    );
+    expect(pasta.match('Macarrão, trigo, integral, cozido')).toBe(
+      'Macarrão, trigo, integral, cozido, drenado, s/ sal',
+    );
+  });
+
+  it('substituteOptions nunca sugere grão ou massa crua', () => {
+    const grains = new FoodCatalog([
+      food('Macarrão, trigo, cozido', 125),
+      food('Macarrão, trigo, cru', 371),
+      food('Arroz, tipo 1, cru', 358),
+      food('Arroz, tipo 1, cozido', 128),
+      food('Mandioca, cozida', 125),
+    ]);
+    expect(
+      grains
+        .substituteOptions('Macarrão, trigo, cozido', 100, {}, 8)
+        .map((item) => item.name)
+        .sort(),
+    ).toEqual(['Arroz, tipo 1, cozido', 'Mandioca, cozida']);
   });
 });
 

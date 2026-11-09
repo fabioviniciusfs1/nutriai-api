@@ -78,6 +78,37 @@ describe('parseSubstitutes', () => {
     ).toEqual(['Maçã, crua']);
   });
 
+  it('grão ou massa crua nunca, mesmo no lugar de outro cru', () => {
+    const grains = new FoodCatalog([
+      ...testFoods,
+      {
+        name: 'Macarrão, trigo, cru',
+        group: 'carboidratos',
+        per100g: { carbs: 77, protein: 10, fat: 1, kcal: 371 },
+      },
+      {
+        name: 'Arroz, tipo 1, cru',
+        group: 'carboidratos',
+        per100g: { carbs: 79, protein: 7, fat: 0, kcal: 358 },
+      },
+      {
+        name: 'Arroz, tipo 1, cozido',
+        group: 'carboidratos',
+        per100g: { carbs: 28, protein: 3, fat: 0, kcal: 128 },
+      },
+    ]);
+    expect(
+      parseSubstitutes(
+        JSON.stringify({
+          names: ['Arroz, tipo 1, cru', 'Arroz, tipo 1, cozido'],
+        }),
+        grains,
+        {},
+        'Macarrão, trigo, cru',
+      ),
+    ).toEqual(['Arroz, tipo 1, cozido']);
+  });
+
   it('lê o formato com os valores por 100 g', () => {
     expect(
       parseSubstitutes(

@@ -14,6 +14,7 @@ import type {
   WeightProjection,
 } from '../src/contract.js';
 import { addDays, userClock, weekday } from '../src/common/timezone.js';
+import { OffProductsService } from '../src/foods/off-products.service.js';
 import { PlanPersonalizerService } from '../src/plan/personalizer.service.js';
 import { createTestApp, FRONTEND } from './setup-app.js';
 
@@ -829,7 +830,7 @@ describe('plano alimentar', () => {
     const today = (await http('get', '/plan/today').expect(200))
       .body as TodayPlan;
     expect(today.meals.map((meal) => meal.totals.kcal)).toEqual([
-      355, 399, 399,
+      378, 403, 399,
     ]);
     // Sem rotina: café da manhã, almoço e jantar.
     expect(today.meals.map((meal) => meal.slot)).toEqual([
@@ -1002,8 +1003,8 @@ describe('plano alimentar', () => {
 
   it('troca alimentos e lista/libera restrições', async () => {
     const { http } = await newUser();
-    const ARROZ = 'Arroz, integral, cozido';
-    const ARROZ_BRANCO = 'Arroz, tipo 1, cozido';
+    const ARROZ = 'Arroz, tipo 1, cozido';
+    const ARROZ_TIPO_2 = 'Arroz, tipo 2, cozido';
     const AZEITE = 'Azeite, de oliva, extra virgem';
     const MANDIOCA = 'Mandioca, cozida';
 
@@ -1018,9 +1019,9 @@ describe('plano alimentar', () => {
     const rice = names.filter((name: string) => name.startsWith('Arroz, '));
     expect(rice.length).toBeGreaterThan(0);
     expect(rice.length).toBeLessThanOrEqual(2);
-    expect(
-      names.some((name: string) => name.startsWith('Arroz, integral')),
-    ).toBe(false);
+    expect(names.some((name: string) => name.startsWith('Arroz, tipo 1'))).toBe(
+      false,
+    );
     expect(names).not.toContain('Feijão, carioca, cozido');
 
     const swapped = (
@@ -1028,13 +1029,13 @@ describe('plano alimentar', () => {
         .send({
           foodName: ARROZ,
           reason: 'nao-gosto',
-          substitute: ARROZ_BRANCO,
+          substitute: ARROZ_TIPO_2,
         })
         .expect(200)
     ).body as TodayPlan;
     const lunch = swapped.meals.find((meal) => meal.id === 2) as PlanMeal;
     expect(lunch.foods.map((food) => food.name)).not.toContain(ARROZ);
-    expect(lunch.foods.map((food) => food.name)).toContain(ARROZ_BRANCO);
+    expect(lunch.foods.map((food) => food.name)).toContain(ARROZ_TIPO_2);
 
     // A troca exige um substituto.
     await http('post', '/plan/meals/2/swaps')
@@ -1065,7 +1066,7 @@ describe('plano alimentar', () => {
         feedback: 'nao-gosto',
         group: 'carboidratos',
         onlyInMeal: false,
-        substitute: ARROZ_BRANCO,
+        substitute: ARROZ_TIPO_2,
       },
       {
         name: AZEITE,
@@ -1078,7 +1079,7 @@ describe('plano alimentar', () => {
 
     const search = await http(
       'get',
-      `/plan/meals/1/food-search?q=${encodeURIComponent('arroz, integral, cozido')}`,
+      `/plan/meals/1/food-search?q=${encodeURIComponent('arroz, tipo 1, cozido')}`,
     ).expect(200);
     expect(search.body.restricted).toEqual({
       name: ARROZ,
@@ -1102,7 +1103,7 @@ describe('plano alimentar', () => {
       .body as TodayPlan;
     expect(
       plan.meals.find((meal) => meal.id === 2)!.foods.map((food) => food.name),
-    ).toContain(ARROZ_BRANCO);
+    ).toContain(ARROZ_TIPO_2);
   });
 });
 
@@ -1136,7 +1137,7 @@ describe('substitutos do assistente', () => {
   it('os substitutos vêm do Claude, conferidos no catálogo, e a troca aceita outro grupo', async () => {
     create.mockReset();
     const { http } = await newUser();
-    const ARROZ = 'Arroz, integral, cozido';
+    const ARROZ = 'Arroz, tipo 1, cozido';
     const FEIJAO = 'Feijão, carioca, cozido';
     const MANDIOCA = 'Mandioca, cozida';
     create.mockResolvedValueOnce({
@@ -1197,7 +1198,7 @@ describe('substitutos do assistente', () => {
     const found = (
       await http(
         'get',
-        `/plan/meals/2/substitutes?food=${encodeURIComponent('Arroz, integral, cozido')}&q=banana`,
+        `/plan/meals/2/substitutes?food=${encodeURIComponent('Arroz, tipo 1, cozido')}&q=banana`,
       ).expect(200)
     ).body as PlanMeal['foods'];
     expect(found.length).toBeGreaterThan(0);
@@ -1213,13 +1214,13 @@ describe('substitutos do assistente', () => {
     const { http } = await newUser();
     const substitutes = await http(
       'get',
-      `/plan/meals/2/substitutes?food=${encodeURIComponent('Arroz, integral, cozido')}`,
+      `/plan/meals/2/substitutes?food=${encodeURIComponent('Arroz, tipo 1, cozido')}`,
     ).expect(200);
     expect(substitutes.body.length).toBeGreaterThan(0);
 
     // "Ver mais": um `exclude` por nome já mostrado; volta só opções novas, até acabarem ou chegar aos 64
     // nomes que o `exclude` aceita (o front para aí).
-    const path = `/plan/meals/2/substitutes?food=${encodeURIComponent('Arroz, integral, cozido')}`;
+    const path = `/plan/meals/2/substitutes?food=${encodeURIComponent('Arroz, tipo 1, cozido')}`;
     let shown: string[] = substitutes.body.map(
       (food: { name: string }) => food.name,
     );
@@ -1254,7 +1255,7 @@ describe('plano individual do assistente', () => {
         title: 'Pão com Ovo e Mamão',
         time: '07:30',
         foods: [
-          { name: 'Pão, trigo, forma, integral', grams: 50 },
+          { name: 'Pão, trigo, francês', grams: 50 },
           { name: 'Ovo, de galinha, inteiro, cozido/10minutos', grams: 100 },
           { name: 'Mamão, Papaia, cru', grams: 150 },
         ],
@@ -1266,7 +1267,7 @@ describe('plano individual do assistente', () => {
         foods: [
           { name: TOFU, grams: 150 },
           { name: FRANGO, grams: 100 },
-          { name: 'Arroz, integral, cozido', grams: 150 },
+          { name: 'Arroz, tipo 1, cozido', grams: 150 },
           { name: 'Feijão, carioca, cozido', grams: 100 },
         ],
       },
@@ -1442,6 +1443,70 @@ describe('plano individual do assistente', () => {
     await http('put', '/me/routine')
       .send({ ...ROUTINE, diet: 'carnivora' })
       .expect(400, { error: 'Escolha o tipo de alimentação.' });
+  });
+
+  it('o que falta na TACO e na TBCA vem do Open Food Facts, pela mediana dos produtos brasileiros', async () => {
+    const db = app.get(DataSource);
+    await db.query(`
+      INSERT INTO off_products (code, name, brand, serving_g, countries, kcal, protein, carbs, fat, search_name)
+      VALUES ('7890000000011', 'Queijo Cottage', 'Marca A', NULL, '{en:brazil}', 90, 12, 3, 4,
+              'queijo cottage marca a'),
+             ('7890000000028', 'Queijo tipo cottage', 'Marca B', NULL, '{en:brazil}', 94, 11, 3, 4,
+              'queijo tipo cottage marca b'),
+             ('7890000000035', 'Queijo cottage light', 'Marca C', NULL, '{en:brazil}', 100, 13, 4, 4,
+              'queijo cottage light marca c'),
+             ('0000000000048', 'Cottage cheese', 'Brand D', NULL, '{en:united-states}', 300, 1, 1, 30,
+              'cottage cheese brand d')
+      ON CONFLICT DO NOTHING`);
+    const COTTAGE = 'Queijo, cottage';
+    const withCottage = {
+      meals: PLAN.meals.map((meal) =>
+        meal.id === 4
+          ? {
+              ...meal,
+              foods: [
+                {
+                  name: COTTAGE,
+                  grams: 100,
+                  per100g: { kcal: 98, protein: 11, fat: 4, carbs: 3 },
+                },
+                ...meal.foods,
+              ],
+            }
+          : meal,
+      ),
+    };
+    create.mockReset();
+    create.mockResolvedValueOnce(reply(withCottage));
+    const { http } = await newUser();
+    await http('put', '/me/profile').send(PROFILE).expect(200);
+    await http('put', '/me/routine').send(ROUTINE).expect(200);
+    await personalizationIdle();
+
+    const plan = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+    const snack = plan.meals.find((meal) => meal.id === 4)!;
+    expect(snack.foods.map((food) => food.name)).toContain(COTTAGE);
+    // Mediana dos 3 brasileiros (o americano fica de fora), no grupo dos queijos do catálogo.
+    const [saved] = await db.query(
+      `SELECT "group", per100g, animal, source FROM foods WHERE name = $1`,
+      [COTTAGE],
+    );
+    expect(saved).toEqual({
+      group: 'laticinios',
+      per100g: { kcal: 94, protein: 12, fat: 4, carbs: 3 },
+      animal: ['leite'],
+      source: 'off',
+    });
+
+    // Da segunda vez, o genérico já está no catálogo.
+    const medians = vi.spyOn(app.get(OffProductsService), 'medians');
+    create.mockResolvedValueOnce(reply(withCottage));
+    await http('post', '/plan/personalize').expect(200);
+    await personalizationIdle();
+    expect(medians).not.toHaveBeenCalled();
+    medians.mockRestore();
+    create.mockReset();
   });
 });
 
@@ -1657,8 +1722,8 @@ describe('histórico com dias sem o app aberto', () => {
 describe('histórico de planos', () => {
   it('guarda o plano montado com as alterações do usuário dentro dele', async () => {
     const { http, username } = await newUser();
-    const ARROZ = 'Arroz, integral, cozido';
-    const ARROZ_BRANCO = 'Arroz, tipo 1, cozido';
+    const ARROZ = 'Arroz, tipo 1, cozido';
+    const ARROZ_TIPO_2 = 'Arroz, tipo 2, cozido';
     const BANANA = 'Banana, prata, crua';
     const today = userClock('America/Sao_Paulo').today;
     const plans = async () =>
@@ -1684,7 +1749,7 @@ describe('histórico de planos', () => {
 
     // A troca fica no plano, que passa a mostrar as refeições como ficaram.
     await http('post', '/plan/meals/2/swaps')
-      .send({ foodName: ARROZ, reason: 'nao-gosto', substitute: ARROZ_BRANCO })
+      .send({ foodName: ARROZ, reason: 'nao-gosto', substitute: ARROZ_TIPO_2 })
       .expect(200);
     list = await plans();
     expect(list).toHaveLength(1);
@@ -1694,12 +1759,12 @@ describe('histórico de planos', () => {
         meal: lunch,
         kind: 'swap',
         from: expect.objectContaining({ name: ARROZ }),
-        to: expect.objectContaining({ name: ARROZ_BRANCO }),
+        to: expect.objectContaining({ name: ARROZ_TIPO_2 }),
         date: today,
       }),
     ]);
     expect(list[0].meals[1].foods.map((food) => food.name)).toContain(
-      ARROZ_BRANCO,
+      ARROZ_TIPO_2,
     );
 
     // Uma alteração por mudança, com o horário, da mais recente para a mais antiga.
@@ -1812,7 +1877,7 @@ describe('chat', () => {
       { role: 'user', content: 'Quantas calorias hoje?' },
     ]);
     expect(params.system[1].text).toContain(
-      'Plano de hoje (1153 kcal no total)',
+      'Plano de hoje (1180 kcal no total)',
     );
 
     create.mockRejectedValueOnce(new Error('falhou'));

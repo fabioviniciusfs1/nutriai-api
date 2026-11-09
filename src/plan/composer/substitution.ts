@@ -1,11 +1,19 @@
 // Partes puras das sugestões de substituto pelo assistente: prompt, schema da resposta e validação.
 import type { Diet, FoodFeedback, MealSlot } from '../../contract.js';
 import { MEAL_NAMES } from '../../users/routine.js';
-import { FoodCatalog, isRaw, isSameFood } from '../engine/foods.js';
 import {
+  FoodCatalog,
+  isRaw,
+  isRawStaple,
+  isSameFood,
+} from '../engine/foods.js';
+import {
+  type CitedFood,
+  citedFoods,
   dietLine,
   FOOD_NAMING,
   parseApprox,
+  parseJson,
   PER100G_SCHEMA,
   PERIOD_NAMES,
 } from './composition.js';
@@ -24,7 +32,8 @@ Regras:
   gordura e carboidrato; o app ajusta a porção para as mesmas calorias.
 - Sugira alimentos na forma em que são comidos: se o alimento a substituir não é cru, nunca sugira um com
   "cru" ou "crua" no nome (ex.: troque frango grelhado por peixe grelhado ou assado, não por peixe cru).
-  Frutas e verduras cruas só no lugar de outro alimento cru.
+  Frutas e verduras cruas só no lugar de outro alimento cru. Arroz, macarrão e outras massas, grãos e
+  leguminosas sempre cozidos, mesmo no lugar de um alimento cru.
 - Nunca sugira o próprio alimento, nem ele em outro preparo (para batata-doce cozida, nada de batata-doce
   assada ou frita), nem os alimentos que o usuário marcou como restritos.`;
 
@@ -82,11 +91,20 @@ export function substitutePrompt(request: SubstituteRequest): string {
   ].join('\n');
 }
 
+/** Os alimentos citados na resposta dos substitutos (`foods`, ou `names` só com os nomes). */
+export function substituteCitedFoods(text: string): CitedFood[] {
+  const { foods, names } = (parseJson(text) ?? {}) as {
+    foods?: unknown;
+    names?: unknown;
+  };
+  return citedFoods(Array.isArray(foods) ? foods : names);
+}
+
 /**
  * Lê a resposta do assistente (`foods`, ou `names` só com os nomes) e devolve os alimentos do catálogo que
  * correspondem aos citados (`FoodCatalog.match`), na ordem dele, sem o próprio alimento (nem ele em outro preparo,
- * `isSameFood`), sem restritos, sem repetidos, sem os que não passam em `allowed` (tipo de alimentação) e sem
- * crus quando o alimento original não é cru.
+ * `isSameFood`), sem restritos, sem repetidos, sem os que não passam em `allowed` (tipo de alimentação), sem
+ * crus quando o alimento original não é cru e nunca com grão, massa ou leguminosa crua (`isRawStaple`).
  */
 export function parseSubstitutes(
   text: string,
@@ -117,6 +135,8 @@ export function parseSubstitutes(
     // O mesmo alimento em outro preparo não é substituto.
     if (isSameFood(foodName, name)) continue;
     if (isRaw(name) && !isRaw(foodName)) continue;
+    // Grão, massa ou leguminosa crua nunca, mesmo no lugar de outro cru.
+    if (isRawStaple(name)) continue;
     if (!allowed(name)) continue;
     chosen.add(name);
     if (chosen.size === MAX_SUBSTITUTES) break;

@@ -61,7 +61,7 @@ npx vitest run -t "não gosto"                     # por nome do teste
 - O plano base (`src/database/seed-data.ts`) lista só `{ name, grams }` com nomes exatos do
   catálogo; o seed calcula os nutrientes (`seed-plan.ts`). O `CatalogService` guarda o catálogo em memória:
   depois de importar, reinicie a API.
-- Open Food Facts (produtos industrializados, só para o alimento extra): `scripts/filter-off.mjs` reduz o dump
+- Open Food Facts (produtos industrializados, para o alimento extra e os genéricos abaixo): `scripts/filter-off.mjs` reduz o dump
   JSONL do OFF (~84 GB, fora do repositório) a `data/off/off-products.jsonl.gz` (fora do git: código, nome,
   marca, porção, países, kcal/macros por 100 g; ~3,2 mi de produtos); `db:import-off` troca a tabela
   `off_products` inteira numa transação (`sources/off/`, ~3 min; a busca de produtos espera até o fim). Fica
@@ -70,6 +70,14 @@ npx vitest run -t "não gosto"                     # por nome do teste
   `pg_trgm`; primeiro os vendidos no Brasil). As rotas do alimento extra aceitam `barcode` no lugar do nome e
   passam o `Product` (`src/plan/engine/products.ts`) ao `Planner` (`searchFoods`, `foodPortion`, `addFood`); o
   extra guarda os macros como sempre (sem micronutrientes).
+- Genéricos do Open Food Facts (`sources/off/generic.ts`): quando o Claude (plano individual ou substitutos) cita
+  um alimento que não existe na TACO nem na TBCA (`needsOffFood`: sem par no `match`, ou com uma palavra que o
+  catálogo não tem, `FoodCatalog.unknownWords`, e o par com kcal mais de 20% longe das citadas, como cottage →
+  ricota), o `MealComposerService.catalogWithOffFoods` cria um alimento sem marca com o nome citado e a mediana
+  dos produtos vendidos no Brasil com as palavras do nome (`OffProductsService.medians`, 3 ou mais; kcal perto
+  das citadas e mais perto que o par). Grupo e origens animais vêm da família no catálogo; fibra e sódio vão nos
+  micronutrientes. Fica em `foods` com `source = 'off'` (`CatalogService.addFoods`), e daí em diante é um
+  alimento do catálogo como os outros; o `db:import-off` não mexe neles.
 - Os testes do engine usam um catálogo fixo (`src/plan/engine/test-catalog.ts`, os dados do mock antigo).
 
 ## Arquitetura
@@ -168,10 +176,11 @@ npx vitest run -t "não gosto"                     # por nome do teste
   `PER100G_SCHEMA` em `composition.ts`), e `FoodCatalog.match` (`src/plan/engine/foods.ts`) acha o do catálogo:
   palavras pesadas pela raridade, sinônimos (`SYNONYMS`, na forma de `stem`), a família do nome tem de estar no
   citado, calorias longe demais descartam; sem par → descartado. `parseFoods` e `parseSubstitutes` usam o
-  `match` e depois descartam restritos e fora da dieta. O cliente e o modelo (`CLAUDE_MODEL`) ficam em
+  `match` e depois descartam restritos e fora da dieta; o plano individual também descarta grão, massa ou
+  leguminosa crua e as versões integrais de pão, arroz, massa… (`planAllows`, `isWholeGrain`). O cliente e o modelo (`CLAUDE_MODEL`) ficam em
   `src/ai/`. Toda chamada ao Claude (chat, substitutos, plano individual, horário) passa por `LlmLogService.track`
   (`src/ai/llm-log.service.ts`), que grava pedido, resposta ou erro, tokens e duração em `llm_calls`. Sugere substitutos ao trocar alimento (`substitution.ts`; até 8, sem crus se o original não for
-  cru e nunca o próprio alimento em outro preparo, `isSameFood`); sem o Claude, os do mesmo grupo mais parecidos
+  cru, nunca grão, massa ou leguminosa crua, `isRawStaple`, e nunca o próprio alimento em outro preparo, `isSameFood`); sem o Claude, os do mesmo grupo mais parecidos
   em macros e em kcal/100 g (`FoodCatalog.substituteOptions`), no máximo 2 por família do nome e sem duas
   versões do mesmo alimento. A troca aceita
   qualquer alimento do catálogo não restrito.

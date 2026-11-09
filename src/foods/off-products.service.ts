@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource } from 'typeorm';
+import type { OffStats } from '../database/sources/off/generic.js';
 import { offDisplayName } from '../database/sources/off/parse.js';
 import { normalize } from '../plan/engine/foods.js';
 import { barcodeVariants, type Product } from '../plan/engine/products.js';
@@ -39,7 +40,7 @@ function toProduct(row: ProductRow): Product {
   };
 }
 
-/** Produtos do Open Food Facts (`off_products`), para o alimento extra. */
+/** Produtos do Open Food Facts (`off_products`), para o alimento extra e os genéricos do catálogo. */
 @Injectable()
 export class OffProductsService {
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
@@ -79,5 +80,49 @@ export class OffProductsService {
       [...words.map((word) => `%${word}%`), normalized, limit],
     );
     return rows.map(toProduct);
+  }
+
+  /**
+   * Medianas por 100 g dos produtos vendidos no Brasil com todas as `words` no nome (já normalizadas, como
+   * `offSearchWords`), para o genérico do catálogo.
+   */
+  async medians(words: string[]): Promise<OffStats> {
+    if (!words.length)
+      return {
+        count: 0,
+        kcal: 0,
+        protein: 0,
+        fat: 0,
+        carbs: 0,
+        fiber: null,
+        sodiumMg: null,
+      };
+    const where = words
+      .map((_, index) => `search_name LIKE $${index + 1}`)
+      .join(' AND ');
+    const median = (column: string) =>
+      `percentile_cont(0.5) WITHIN GROUP (ORDER BY ${column}) AS ${column}`;
+    const [row]: {
+      count: string;
+      kcal: number | null;
+      protein: number | null;
+      fat: number | null;
+      carbs: number | null;
+      fiber: number | null;
+      sodium_mg: number | null;
+    }[] = await this.dataSource.query(
+      `SELECT count(*) AS count, ${['kcal', 'protein', 'fat', 'carbs', 'fiber', 'sodium_mg'].map(median).join(', ')}
+        FROM off_products WHERE 'en:brazil' = ANY(countries) AND ${where}`,
+      words.map((word) => `%${word}%`),
+    );
+    return {
+      count: Number(row?.count ?? 0),
+      kcal: row?.kcal ?? 0,
+      protein: row?.protein ?? 0,
+      fat: row?.fat ?? 0,
+      carbs: row?.carbs ?? 0,
+      fiber: row?.fiber ?? null,
+      sodiumMg: row?.sodium_mg ?? null,
+    };
   }
 }

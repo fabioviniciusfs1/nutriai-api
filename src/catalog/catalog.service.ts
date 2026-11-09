@@ -6,6 +6,7 @@ import {
   FoodEntity,
   NutrientDefEntity,
 } from '../database/entities/index.js';
+import type { CatalogSourceFood } from '../database/sources/catalog-food.js';
 import type { Catalog } from '../plan/engine/types.js';
 
 /** Catálogo fixo (alimentos, plano base, nutrientes), lido do banco e guardado em memória. */
@@ -80,5 +81,20 @@ export class CatalogService {
   /** Esquece o cache (depois de mudar o catálogo no banco). */
   invalidate() {
     this.cached = null;
+  }
+
+  /**
+   * Acrescenta alimentos ao catálogo (os genéricos do Open Food Facts); nome já usado fica como está. O cache é
+   * relido na próxima leitura.
+   */
+  async addFoods(foods: CatalogSourceFood[]): Promise<void> {
+    if (foods.length === 0) return;
+    await this.foods
+      .createQueryBuilder()
+      .insert()
+      .values(foods)
+      .orIgnore()
+      .execute();
+    this.invalidate();
   }
 }

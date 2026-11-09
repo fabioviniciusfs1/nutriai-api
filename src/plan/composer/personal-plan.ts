@@ -11,12 +11,19 @@ import {
   MEAL_NAMES,
   routineLines,
 } from '../../users/routine.js';
-import type { FoodCatalog } from '../engine/foods.js';
+import {
+  type FoodCatalog,
+  isRawStaple,
+  isWholeGrain,
+} from '../engine/foods.js';
 import type { PersonalMeals } from '../engine/types.js';
 import {
+  type CitedFood,
+  citedFoods,
   dietLine,
   FOOD_NAMING,
   parseFoods,
+  parseJson,
   parseTitle,
   PER100G_SCHEMA,
 } from './composition.js';
@@ -43,7 +50,10 @@ Regras:
   hora de dormir, a refeição deve ser leve.
 - Use de 2 a 6 alimentos por refeição, em gramas de porções caseiras realistas.
 - Prefira alimentos na forma em que são comidos: cozidos, grelhados ou assados; frutas e verduras cruas.
-  Não use carnes, grãos, ovos ou farinhas crus (massas secas, como macarrão, podem vir pelo peso cru).
+  Não use carnes, grãos, ovos ou farinhas crus. Arroz, macarrão e outras massas, grãos e leguminosas vão
+  sempre cozidos, com as gramas já cozidas.
+- Não use as versões integrais de pão, arroz, macarrão, torrada ou biscoito: use as comuns (ex.: pão
+  francês, arroz branco tipo 1, macarrão comum).
 - É um plano para o dia a dia: prefira alimentos in natura ou pouco processados. Evite doces, bolos,
   biscoitos, refrigerantes e ultraprocessados, principalmente se o objetivo é perder peso.
 - Distribua a proteína ao longo do dia, com uma fonte de proteína em cada refeição principal.
@@ -52,6 +62,28 @@ Regras:
 - O tipo de alimentação é obrigatório: nunca use alimentos que ele exclui.
 - Nunca use os alimentos que o usuário marcou como restritos.
 - "title" é um nome curto e descritivo para cada refeição (ex.: "Omelete de Queijo com Salada").`;
+
+/**
+ * Alimentos que podem entrar no plano individual: os que passam em `allowed` (tipo de alimentação), sem grão,
+ * massa ou leguminosa crua (`isRawStaple`) e sem versão integral de pão, arroz, massa… (`isWholeGrain`).
+ */
+export function planAllows(
+  catalog: FoodCatalog,
+  allowed: (name: string) => boolean,
+) {
+  return (name: string) =>
+    allowed(name) && !isRawStaple(name) && !isWholeGrain(catalog.entry(name));
+}
+
+/** Todos os alimentos citados na resposta do plano individual (`meals[].foods`). */
+export function personalPlanCitedFoods(text: string): CitedFood[] {
+  const { meals } = (parseJson(text) ?? {}) as { meals?: unknown };
+  return Array.isArray(meals)
+    ? (meals as { foods?: unknown }[]).flatMap((meal) =>
+        citedFoods(meal?.foods),
+      )
+    : [];
+}
 
 /** Schema da resposta (saída estruturada). */
 export const PERSONAL_PLAN_SCHEMA = {

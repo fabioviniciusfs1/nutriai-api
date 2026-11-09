@@ -19,11 +19,11 @@ export const baseMeals: {
 }[] = [
   {
     id: 1,
-    title: 'Pão Integral com Ovo, Queijo e Mamão',
+    title: 'Pão Francês com Ovo, Queijo e Mamão',
     time: '07:30',
     slot: 'cafe-da-manha',
     foods: [
-      { name: 'Pão, trigo, forma, integral', grams: 50 },
+      { name: 'Pão, trigo, francês', grams: 50 },
       { name: 'Ovo, de galinha, inteiro, cozido/10minutos', grams: 50 },
       { name: 'Queijo, minas, frescal', grams: 30 },
       { name: 'Mamão, Papaia, cru', grams: 150 },
@@ -36,7 +36,7 @@ export const baseMeals: {
     time: '12:30',
     slot: 'almoco',
     foods: [
-      { name: 'Arroz, integral, cozido', grams: 100 },
+      { name: 'Arroz, tipo 1, cozido', grams: 100 },
       { name: 'Feijão, carioca, cozido', grams: 80 },
       { name: 'Frango, peito, sem pele, grelhado', grams: 100 },
       { name: 'Alface, crespa, crua', grams: 30 },

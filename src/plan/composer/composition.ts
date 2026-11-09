@@ -14,7 +14,7 @@ const MAX_GRAMS = 1000;
 export const FOOD_NAMING = `Os alimentos são conferidos nas tabelas brasileiras de composição de alimentos (TACO e TBCA). Para cada
 alimento, informe:
 - "name": o nome no estilo dessas tabelas, do geral para o específico, separado por vírgulas e com a forma
-  de preparo, sem marcas (ex.: "Arroz, integral, cozido", "Frango, peito, sem pele, grelhado", "Feijão,
+  de preparo, sem marcas (ex.: "Arroz, tipo 1, cozido", "Frango, peito, sem pele, grelhado", "Feijão,
   carioca, cozido", "Banana, prata, crua", "Pão, trigo, francês", "Ovo, de galinha, inteiro, cozido").
   Um alimento por item: em vez de um prato pronto, liste os ingredientes principais.
 - "per100g": kcal, proteína (protein), gordura (fat) e carboidrato (carbs) aproximados por 100 g do alimento
@@ -50,6 +50,32 @@ export const PERIOD_NAMES = {
   tarde: 'tarde',
   noite: 'noite',
 } as const;
+
+/** Alimento como o assistente citou: o nome e os valores aproximados por 100 g. */
+export type CitedFood = { name: string; approx?: ApproxPer100g };
+
+/** Os alimentos citados numa lista da resposta (`{ name, per100g }` ou só o nome). */
+export function citedFoods(items: unknown): CitedFood[] {
+  if (!Array.isArray(items)) return [];
+  return (items as unknown[]).flatMap((item) => {
+    const cited =
+      typeof item === 'string'
+        ? { name: item }
+        : (item as { name?: unknown; per100g?: unknown } | null);
+    return typeof cited?.name === 'string' && cited.name.trim()
+      ? [{ name: cited.name, approx: parseApprox(cited.per100g) }]
+      : [];
+  });
+}
+
+/** O JSON da resposta, ou `null` se não for JSON. */
+export function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 
 /** Tipo de alimentação do usuário, como linha do prompt. */
 export function dietLine(diet: Diet): string {

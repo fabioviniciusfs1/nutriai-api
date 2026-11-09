@@ -8,7 +8,9 @@ import {
   mealStartWindows,
   nextMealDeadline,
   parsePersonalPlan,
+  PERSONAL_PLAN_INSTRUCTIONS,
   personalPlanPrompt,
+  planAllows,
   spreadMealTimes,
 } from './personal-plan.js';
 
@@ -109,6 +111,55 @@ describe('parsePersonalPlan', () => {
       parsePersonalPlan('não é JSON', catalog, {}, () => true, [1], WINDOWS),
     ).toBeNull();
     expect(parse('nada')).toBeNull();
+  });
+});
+
+describe('planAllows', () => {
+  const grains = new FoodCatalog([
+    ...testFoods,
+    {
+      name: 'Macarrão, trigo, cru',
+      group: 'carboidratos',
+      per100g: { carbs: 77, protein: 10, fat: 1, kcal: 371 },
+    },
+    {
+      name: 'Macarrão, trigo, cozido',
+      group: 'carboidratos',
+      per100g: { carbs: 26, protein: 4, fat: 1, kcal: 125 },
+    },
+    {
+      name: 'Arroz, integral, cozido',
+      group: 'carboidratos',
+      per100g: { carbs: 26, protein: 3, fat: 1, kcal: 124 },
+    },
+  ]);
+
+  it('o plano descarta massa crua e versão integral, e a regra fica no prompt', () => {
+    expect(
+      parsePersonalPlan(
+        JSON.stringify({
+          meals: [
+            {
+              id: 1,
+              title: 'Macarrão',
+              time: '12:30',
+              foods: [
+                { name: 'Macarrão, trigo, cru', grams: 60 },
+                { name: 'Arroz, integral, cozido', grams: 100 },
+                { name: 'Macarrão, trigo, cozido', grams: 150 },
+              ],
+            },
+          ],
+        }),
+        grains,
+        {},
+        planAllows(grains, () => true),
+        [1],
+        WINDOWS,
+      )?.[1]?.foods.map((item) => item.name),
+    ).toEqual(['Macarrão, trigo, cozido']);
+    expect(PERSONAL_PLAN_INSTRUCTIONS).not.toContain('peso cru');
+    expect(PERSONAL_PLAN_INSTRUCTIONS).toContain('versões integrais');
   });
 });
 

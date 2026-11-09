@@ -116,6 +116,44 @@ export function isRaw(name: string) {
   return /\bcrus?\b|\bcruas?\b/.test(normalize(name));
 }
 
+/** Famílias de grãos, massas e leguminosas, que vão sempre cozidas (aveia e granola são comidas cruas). */
+const MUST_COOK_FAMILIES = new Set(
+  [
+    'arroz',
+    'macarrão',
+    'massa',
+    'lasanha',
+    'talharim',
+    'espaguete',
+    'nhoque',
+    'trigo',
+    'trigo para quibe',
+    'canjica',
+    'cevada',
+    'quinoa',
+    'amaranto',
+    'milho',
+    'feijão',
+    'lentilha',
+    'grão-de-bico',
+    'grão de bico',
+    'ervilha',
+    'soja',
+  ].map(normalize),
+);
+
+/** Grão, massa ou leguminosa crua ("Macarrão, trigo, cru"): fica fora do plano e dos substitutos. */
+export function isRawStaple(name: string) {
+  return isRaw(name) && MUST_COOK_FAMILIES.has(foodFamily(name));
+}
+
+/** Versão integral de pão, arroz, massa… (grupo `carboidratos`; leite integral não entra): fora do plano. */
+export function isWholeGrain(food: CatalogFood | undefined) {
+  return (
+    food?.group === 'carboidratos' && /\bintegral\b/.test(normalize(food.name))
+  );
+}
+
 /** Palavras que não ajudam a achar o alimento ("Arroz c/ feijão" ≈ "Arroz feijão"). */
 const STOPWORDS = new Set([
   'a',
@@ -218,8 +256,28 @@ export function isSameFood(original: string, candidate: string) {
 export type ApproxPer100g = Partial<Totals>;
 
 /** Diferença relativa de calorias acima da qual o alimento do catálogo não é o citado (cru × cozido). */
-const MAX_KCAL_GAP = 0.6;
+export const MAX_KCAL_GAP = 0.6;
 const KCAL_GAP_FLOOR = 50;
+
+/**
+ * Diferença relativa entre duas calorias por 100 g, com piso: entre alimentos quase sem calorias (café, folhas),
+ * 9 × 2 kcal não é diferença.
+ */
+export function kcalGap(a: number, b: number) {
+  return Math.abs(a - b) / Math.max(a, b, KCAL_GAP_FLOOR);
+}
+
+/** Palavras que vêm depois de "sem" ou "s/" ("Granola, sem açúcar" → "acucar"), na forma de `stem`. */
+function negatedWords(name: string) {
+  const tokens = normalize(name).split(' ');
+  return new Set(
+    tokens.flatMap((token, index) =>
+      (token === 'sem' || token === 's') && tokens[index + 1]
+        ? [stem(tokens[index + 1])]
+        : [],
+    ),
+  );
+}
 /** Fração mínima das palavras citadas (pesadas pela raridade) que o nome do catálogo precisa ter. */
 const MIN_RECALL = 0.5;
 /** Grupos em que o cru só vale se o nome citado diz cru. */
@@ -297,6 +355,11 @@ export class FoodCatalog {
     if (query.length === 0) return null;
     const accepts = (word: string) => [word, ...(SYNONYMS[word] ?? [])];
     const queryWords = new Set(query.flatMap(accepts));
+    // A família tem de estar no citado, mas não depois de "sem": "Granola, sem açúcar" não é açúcar.
+    const negated = negatedWords(name);
+    const familyWords = new Set(
+      query.filter((word) => !negated.has(word)).flatMap(accepts),
+    );
     const index = this.wordIndex();
 
     // Cada palavra citada pesa pela raridade no catálogo ("tilápia" pesa mais que "peixe"); uma que o
@@ -316,6 +379,7 @@ export class FoodCatalog {
     }
 
     const raw = isRaw(name);
+    const wholeGrain = /\bintegral\b/.test(normalize(name));
     let best: { food: CatalogFood; score: number } | null = null;
     for (const [position, matched] of hits) {
       const recall = matched / total;
@@ -323,7 +387,7 @@ export class FoodCatalog {
       const family = index.family[position];
       if (
         !family.every(
-          (word) => queryWords.has(word) || GENERIC_FAMILIES.has(word),
+          (word) => familyWords.has(word) || GENERIC_FAMILIES.has(word),
         )
       )
         continue;
@@ -336,11 +400,10 @@ export class FoodCatalog {
       // Carnes, ovos, grãos e massas cruas só se o nome citado diz cru (frutas e castanhas são comidas cruas).
       if (!raw && isRaw(food.name) && RAW_PENALTY_GROUPS.has(food.group))
         score -= 0.5;
+      // Pão, arroz, massa… integral só se o nome citado diz integral.
+      if (!wholeGrain && isWholeGrain(food)) score -= 0.5;
       if (approx?.kcal !== undefined && approx.kcal > 0) {
-        // Com piso: entre alimentos quase sem calorias (café, folhas), 9 × 2 kcal não é diferença.
-        const gap =
-          Math.abs(food.per100g.kcal - approx.kcal) /
-          Math.max(food.per100g.kcal, approx.kcal, KCAL_GAP_FLOOR);
+        const gap = kcalGap(food.per100g.kcal, approx.kcal);
         if (gap > MAX_KCAL_GAP) continue;
         score -= gap * 1.5;
         const { protein, fat, carbs } = approx;
@@ -367,6 +430,22 @@ export class FoodCatalog {
         best = { food, score };
     }
     return best?.food.name ?? null;
+  }
+
+  /**
+   * Palavras do nome citado que nenhum alimento do catálogo tem (nem por sinônimo), sem as de preparo e as
+   * curtas: "Queijo, cottage" → ["cottage"]. O `match` pesa essas o mínimo, então o par pode ser outro alimento.
+   */
+  unknownWords(name: string): string[] {
+    const index = this.wordIndex();
+    return [...new Set(words(name))].filter(
+      (word) =>
+        word.length >= 3 &&
+        !PREPARATION.has(word) &&
+        ![word, ...(SYNONYMS[word] ?? [])].some((item) =>
+          index.postings.has(item),
+        ),
+    );
   }
 
   /** O alimento `name` numa porção de `grams` gramas, com os nutrientes do catálogo. */
@@ -434,6 +513,7 @@ export class FoodCatalog {
           food.group === original.group &&
           food.name !== foodName &&
           !isSameFood(foodName, food.name) &&
+          !isRawStaple(food.name) &&
           !feedback[food.name] &&
           food.per100g.kcal > 0 &&
           allowed(food.name),
