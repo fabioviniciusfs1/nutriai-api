@@ -9,6 +9,7 @@ import {
   nextMealDeadline,
   parsePersonalPlan,
   PERSONAL_PLAN_INSTRUCTIONS,
+  mealTargets,
   personalPlanPrompt,
   planAllows,
   spreadMealTimes,
@@ -344,6 +345,39 @@ describe('horários das refeições', () => {
   });
 });
 
+describe('mealTargets', () => {
+  const day = { kcal: 2300, protein: 162, fat: 90, carbs: 211 };
+
+  it('divide o dia 35/40/25, o lanche em partes iguais com a refeição principal', () => {
+    expect(
+      mealTargets(day, [
+        { id: 1, slot: 'cafe-da-manha' },
+        { id: 5, slot: 'lanche-da-manha' },
+        { id: 2, slot: 'almoco' },
+        { id: 4, slot: 'lanche-da-tarde' },
+        { id: 3, slot: 'jantar' },
+        { id: 6, slot: 'ceia' },
+      ]),
+    ).toEqual([
+      { kcal: 400, protein: 28, fat: 16, carbs: 37 },
+      { kcal: 400, protein: 28, fat: 16, carbs: 37 },
+      { kcal: 460, protein: 32, fat: 18, carbs: 42 },
+      { kcal: 460, protein: 32, fat: 18, carbs: 42 },
+      { kcal: 290, protein: 20, fat: 11, carbs: 26 },
+      { kcal: 290, protein: 20, fat: 11, carbs: 26 },
+    ]);
+  });
+
+  it('um período sem refeição passa a parte dele para os outros', () => {
+    expect(
+      mealTargets(day, [
+        { id: 2, slot: 'almoco' },
+        { id: 3, slot: 'jantar' },
+      ]).map((target) => target.kcal),
+    ).toEqual([1420, 880]);
+  });
+});
+
 describe('personalPlanPrompt e personalPlanRequest', () => {
   const profile = {
     sex: 'feminino',
@@ -389,13 +423,16 @@ describe('personalPlanPrompt e personalPlanRequest', () => {
       'Horários em que pode começar uma refeição: 07:00–08:00, 12:00–13:00, 19:00–20:00.',
     );
     expect(prompt).not.toContain('fome');
+    const targets = mealTargets(request.day, request.meals);
+    const macros = (index: number) =>
+      `${targets[index].protein} g de proteína, ${targets[index].fat} g de gordura, ${targets[index].carbs} g de carboidrato`;
     expect(prompt).toContain(
       [
-        'Refeições a montar:',
-        '- id 1: café da manhã',
-        '- id 2: almoço',
-        '- id 4: lanche da tarde',
-        '- id 3: jantar',
+        'Refeições a montar (com a meta de cada uma):',
+        `- id 1: café da manhã, cerca de 580 kcal (${macros(0)})`,
+        `- id 2: almoço, cerca de 330 kcal (${macros(1)})`,
+        `- id 4: lanche da tarde, cerca de 330 kcal (${macros(2)})`,
+        `- id 3: jantar, cerca de 420 kcal (${macros(3)})`,
       ].join('\n'),
     );
     expect(

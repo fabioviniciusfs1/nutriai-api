@@ -16,6 +16,7 @@ import {
   isRawStaple,
   isWholeGrain,
 } from '../engine/foods.js';
+import { PERIOD_SHARES, SLOT_PERIODS } from '../engine/planner.js';
 import type { PersonalMeals } from '../engine/types.js';
 import {
   type CitedFood,
@@ -43,9 +44,11 @@ Regras:
   horas; se 6 horas depois de uma refeição o usuário não puder comer, a próxima fica no início do próximo horário
   em que ele pode começar uma refeição. Cada id é a refeição indicada no pedido (café
   da manhã, lanche, almoço, jantar, ceia): monte um prato próprio dela, no horário que combine com ela.
-- As calorias do dia ficam 35% de manhã (café da manhã e lanche da manhã), 40% à tarde (almoço e lanche da
-  tarde) e 25% à noite (jantar e ceia). Quando o usuário faz o lanche do período, ele divide o período em partes
-  iguais com a refeição principal. O app ajusta as porções para isso.
+- Cada refeição do pedido vem com a meta dela (kcal e gramas de proteína, gordura e carboidrato): monte as
+  porções para chegar perto dessa meta, conferindo pelos valores por 100 g que você informa (gramas × valor /
+  100). Ela vem das calorias do dia divididas em 35% de manhã (café da manhã e lanche da manhã), 40% à tarde
+  (almoço e lanche da tarde) e 25% à noite (jantar e ceia), com o lanche do período em partes iguais com a
+  refeição principal, e dos macros do dia na mesma proporção.
   Se ele treina, deixe uma refeição com carboidrato e proteína até 2 horas antes ou depois do treino. Perto da
   hora de dormir, a refeição deve ser leve.
 - Use de 2 a 6 alimentos por refeição, em gramas de porções caseiras realistas.
@@ -57,8 +60,8 @@ Regras:
 - É um plano para o dia a dia: prefira alimentos in natura ou pouco processados. Evite doces, bolos,
   biscoitos, refrigerantes e ultraprocessados, principalmente se o objetivo é perder peso.
 - Distribua a proteína ao longo do dia, com uma fonte de proteína em cada refeição principal.
-- A soma do dia deve ficar perto da meta de calorias e macronutrientes. O app ajusta as porções do dia para a
-  meta exata, então o mais importante é a proporção entre as refeições e entre proteína, gordura e carboidrato.
+- A soma do dia deve ficar perto da meta de calorias e macronutrientes. O app ainda ajusta as porções para a
+  meta exata, mas, quanto mais perto você chegar em cada refeição, menos ele muda as porções que você escolheu.
 - O tipo de alimentação é obrigatório: nunca use alimentos que ele exclui.
 - Nunca use os alimentos que o usuário marcou como restritos.
 - "title" é um nome curto e descritivo para cada refeição (ex.: "Omelete de Queijo com Salada").`;
@@ -166,6 +169,33 @@ export function profileLine(profile: PersonalPlanRequest['profile']): string {
   );
 }
 
+/**
+ * A meta de cada refeição: a parte dela das calorias do dia (a do período em `PERIOD_SHARES`, em partes iguais
+ * entre a refeição principal e o lanche, como no `Planner`; um período sem refeição passa a parte dele para os
+ * outros) e os macros do dia na mesma proporção. Calorias em dezenas, gramas inteiras.
+ */
+export function mealTargets(
+  day: PersonalPlanRequest['day'],
+  meals: PersonalPlanRequest['meals'],
+): (Macros & { kcal: number })[] {
+  const count = (slot: MealSlot) =>
+    meals.filter((meal) => SLOT_PERIODS[meal.slot] === SLOT_PERIODS[slot])
+      .length;
+  const shares = meals.map(
+    ({ slot }) => PERIOD_SHARES[SLOT_PERIODS[slot]] / count(slot),
+  );
+  const total = shares.reduce((sum, share) => sum + share, 0) || 1;
+  return shares.map((share) => {
+    const part = share / total;
+    return {
+      kcal: Math.round((day.kcal * part) / 10) * 10,
+      protein: Math.round(day.protein * part),
+      fat: Math.round(day.fat * part),
+      carbs: Math.round(day.carbs * part),
+    };
+  });
+}
+
 /** Pedido para o assistente (muda a cada usuário). */
 export function personalPlanPrompt(request: PersonalPlanRequest): string {
   const { profile, day } = request;
@@ -182,8 +212,11 @@ export function personalPlanPrompt(request: PersonalPlanRequest): string {
     request.restricted.length > 0
       ? `Alimentos restritos (não use): ${request.restricted.join('; ')}.`
       : 'Alimentos restritos: nenhum.',
-    'Refeições a montar:',
-    ...request.meals.map(({ id, slot }) => `- id ${id}: ${MEAL_NAMES[slot]}`),
+    'Refeições a montar (com a meta de cada uma):',
+    ...mealTargets(day, request.meals).map(
+      (target, index) =>
+        `- id ${request.meals[index].id}: ${MEAL_NAMES[request.meals[index].slot]}, cerca de ${target.kcal} kcal (${macrosText(target)})`,
+    ),
   ];
   return lines.join('\n');
 }

@@ -148,7 +148,8 @@ npx vitest run -t "não gosto"                     # por nome do teste
   do plano base de cada grupo de dias (uma chamada por grupo, uma depois da outra; depois, `routineChanged` só monta
   os grupos novos e apaga o plano dos que saíram) em segundo plano (`composer/personal-plan.ts`, com o `CLAUDE_PLAN_MODEL`, Sonnet, e
   `fallbacks: 'default'` no endpoint beta), escolhendo o horário de cada uma dentro das janelas da rotina e
-  distribuindo as calorias por ela. A refeição dura até 30 min e acaba 30 min antes do fim da janela: só começa
+  distribuindo as calorias por ela; o prompt traz a meta de cada refeição, kcal e macros, pela mesma divisão do
+  `Planner` (`mealTargets`), para as porções do Claude já chegarem perto e os fatores mexerem pouco nelas. A refeição dura até 30 min e acaba 30 min antes do fim da janela: só começa
   até 1 h antes da hora cheia em que a janela acaba (`mealStartWindows`; `12:00–13:59` → 12:00 a 13:00), e é
   nesses inícios que valem as regras abaixo. Ficam em `schedule_plans.personal_meals` (id da refeição base → título,
   alimentos e horário) e o `Planner` usa no lugar das padrão. No máximo 6 h entre uma refeição e a seguinte, ou até o

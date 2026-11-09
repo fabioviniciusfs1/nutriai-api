@@ -1316,7 +1316,10 @@ describe('plano individual do assistente', () => {
       'Horários em que pode comer: 07:00–08:30, 12:00–13:30, 15:30–16:30, 19:00–21:00.',
     );
     expect(prompt).toContain('treina das 18:00 às 19:00');
-    expect(prompt).toContain('- id 4: lanche da tarde\n- id 3: jantar');
+    // Cada refeição com a meta dela (kcal e macros).
+    expect(prompt).toMatch(
+      /- id 4: lanche da tarde, cerca de \d+ kcal \(\d+ g de proteína, \d+ g de gordura, \d+ g de carboidrato\)\n- id 3: jantar, cerca de \d+ kcal/,
+    );
     await http('post', '/plan/personalize').expect(409, {
       error: 'Seu plano já está sendo montado.',
     });
