@@ -3,9 +3,11 @@ import type { Diet, FoodFeedback, MealSlot } from '../../contract.js';
 import { MEAL_NAMES } from '../../users/routine.js';
 import {
   FoodCatalog,
+  foodFamily,
   isRaw,
   isRawStaple,
   isSameFood,
+  MAX_PER_FAMILY,
 } from '../engine/foods.js';
 import {
   type CitedFood,
@@ -28,12 +30,18 @@ Regras:
 - Sugira até ${MAX_SUBSTITUTES} alimentos que possam ocupar o lugar do alimento informado naquela refeição: com a
   mesma função no prato (ex.: a proteína do almoço, a fruta do lanche, o pão do café) e combinando com o horário
   e com os outros alimentos da refeição.
-- Ordene do mais adequado para o menos adequado. Prefira substitutos com proporção parecida de proteína,
-  gordura e carboidrato; o app ajusta a porção para as mesmas calorias.
+- Ordene do mais adequado para o menos adequado. O pedido traz os macronutrientes do alimento na porção e de
+  onde vem a maior parte das calorias dele: sugira substitutos com proporção parecida de proteína, gordura e
+  carboidrato (no lugar de uma fonte de gordura, como abacate ou azeite, outra fonte de gordura, não uma
+  proteína); o app ajusta a porção para as mesmas calorias.
 - Sugira alimentos na forma em que são comidos: se o alimento a substituir não é cru, nunca sugira um com
   "cru" ou "crua" no nome (ex.: troque frango grelhado por peixe grelhado ou assado, não por peixe cru).
   Frutas e verduras cruas só no lugar de outro alimento cru. Arroz, macarrão e outras massas, grãos e
   leguminosas sempre cozidos, mesmo no lugar de um alimento cru.
+- Prefira alimentos in natura ou pouco processados e saudáveis para o dia a dia: nada de banha, margarina,
+  gordura hidrogenada, embutidos, doces ou ultraprocessados.
+- Varie: no máximo 2 do mesmo tipo de alimento (ex.: 2 óleos, 2 queijos), e o resto de outros que façam a
+  mesma função (no lugar do azeite: abacate, castanhas, azeitona…).
 - Nunca sugira o próprio alimento, nem ele em outro preparo (para batata-doce cozida, nada de batata-doce
   assada ou frita), nem os alimentos que o usuário marcou como restritos.`;
 
@@ -56,8 +64,15 @@ export const SUBSTITUTES_SCHEMA = {
 } as const;
 
 export type SubstituteRequest = {
-  /** Alimento a substituir, com a porção de hoje. */
-  food: { name: string; grams: number };
+  /** Alimento a substituir, com a porção de hoje e os nutrientes dela. */
+  food: {
+    name: string;
+    grams: number;
+    kcal: number;
+    protein: number;
+    fat: number;
+    carbs: number;
+  };
   /** Que refeição do dia é (almoço, jantar…). */
   slot: MealSlot;
   mealTitle: string;
@@ -71,10 +86,36 @@ export type SubstituteRequest = {
   exclude: string[];
 };
 
+const MACRO_NAMES = {
+  protein: 'proteína',
+  fat: 'gordura',
+  carbs: 'carboidrato',
+} as const;
+
+/** De onde vêm as calorias do alimento: o macronutriente com metade ou mais delas, ou os dois maiores. */
+function caloriesSource(food: SubstituteRequest['food']): string | null {
+  const kcal = [
+    ['protein', food.protein * 4],
+    ['fat', food.fat * 9],
+    ['carbs', food.carbs * 4],
+  ] as const;
+  const total = kcal.reduce((sum, [, value]) => sum + value, 0);
+  if (total === 0) return null;
+  const [first, second] = [...kcal].sort((a, b) => b[1] - a[1]);
+  const share = (value: number) => Math.round((value / total) * 100);
+  return first[1] / total >= 0.5
+    ? `${share(first[1])}% das calorias vêm da ${MACRO_NAMES[first[0]]}`
+    : `as calorias vêm da ${MACRO_NAMES[first[0]]} (${share(first[1])}%) e da ${MACRO_NAMES[second[0]]} (${share(second[1])}%)`;
+}
+
 /** Pedido do usuário para o assistente (muda a cada chamada). */
 export function substitutePrompt(request: SubstituteRequest): string {
+  const { food } = request;
+  const source = caloriesSource(food);
   return [
-    `Substituir: "${request.food.name}" (${request.food.grams} g).`,
+    `Substituir: "${food.name}" (${food.grams} g: ${Math.round(food.kcal)} kcal; ${Math.round(food.protein)} g de ` +
+      `proteína, ${Math.round(food.fat)} g de gordura, ${Math.round(food.carbs)} g de carboidrato` +
+      `${source ? `; ${source}` : ''}).`,
     `Refeição: ${MEAL_NAMES[request.slot]}, "${request.mealTitle}", às ${request.time} (${PERIOD_NAMES[mealPeriod(request.time)]}).`,
     request.mealFoods.length > 0
       ? `Outros alimentos da refeição: ${request.mealFoods.join('; ')}.`
@@ -104,7 +145,8 @@ export function substituteCitedFoods(text: string): CitedFood[] {
  * Lê a resposta do assistente (`foods`, ou `names` só com os nomes) e devolve os alimentos do catálogo que
  * correspondem aos citados (`FoodCatalog.match`), na ordem dele, sem o próprio alimento (nem ele em outro preparo,
  * `isSameFood`), sem restritos, sem repetidos, sem os que não passam em `allowed` (tipo de alimentação), sem
- * crus quando o alimento original não é cru e nunca com grão, massa ou leguminosa crua (`isRawStaple`).
+ * crus quando o alimento original não é cru, nunca com grão, massa ou leguminosa crua (`isRawStaple`) e no
+ * máximo `MAX_PER_FAMILY` da mesma família, contando os já oferecidos (`offered`).
  */
 export function parseSubstitutes(
   text: string,
@@ -112,6 +154,7 @@ export function parseSubstitutes(
   feedback: Record<string, FoodFeedback>,
   foodName: string,
   allowed: (name: string) => boolean = () => true,
+  offered: string[] = [],
 ): string[] {
   let raw: unknown;
   try {
@@ -138,6 +181,13 @@ export function parseSubstitutes(
     // Grão, massa ou leguminosa crua nunca, mesmo no lugar de outro cru.
     if (isRawStaple(name)) continue;
     if (!allowed(name)) continue;
+    // Variedade: no máximo `MAX_PER_FAMILY` da mesma família, contando os já oferecidos ("Ver mais").
+    const family = foodFamily(name);
+    if (
+      [...offered, ...chosen].filter((item) => foodFamily(item) === family)
+        .length >= MAX_PER_FAMILY
+    )
+      continue;
     chosen.add(name);
     if (chosen.size === MAX_SUBSTITUTES) break;
   }

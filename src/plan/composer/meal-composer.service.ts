@@ -113,6 +113,7 @@ export class MealComposerService {
       feedback,
       request.food.name,
       (name) => inDiet(name) && !excluded.has(name),
+      request.exclude,
     );
     if (names.length === 0) {
       this.logger.warn('Sugestão de substitutos sem alimentos do catálogo.');
@@ -242,7 +243,8 @@ export class MealComposerService {
     maxTokens: number;
     timeout: number;
     /**
-     * Montagem do plano individual: usa o `CLAUDE_PLAN_MODEL` (esforço médio, para não demorar demais) e,
+     * Montagem do plano individual: usa o `CLAUDE_PLAN_MODEL` (esforço médio, para não demorar demais; os outros
+     * pedidos, o `CLAUDE_MODEL`, também com esforço médio) e,
      * se ele recusar, a API refaz com outro modelo (`fallbacks: 'default'`, beta).
      */
     plan?: boolean;
@@ -292,9 +294,10 @@ export class MealComposerService {
               max_tokens: options.maxTokens,
               system,
               messages,
-              // Substitutos e horário são escolhas simples, e o usuário espera no diálogo: pouco raciocínio.
+              // Substitutos e horário: o usuário espera no diálogo, mas a escolha precisa entender a função do
+              // alimento no prato (com `low`, o Haiku trocava abacate por frango). Esforço médio.
               output_config: {
-                effort: 'low',
+                effort: 'medium',
                 format: { type: 'json_schema', schema: options.schema },
               },
             } satisfies Anthropic.MessageCreateParamsNonStreaming,

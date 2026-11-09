@@ -181,7 +181,9 @@ npx vitest run -t "não gosto"                     # por nome do teste
   leguminosa crua e as versões integrais de pão, arroz, massa… (`planAllows`, `isWholeGrain`). O cliente e o modelo (`CLAUDE_MODEL`) ficam em
   `src/ai/`. Toda chamada ao Claude (chat, substitutos, plano individual, horário) passa por `LlmLogService.track`
   (`src/ai/llm-log.service.ts`), que grava pedido, resposta ou erro, tokens e duração em `llm_calls`. Sugere substitutos ao trocar alimento (`substitution.ts`; até 8, sem crus se o original não for
-  cru, nunca grão, massa ou leguminosa crua, `isRawStaple`, e nunca o próprio alimento em outro preparo, `isSameFood`); sem o Claude, os do mesmo grupo mais parecidos
+  cru, nunca grão, massa ou leguminosa crua, `isRawStaple`, nunca o próprio alimento em outro preparo, `isSameFood`, e no
+  máximo 2 por família, contando os já oferecidos; o pedido traz os macros da porção e de onde vêm as calorias, e o
+  Haiku roda com `effort: medium`); sem o Claude, os do mesmo grupo mais parecidos
   em macros e em kcal/100 g (`FoodCatalog.substituteOptions`), no máximo 2 por família do nome e sem duas
   versões do mesmo alimento. A troca aceita
   qualquer alimento do catálogo não restrito.

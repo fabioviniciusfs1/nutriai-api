@@ -168,10 +168,53 @@ describe('parseSubstitutes', () => {
   });
 });
 
+describe('parseSubstitutes: variedade', () => {
+  const oils = new FoodCatalog(
+    [
+      'Óleo, soja',
+      'Óleo, de canola',
+      'Óleo, de girassol',
+      'Azeitona, preta, conserva',
+    ].map((name) => ({
+      name,
+      group: 'gorduras' as const,
+      per100g: { kcal: 884, protein: 0, fat: 100, carbs: 0 },
+    })),
+  );
+  const text = JSON.stringify({
+    names: [
+      'Óleo, soja',
+      'Óleo, de canola',
+      'Óleo, de girassol',
+      'Azeitona, preta, conserva',
+    ],
+  });
+
+  it('no máximo 2 da mesma família, contando os já oferecidos', () => {
+    expect(parseSubstitutes(text, oils, {}, 'Azeite')).toEqual([
+      'Óleo, soja',
+      'Óleo, de canola',
+      'Azeitona, preta, conserva',
+    ]);
+    expect(
+      parseSubstitutes(text, oils, {}, 'Azeite', () => true, [
+        'Óleo, de milho',
+      ]),
+    ).toEqual(['Óleo, soja', 'Azeitona, preta, conserva']);
+  });
+});
+
 describe('substitutePrompt', () => {
   it('traz o alimento, a refeição, os outros alimentos e os restritos', () => {
     const prompt = substitutePrompt({
-      food: { name: 'Guacamole', grams: 30 },
+      food: {
+        name: 'Guacamole',
+        grams: 30,
+        kcal: 48,
+        protein: 1,
+        fat: 4.3,
+        carbs: 2.6,
+      },
       slot: 'almoco',
       mealTitle: 'Bowl de Frango',
       time: '12:30',
@@ -180,7 +223,9 @@ describe('substitutePrompt', () => {
       diet: 'onivora',
       exclude: [],
     });
-    expect(prompt).toContain('"Guacamole" (30 g)');
+    expect(prompt).toContain(
+      '"Guacamole" (30 g: 48 kcal; 1 g de proteína, 4 g de gordura, 3 g de carboidrato; 73% das calorias vêm da gordura).',
+    );
     expect(prompt).toContain(
       'Refeição: almoço, "Bowl de Frango", às 12:30 (tarde)',
     );
@@ -191,7 +236,14 @@ describe('substitutePrompt', () => {
 
   it('no "Ver mais", lista os já oferecidos para não repetir', () => {
     const prompt = substitutePrompt({
-      food: { name: 'Guacamole', grams: 30 },
+      food: {
+        name: 'Guacamole',
+        grams: 30,
+        kcal: 48,
+        protein: 1,
+        fat: 4.3,
+        carbs: 2.6,
+      },
       slot: 'almoco',
       mealTitle: 'Bowl de Frango',
       time: '12:30',

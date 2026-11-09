@@ -8,8 +8,8 @@ import type { CatalogFood, PlanFood, Totals } from './types.js';
 /** Evita laço se as trocas formarem um ciclo (A → B → A). */
 const MAX_CHAIN = 5;
 
-/** Nos substitutos sem o assistente, quantos da mesma família (ex.: "Batata, …") antes de variar. */
-const MAX_PER_FAMILY = 2;
+/** Nos substitutos, quantos da mesma família (ex.: "Batata, …", "Óleo, …") antes de variar. */
+export const MAX_PER_FAMILY = 2;
 
 /** Peso da diferença de calorias por 100 g (em log) no ranking dos substitutos sem o assistente. */
 const DENSITY_WEIGHT = 0.3;
@@ -97,7 +97,7 @@ function macroDistance(original: CatalogFood) {
 }
 
 /** Começo do nome nas tabelas, que indica a família do alimento ("Arroz, tipo 1, cozido" → "arroz"). */
-function foodFamily(name: string) {
+export function foodFamily(name: string) {
   return normalize(name.split(',')[0]);
 }
 

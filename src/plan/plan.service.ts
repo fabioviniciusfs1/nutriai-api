@@ -271,7 +271,14 @@ export class PlanService {
         const food = meal.foods.find((item) => item.name === foodName);
         if (!food) throw new PlanRuleError('not-found', FOOD_NOT_FOUND);
         const request: SubstituteRequest = {
-          food: { name: food.name, grams: food.grams },
+          food: {
+            name: food.name,
+            grams: food.grams,
+            kcal: food.kcal,
+            protein: food.protein,
+            fat: food.fat,
+            carbs: food.carbs,
+          },
           slot: meal.slot,
           mealTitle: meal.title,
           time: meal.time,
