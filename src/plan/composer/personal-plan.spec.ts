@@ -409,7 +409,7 @@ describe('personalPlanPrompt e personalPlanRequest', () => {
 
     const prompt = personalPlanPrompt(request);
     expect(prompt).toContain('sexo feminino, 32 anos, 68.5 kg, 165 cm');
-    expect(prompt).toContain('objetivo perder peso');
+    expect(prompt).toContain('objetivo emagrecimento');
     expect(prompt).toContain('Meta do dia: 1660 kcal');
     expect(prompt).toContain('Tipo de alimentação: vegetariana');
     expect(prompt).toContain('não use): Abacate');

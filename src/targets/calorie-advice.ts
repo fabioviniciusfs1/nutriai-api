@@ -98,7 +98,7 @@ export function calorieAdvice({
     return {
       kind: 'reached',
       title: 'Você chegou ao peso meta!',
-      text: `Seu peso (${kgFormat.format(latest.kg)} kg) chegou ao peso meta de ${kgFormat.format(targetWeightKg)} kg. Escolha um novo peso meta: acima do peso atual para ganhar peso, ou abaixo para continuar emagrecendo.`,
+      text: `Seu peso (${kgFormat.format(latest.kg)} kg) chegou ao peso meta de ${kgFormat.format(targetWeightKg)} kg. Escolha um novo peso meta: acima do peso atual para aumentar a massa magra, ou abaixo para continuar emagrecendo.`,
     };
   const decreaseTo = stepCalories(calories, 'decrease', minimum);
   const increaseTo = stepCalories(calories, 'increase', minimum);
@@ -111,17 +111,17 @@ export function calorieAdvice({
     if (goal === 'ganhar')
       return {
         kind: 'increase',
-        title: 'Você escolheu ganhar peso',
-        text: `Para começar a ganhar peso, aumente 10% das calorias (para ${kcalFormat.format(increaseTo)} kcal).`,
+        title: 'Você escolheu aumentar a massa magra',
+        text: `Para começar a aumentar a massa magra, aumente 10% das calorias (para ${kcalFormat.format(increaseTo)} kcal).`,
       };
     else
       return decreaseTo < calories
         ? {
             kind: 'decrease',
-            title: 'Você escolheu perder peso',
+            title: 'Você escolheu emagrecer',
             text: `Para começar a emagrecer, diminua 10% das calorias (para ${kcalFormat.format(decreaseTo)} kcal).`,
           }
-        : { ...floor, title: 'Você escolheu perder peso' };
+        : { ...floor, title: 'Você escolheu emagrecer' };
   if (weeklyChangeKg === null) return null;
   const week = `Na última semana, seu peso variou ${signedKg(weeklyChangeKg)} kg.`;
   if (goal === 'perder' && weeklyChangeKg > -STALLED_KG)
@@ -136,7 +136,7 @@ export function calorieAdvice({
     return {
       kind: 'increase',
       title: 'Seu peso parou de subir',
-      text: `${week} Você pode aumentar 10% das calorias (para ${kcalFormat.format(increaseTo)} kcal) para continuar ganhando peso.`,
+      text: `${week} Você pode aumentar 10% das calorias (para ${kcalFormat.format(increaseTo)} kcal) para continuar aumentando a massa magra.`,
     };
   return null;
 }

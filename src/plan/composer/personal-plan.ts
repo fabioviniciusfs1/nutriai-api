@@ -58,7 +58,7 @@ Regras:
 - Não use as versões integrais de pão, arroz, macarrão, torrada ou biscoito: use as comuns (ex.: pão
   francês, arroz branco tipo 1, macarrão comum).
 - É um plano para o dia a dia: prefira alimentos in natura ou pouco processados. Evite doces, bolos,
-  biscoitos, refrigerantes e ultraprocessados, principalmente se o objetivo é perder peso.
+  biscoitos, refrigerantes e ultraprocessados, principalmente se o objetivo é emagrecer.
 - Distribua a proteína ao longo do dia, com uma fonte de proteína em cada refeição principal.
 - A soma do dia deve ficar perto da meta de calorias e macronutrientes. O app ainda ajusta as porções para a
   meta exata, mas, quanto mais perto você chegar em cada refeição, menos ele muda as porções que você escolheu.
@@ -153,9 +153,9 @@ const ACTIVITY_NAMES: Record<ActivityLevel, string> = {
 };
 
 const GOAL_NAMES: Record<Goal, string> = {
-  perder: 'perder peso',
+  perder: 'emagrecimento',
   manter: 'manter o peso',
-  ganhar: 'ganhar peso',
+  ganhar: 'aumento de massa magra',
 };
 
 const macrosText = ({ protein, fat, carbs }: Macros) =>

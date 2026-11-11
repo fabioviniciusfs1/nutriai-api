@@ -170,11 +170,11 @@ describe('projectWeight', () => {
       projectWeight({ ...ana, goal: 'manter', targetWeightKg: 60 }, START),
     ).toBe('Com o objetivo de manter o peso, não há peso meta.');
     expect(projectWeight({ ...ana, targetWeightKg: 70 }, START)).toBe(
-      'Para perder peso, o peso meta deve ser menor que o atual.',
+      'Para emagrecer, o peso meta deve ser menor que o atual.',
     );
     expect(
       projectWeight({ ...ana, goal: 'ganhar', targetWeightKg: 68.5 }, START),
-    ).toBe('Para ganhar peso, o peso meta deve ser maior que o atual.');
+    ).toBe('Para aumentar a massa magra, o peso meta deve ser maior que o atual.');
     const floor: Profile = {
       ...ana,
       weightKg: 45,
@@ -206,11 +206,11 @@ describe('targetWeightError', () => {
       targetWeightError({ ...ana, goal: 'manter', targetWeightKg: 60 }),
     ).toBe('Com o objetivo de manter o peso, não há peso meta.');
     expect(targetWeightError({ ...ana, targetWeightKg: 68.5 })).toBe(
-      'Para perder peso, o peso meta deve ser menor que o atual.',
+      'Para emagrecer, o peso meta deve ser menor que o atual.',
     );
     expect(
       targetWeightError({ ...ana, goal: 'ganhar', targetWeightKg: 60 }),
-    ).toBe('Para ganhar peso, o peso meta deve ser maior que o atual.');
+    ).toBe('Para aumentar a massa magra, o peso meta deve ser maior que o atual.');
   });
 });
 

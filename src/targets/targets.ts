@@ -80,9 +80,9 @@ export function targetWeightError(profile: Profile): string | null {
       : 'Com o objetivo de manter o peso, não há peso meta.';
   if (target === null) return 'Informe o peso meta.';
   if (profile.goal === 'perder' && target >= profile.weightKg)
-    return 'Para perder peso, o peso meta deve ser menor que o atual.';
+    return 'Para emagrecer, o peso meta deve ser menor que o atual.';
   if (profile.goal === 'ganhar' && target <= profile.weightKg)
-    return 'Para ganhar peso, o peso meta deve ser maior que o atual.';
+    return 'Para aumentar a massa magra, o peso meta deve ser maior que o atual.';
   return null;
 }
 
@@ -109,7 +109,7 @@ export function projectWeight(
     return calorieGoal === null
       ? 'Com a meta mínima de calorias, não dá para estimar quando o peso meta chega. Procure um nutricionista.'
       : 'Com a meta de calorias de agora, o peso não cai. Ajuste as calorias em "Ajuste da dieta".';
-  // A meta ajustada (ex.: logo depois de virar para ganhar peso) pode ainda estar abaixo do gasto.
+  // A meta ajustada (ex.: logo depois de virar para aumentar a massa magra) pode ainda estar abaixo do gasto.
   if (profile.goal === 'ganhar' && calories <= tdee)
     return 'Com a meta de calorias de agora, o peso não sobe. Ajuste as calorias em "Ajuste da dieta".';
   const kgPerMonth = ((calories - tdee) / KCAL_PER_KG) * DAYS_PER_MONTH;

@@ -220,8 +220,8 @@ Corpo: o `profile` inteiro. Recalcula `targets`. Não monta o plano individual (
 
 - `targetWeightKg` (peso meta): obrigatório com objetivo perder (menor que `weightKg`) ou ganhar (maior)
   ("Informe o peso meta."); com manter, ausente ou `null` ("Com o objetivo de manter o peso, não há peso meta.").
-  30–300 kg com uma casa decimal ("O peso meta deve estar entre 30 e 300 kg."). Outros erros: "Para perder peso, o peso meta deve ser menor que o
-  atual.", "Para ganhar peso, o peso meta deve ser maior que o atual.". Não muda as metas.
+  30–300 kg com uma casa decimal ("O peso meta deve estar entre 30 e 300 kg."). Outros erros: "Para emagrecer, o peso meta deve ser menor que o
+  atual.", "Para aumentar a massa magra, o peso meta deve ser maior que o atual.". Não muda as metas.
 
 ### `PUT /me/target-weight` → `Me`
 
@@ -420,9 +420,9 @@ muda a dieta depois dele.
   virada do objetivo) em diante: depois deles, a sugestão espera duas pesagens novas. `null` sem esse par.
 - `advice` (`null` = nada a sugerir; com `goal: "manter"`, nunca), na ordem:
   - `reached`: a última pesagem chegou ao peso meta (≤ perdendo, ≥ ganhando). A pessoa escolhe um novo peso meta
-    (`PUT /me/target-weight`): acima do peso atual para ganhar peso, abaixo para continuar emagrecendo.
+    (`PUT /me/target-weight`): acima do peso atual para aumentar a massa magra, abaixo para continuar emagrecendo.
   - o objetivo **acabou de virar** com o novo peso meta e as calorias ainda não foram ajustadas desde então →
-    `increase` ("Você escolheu ganhar peso", +10%) ou `decrease` ("Você escolheu perder peso", −10%; `floor` no piso).
+    `increase` ("Você escolheu aumentar a massa magra", +10%) ou `decrease` ("Você escolheu emagrecer", −10%; `floor` no piso).
   - `decrease`: perdendo peso, caiu **menos de 0,2 kg** na semana → sugere −10%.
   - `floor`: o mesmo, mas a meta já está no piso (não dá para diminuir; procurar um nutricionista).
   - `increase`: ganhando peso, subiu **menos de 0,2 kg** na semana → sugere +10%.

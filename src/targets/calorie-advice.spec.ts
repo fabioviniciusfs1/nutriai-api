@@ -129,7 +129,7 @@ describe('calorieAdvice', () => {
     });
     expect(
       calorieAdvice({ ...losing, weeklyChangeKg: null, turned: true }),
-    ).toMatchObject({ kind: 'decrease', title: 'Você escolheu perder peso' });
+    ).toMatchObject({ kind: 'decrease', title: 'Você escolheu emagrecer' });
   });
 
   it('ganhando, o peso parou de subir: aumentar 10%', () => {

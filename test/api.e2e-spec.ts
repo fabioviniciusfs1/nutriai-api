@@ -191,7 +191,7 @@ describe('perfil e pesos', () => {
     await http('post', '/profile/projection')
       .send({ ...PROFILE, targetWeightKg: 70 })
       .expect(400, {
-        error: 'Para perder peso, o peso meta deve ser menor que o atual.',
+        error: 'Para emagrecer, o peso meta deve ser menor que o atual.',
       });
     await http('post', '/profile/projection')
       .send({ ...PROFILE, targetWeightKg: null })
@@ -675,7 +675,7 @@ describe('ajuste das calorias', () => {
     const turned = await calories();
     expect(turned).toMatchObject({
       goal: 'ganhar',
-      advice: { kind: 'increase', title: 'Você escolheu ganhar peso' },
+      advice: { kind: 'increase', title: 'Você escolheu aumentar a massa magra' },
     });
     expect(
       ((await http('get', '/me').expect(200)).body as Me).calorieAdvice,
@@ -703,7 +703,7 @@ describe('ajuste das calorias', () => {
     await target(55).expect(200);
     expect(await calories()).toMatchObject({
       goal: 'perder',
-      advice: { kind: 'decrease', title: 'Você escolheu perder peso' },
+      advice: { kind: 'decrease', title: 'Você escolheu emagrecer' },
     });
 
     // No piso, não dá para diminuir.

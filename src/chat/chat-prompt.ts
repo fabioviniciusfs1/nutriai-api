@@ -25,9 +25,9 @@ procurar um nutricionista ou médico.`;
 
 const SEX = { feminino: 'feminino', masculino: 'masculino' } as const;
 const GOAL = {
-  perder: 'perder peso',
+  perder: 'emagrecimento',
   manter: 'manter o peso',
-  ganhar: 'ganhar peso',
+  ganhar: 'aumento de massa magra',
 } as const;
 
 /** Contexto do usuário para a conversa (muda a cada requisição). */
