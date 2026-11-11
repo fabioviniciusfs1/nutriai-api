@@ -3,6 +3,8 @@ import {
   testCatalog as catalog,
   testFoods as foodCatalog,
 } from './test-catalog.js';
+import type { AvoidRule } from '../../contract.js';
+import { foodKind } from './avoid.js';
 import { FoodCatalog, similarity, sumTotals } from './foods.js';
 import type { Product } from './products.js';
 import {
@@ -626,6 +628,72 @@ describe('tipo de alimentação', () => {
         .searchSubstitutes(3, 'Salmão grelhado', 'frango')
         .map((food) => food.name),
     ).not.toContain('Peito de frango grelhado');
+  });
+});
+
+describe('alimentos que você não come', () => {
+  const salmon = foodKind('Salmão grelhado');
+  const chicken = foodKind('Peito de frango grelhado');
+  const avoiding = (kind: string, scope: AvoidRule['scope'] = 'alimento') =>
+    planner({
+      ...EMPTY_STATE,
+      foodAvoid: [{ kind, label: kind, scope }],
+    });
+  const names = (p: Planner) =>
+    p.plan.flatMap((meal) => meal.foods.map((food) => food.name));
+
+  it('o alimento do plano sai pelo substituto mais parecido, nas mesmas calorias', () => {
+    const before = planner();
+    const after = avoiding(salmon);
+    expect(names(before)).toContain('Salmão grelhado');
+    expect(names(after)).not.toContain('Salmão grelhado');
+    const dinner = (p: Planner) => p.plan.find((meal) => meal.id === 3)!;
+    expect(dinner(after).foods).toHaveLength(dinner(before).foods.length);
+    expect(Math.abs(after.dayKcal() - before.dayKcal())).toBeLessThan(
+      before.dayKcal() * 0.05,
+    );
+  });
+
+  it('tirar a regra devolve o alimento ao plano', () => {
+    const state = avoiding(salmon).setAvoid([]);
+    expect(names(planner(state))).toContain('Salmão grelhado');
+  });
+
+  it('não aparece nos substitutos, na pesquisa, na troca nem no alimento extra', () => {
+    const p = avoiding(chicken);
+    expect(
+      p.substitutes(3, 'Salmão grelhado').map((food) => food.name),
+    ).not.toContain('Peito de frango grelhado');
+    expect(
+      p
+        .substitutes(3, 'Salmão grelhado', ['Peito de frango grelhado', 'Tofu'])
+        .map((food) => food.name),
+    ).toEqual(['Tofu']);
+    expect(
+      p.searchSubstitutes(3, 'Salmão grelhado', 'frango').map((f) => f.name),
+    ).not.toContain('Peito de frango grelhado');
+    expect(() =>
+      p.swapFood(3, 'Salmão grelhado', 'nao-gosto', 'Peito de frango grelhado'),
+    ).toThrow(PlanRuleError);
+    expect(
+      p.searchFoods(3, 'frango').options.map((option) => option.food.name),
+    ).not.toContain('Peito de frango grelhado');
+    expect(() => p.foodPortion(3, 'Peito de frango grelhado', 100)).toThrow(
+      PlanRuleError,
+    );
+  });
+
+  it('só aceita tipos do catálogo, e o tipo repetido fica uma vez só', () => {
+    expect(() =>
+      planner().setAvoid([{ kind: 'xyz', label: 'Xyz', scope: 'alimento' }]),
+    ).toThrow(PlanRuleError);
+    const state = planner().setAvoid([
+      { kind: salmon, label: 'Salmão', scope: 'alimento' },
+      { kind: salmon, label: 'Salmão', scope: 'ingrediente' },
+    ]);
+    expect(state.foodAvoid).toEqual([
+      { kind: salmon, label: 'Salmão', scope: 'ingrediente' },
+    ]);
   });
 });
 

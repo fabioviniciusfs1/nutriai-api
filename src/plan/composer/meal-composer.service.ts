@@ -7,7 +7,7 @@ import {
 } from '../../ai/anthropic.provider.js';
 import { LlmLogService } from '../../ai/llm-log.service.js';
 import { CatalogService } from '../../catalog/catalog.service.js';
-import type { Diet, FoodFeedback } from '../../contract.js';
+import type { AvoidRule, Diet, FoodFeedback } from '../../contract.js';
 import type { LlmTask } from '../../database/entities/index.js';
 import {
   genericFood,
@@ -15,6 +15,7 @@ import {
   offSearchWords,
 } from '../../database/sources/off/generic.js';
 import { OffProductsService } from '../../foods/off-products.service.js';
+import { avoidMatcher } from '../engine/avoid.js';
 import { allowedByDiet } from '../engine/diet.js';
 import { FoodCatalog } from '../engine/foods.js';
 import type { PersonalMeals } from '../engine/types.js';
@@ -54,11 +55,12 @@ const MEAL_TIME_TIMEOUT_MS = 10_000;
 /** Tempo máximo de espera pelo plano individual (roda em segundo plano). */
 const PERSONAL_PLAN_TIMEOUT_MS = 120_000;
 
-/** Só os alimentos do catálogo que cabem no tipo de alimentação. */
-function dietFilter(catalog: FoodCatalog, diet: Diet) {
+/** Só os alimentos do catálogo que cabem no tipo de alimentação e não caem nos "Alimentos que você não come". */
+function dietFilter(catalog: FoodCatalog, diet: Diet, avoid: AvoidRule[] = []) {
+  const avoided = avoidMatcher(avoid);
   return (name: string) => {
     const entry = catalog.entry(name);
-    return entry !== undefined && allowedByDiet(entry, diet);
+    return entry !== undefined && allowedByDiet(entry, diet) && !avoided(name);
   };
 }
 
@@ -105,7 +107,7 @@ export class MealComposerService {
     });
     if (text === null) return null;
     const catalog = await this.catalogWithOffFoods(substituteCitedFoods(text));
-    const inDiet = dietFilter(catalog, request.diet);
+    const inDiet = dietFilter(catalog, request.diet, request.avoid);
     const excluded = new Set(request.exclude);
     const names = parseSubstitutes(
       text,
@@ -178,7 +180,10 @@ export class MealComposerService {
       text,
       catalog,
       feedback,
-      planAllows(catalog, dietFilter(catalog, request.routine.diet)),
+      planAllows(
+        catalog,
+        dietFilter(catalog, request.routine.diet, request.avoid),
+      ),
       request.meals.map((meal) => meal.id),
       request.routine.eatingWindows,
       (from, to) =>

@@ -1,7 +1,8 @@
 // Partes puras comuns aos pedidos ao assistente (plano individual e substitutos): como ele nomeia os
 // alimentos e a validação dos que ele devolve. Ele não vê o catálogo: cita os alimentos e a API acha cada um
 // no catálogo (`FoodCatalog.match`).
-import type { Diet, FoodFeedback } from '../../contract.js';
+import type { AvoidRule, Diet, FoodFeedback } from '../../contract.js';
+import { avoidText } from '../engine/avoid.js';
 import { DIET_NAMES } from '../engine/diet.js';
 import { type ApproxPer100g, FoodCatalog, sumTotals } from '../engine/foods.js';
 import type { PlanFood } from '../engine/types.js';
@@ -80,6 +81,15 @@ export function parseJson(text: string): unknown {
 /** Tipo de alimentação do usuário, como linha do prompt. */
 export function dietLine(diet: Diet): string {
   return `Tipo de alimentação: ${DIET_NAMES[diet]}.`;
+}
+
+/** Linha do pedido com os "Alimentos que você não come" (nenhuma sem regras). */
+export function avoidLines(rules: AvoidRule[] = []): string[] {
+  return rules.length > 0
+    ? [
+        `Alimentos que a pessoa não come (nunca use, em nenhum preparo): ${avoidText(rules)}.`,
+      ]
+    : [];
 }
 
 /**

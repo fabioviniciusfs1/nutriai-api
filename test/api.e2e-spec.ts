@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 import type {
+  AvoidOption,
   CalorieAdjustment,
   DietAdjustment,
   DietPreview,
@@ -675,7 +676,10 @@ describe('ajuste das calorias', () => {
     const turned = await calories();
     expect(turned).toMatchObject({
       goal: 'ganhar',
-      advice: { kind: 'increase', title: 'Você escolheu aumentar a massa magra' },
+      advice: {
+        kind: 'increase',
+        title: 'Você escolheu aumentar a massa magra',
+      },
     });
     expect(
       ((await http('get', '/me').expect(200)).body as Me).calorieAdvice,
@@ -1236,6 +1240,118 @@ describe('substitutos do assistente', () => {
       shown = [...shown, ...names];
     }
     expect(shown.length).toBeGreaterThan(substitutes.body.length);
+    create.mockReset();
+  });
+});
+
+describe('alimentos que você não come', () => {
+  const foodNames = (plan: TodayPlan) =>
+    plan.meals.flatMap((meal) => meal.foods.map((food) => food.name));
+
+  it('busca o tipo, tira do plano, das sugestões e do alimento extra, e volta ao remover', async () => {
+    create.mockReset();
+    const { http } = await newUser();
+    expect(
+      foodNames((await http('get', '/plan/today').expect(200)).body),
+    ).toContain('Cenoura, cozida');
+    await http('get', '/foods/avoid').expect(200, []);
+
+    const options = (
+      await http('get', '/foods/avoid/search?q=cenoura').expect(200)
+    ).body as AvoidOption[];
+    expect(options[0].label).toBe('Cenoura');
+    expect(options[0].foods.count).toBeGreaterThan(1);
+    expect(options[0].ingredient.count).toBeGreaterThan(options[0].foods.count);
+    const batatas = (
+      await http('get', '/foods/avoid/search?q=batata').expect(200)
+    ).body as AvoidOption[];
+    expect(batatas.map((option) => option.label)).toEqual(
+      expect.arrayContaining([
+        'Batata (todos os tipos)',
+        'Batata doce',
+        'Batata inglesa',
+      ]),
+    );
+
+    const kind = (
+      await http(
+        'get',
+        `/foods/avoid/kind?food=${encodeURIComponent('Cenoura, cozida')}`,
+      ).expect(200)
+    ).body.option as AvoidOption;
+    expect(kind).toMatchObject({ kind: options[0].kind, label: 'Cenoura' });
+    await http('get', '/foods/avoid/kind?food=xyz').expect(200, {
+      option: null,
+    });
+
+    const rules = [
+      { kind: options[0].kind, label: options[0].label, scope: 'ingrediente' },
+    ];
+    await http('put', '/foods/avoid').send({ rules }).expect(200, rules);
+    await http('get', '/foods/avoid').expect(200, rules);
+    const plan = (await http('get', '/plan/today').expect(200))
+      .body as TodayPlan;
+    expect(foodNames(plan).filter((name) => /cenoura/i.test(name))).toEqual([]);
+    // A cenoura saiu pelo substituto: o jantar segue com o mesmo número de alimentos.
+    expect(plan.meals.find((meal) => meal.id === 3)!.foods).toHaveLength(5);
+
+    // O que o Claude citar e cair na regra é descartado.
+    create.mockResolvedValueOnce({
+      stop_reason: 'end_turn',
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            foods: [
+              { name: 'Cenoura, crua', per100g: { kcal: 34 } },
+              { name: 'Abobrinha, italiana, cozida', per100g: { kcal: 15 } },
+            ],
+          }),
+        },
+      ],
+    });
+    const BROCOLIS = 'Brócolis, cozido';
+    const substitutes = (
+      await http(
+        'get',
+        `/plan/meals/3/substitutes?food=${encodeURIComponent(BROCOLIS)}`,
+      ).expect(200)
+    ).body as { name: string }[];
+    const prompt = create.mock.calls[0][0].messages[0].content as string;
+    expect(prompt).toContain(
+      'Alimentos que a pessoa não come (nunca use, em nenhum preparo): cenoura (nem pratos ou produtos que levam cenoura).',
+    );
+    expect(substitutes.map((food) => food.name)).toEqual([
+      'Abobrinha, italiana, cozida',
+    ]);
+    const search = await http(
+      'get',
+      '/plan/meals/1/food-search?q=cenoura',
+    ).expect(200);
+    for (const option of search.body.options as { food: { name: string } }[])
+      expect(option.food.name).not.toMatch(/cenoura/i);
+    await http('post', '/plan/meals/1/foods')
+      .send({ foodName: 'Cenoura, crua', grams: 50 })
+      .expect(400);
+
+    await http('put', '/foods/avoid')
+      .send({ rules: [{ kind: 'nao existe', label: 'X', scope: 'alimento' }] })
+      .expect(400, {
+        error:
+          'Não encontramos esse alimento. Pesquise de novo e escolha um da lista.',
+      });
+    await http('put', '/foods/avoid')
+      .send({
+        rules: [{ kind: options[0].kind, label: 'Cenoura', scope: 'tudo' }],
+      })
+      .expect(400, {
+        error: 'Escolha se tira só o alimento ou também o que leva ele.',
+      });
+
+    await http('put', '/foods/avoid').send({ rules: [] }).expect(200, []);
+    expect(
+      foodNames((await http('get', '/plan/today').expect(200)).body),
+    ).toContain('Cenoura, cozida');
     create.mockReset();
   });
 });

@@ -103,6 +103,7 @@ export class ChatService {
       this.plan.read(userId, clock, (planner) => ({
         plan: planner.todayPlan(),
         restricted: planner.restrictedFoods(),
+        avoid: planner.state.foodAvoid ?? [],
       })),
     ]);
     const turns = history.reverse();

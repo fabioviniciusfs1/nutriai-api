@@ -692,6 +692,51 @@ alimento volta a poder ser sugerido e oferecido); **as trocas já feitas continu
 
 **Alimentos restritos:** nunca aparecem como substitutos nem na busca.
 
+### `/foods/avoid` — "Alimentos que você não come" (passo 2 e página Alimentos)
+
+Regras por **tipo** de alimento (cenoura, batata doce), não por item do catálogo. Valem em todos os planos.
+
+`GET /foods/avoid/search?q=batata` → `AvoidOption[]` (até 10): os tipos do catálogo cujo nome começa pelo texto
+(ou que têm o texto como outro nome: "mandioquinha" → batata baroa). Quando a família tem mais de um tipo, vem antes
+a opção dela toda ("Batata (todos os tipos)"). O prato que só cita o alimento no nome ("Bolo de cenoura") não vira
+um tipo: entra no alcance `ingrediente`.
+
+```json
+[{ "kind": "batato doce", "label": "Batata doce",
+   "foods": { "count": 19, "examples": ["Batata, doce, cozida", "…"] },
+   "ingredient": { "count": 88, "examples": ["Carne, boi, músculo, cozida, c/ batata doce e cenoura", "…"] } }]
+```
+
+- `foods`: só o tipo, em qualquer preparo (quantos saem e alguns deles).
+- `ingredient`: também o que tem o tipo no nome; `count` é o total, `examples` só os a mais.
+- `kind` é a chave da regra: o front devolve como veio.
+
+`GET /foods/avoid/kind?food=Cenoura,%20cozida` → `{ option: AvoidOption | null }`: o tipo de um alimento do plano, para o
+diálogo de troca oferecer, junto do "Não gosto", "Não como nenhum tipo de cenoura" (vira uma regra `alimento`).
+`option: null` quando o nome não tem tipo ou o tipo só tem esse alimento.
+
+`GET /foods/avoid` → `AvoidRule[]`. `PUT /foods/avoid` com `{ "rules": AvoidRule[] }` troca a lista inteira e
+devolve a que ficou:
+
+```json
+{ "rules": [{ "kind": "cenouro", "label": "Cenoura", "scope": "ingrediente" }] }
+```
+
+- `scope`: `alimento` (só o tipo) ou `ingrediente` (também pratos e produtos com ele no nome).
+- Erros (`400`): tipo que não existe no catálogo ("Não encontramos esse alimento. Pesquise de novo e escolha um da
+  lista."), `scope` inválido ("Escolha se tira só o alimento ou também o que leva ele."), mais de 50 ("Escolha no
+  máximo 50 alimentos.").
+- O alimento do plano que cai numa regra sai **na hora** pelo substituto mais parecido, nas mesmas calorias. A troca
+  não é salva: removida a regra, o alimento original volta (diferente do "Liberar" dos restritos).
+- Os tipos evitados nunca aparecem nos substitutos (com ou sem o assistente), na pesquisa da troca, na busca do
+  alimento extra (nem produtos do Open Food Facts com o nome) e no plano individual; o `POST` do alimento extra
+  responde `400`. O assistente recebe as regras no pedido, e o que ele citar mesmo assim é descartado.
+- Prato pronto só sai se o alimento estiver **no nome**: as tabelas não trazem os ingredientes dos pratos.
+- No passo 2, envie o `PUT /foods/avoid` **antes** do `PUT /me/routine`: o plano individual é montado com as regras.
+- Na página Alimentos, as regras aparecem na aba **"Não gosto"**, junto dos alimentos marcados ("Liberar" = `PUT` sem
+  a regra). Para incluir, o campo de busca fica no passo 2 (rotina) e o diálogo de troca oferece "Não como … em nenhum
+  preparo".
+
 ## Nutrientes 🔒
 
 ### `GET /nutrition/today` → `NutritionToday`

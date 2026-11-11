@@ -1,10 +1,12 @@
 import type {
+  AvoidRule,
   Profile,
   RestrictedFood,
   Routine,
   Targets,
   TodayPlan,
 } from '../contract.js';
+import { avoidLines } from '../plan/composer/composition.js';
 import { DIET_NAMES } from '../plan/engine/diet.js';
 import { daysText, routineLines, scheduleOn, WEEK } from '../users/routine.js';
 
@@ -39,6 +41,8 @@ export function userContext(input: {
   targets: Targets | null;
   plan: TodayPlan;
   restricted: RestrictedFood[];
+  /** "Alimentos que você não come"; sem o campo, nenhum. */
+  avoid?: AvoidRule[];
 }): string {
   const lines = [
     `Contexto do usuário (hoje é ${input.today}):`,
@@ -92,6 +96,7 @@ export function userContext(input: {
     input.restricted.length === 0
       ? 'Alimentos restritos: nenhum.'
       : `Alimentos restritos: ${input.restricted.map((food) => food.name).join(', ')}.`,
+    ...avoidLines(input.avoid),
   );
   return lines.join('\n');
 }

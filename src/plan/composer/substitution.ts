@@ -1,5 +1,10 @@
 // Partes puras das sugestões de substituto pelo assistente: prompt, schema da resposta e validação.
-import type { Diet, FoodFeedback, MealSlot } from '../../contract.js';
+import type {
+  AvoidRule,
+  Diet,
+  FoodFeedback,
+  MealSlot,
+} from '../../contract.js';
 import { MEAL_NAMES } from '../../users/routine.js';
 import {
   FoodCatalog,
@@ -10,6 +15,7 @@ import {
   MAX_PER_FAMILY,
 } from '../engine/foods.js';
 import {
+  avoidLines,
   type CitedFood,
   citedFoods,
   dietLine,
@@ -81,6 +87,8 @@ export type SubstituteRequest = {
   mealFoods: string[];
   /** Alimentos restritos (não podem ser sugeridos). */
   restricted: string[];
+  /** "Alimentos que você não come" (tipos de alimento); sem o campo, nenhum. */
+  avoid?: AvoidRule[];
   diet: Diet;
   /** Substitutos já mostrados ao usuário ("Ver mais"): não podem se repetir. */
   exclude: string[];
@@ -124,6 +132,7 @@ export function substitutePrompt(request: SubstituteRequest): string {
     request.restricted.length > 0
       ? `Alimentos restritos (não sugira): ${request.restricted.join('; ')}.`
       : 'Alimentos restritos: nenhum.',
+    ...avoidLines(request.avoid),
     ...(request.exclude.length > 0
       ? [
           `Já oferecidos ao usuário (não repita): ${request.exclude.join('; ')}.`,

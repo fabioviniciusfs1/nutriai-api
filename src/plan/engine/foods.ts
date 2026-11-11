@@ -155,7 +155,7 @@ export function isWholeGrain(food: CatalogFood | undefined) {
 }
 
 /** Palavras que não ajudam a achar o alimento ("Arroz c/ feijão" ≈ "Arroz feijão"). */
-const STOPWORDS = new Set([
+export const STOPWORDS = new Set([
   'a',
   'o',
   'e',
@@ -180,7 +180,7 @@ const STOPWORDS = new Set([
 const GENERIC_FAMILIES = new Set(['peixe', 'carne', 'queijo', 'bebido']);
 
 /** Outras palavras com que as tabelas chamam a mesma coisa (já na forma de `stem`). */
-const SYNONYMS: Record<string, string[]> = {
+export const SYNONYMS: Record<string, string[]> = {
   branco: ['polido', '1'],
   bovino: ['boi'],
   boi: ['bovino'],
@@ -196,7 +196,7 @@ const SYNONYMS: Record<string, string[]> = {
 };
 
 /** Forma comparável de uma palavra: sem plural e no masculino ("cozidas" → "cozido", "crua" → "cru"). */
-function stem(word: string) {
+export function stem(word: string) {
   if (/^crus?$|^cruas?$/.test(word)) return 'cru';
   let result = word.length > 3 ? word.replace(/s$/, '') : word;
   if (result.length > 3 && result.endsWith('a'))
@@ -205,7 +205,7 @@ function stem(word: string) {
 }
 
 /** Palavras do nome que identificam o alimento. */
-function words(text: string) {
+export function words(text: string) {
   return normalize(text)
     .split(' ')
     .filter((word) => word && !STOPWORDS.has(word))
@@ -213,7 +213,7 @@ function words(text: string) {
 }
 
 /** Palavras de preparo e de apresentação: não mudam qual é o alimento ("Batata, doce, s/ casca, assada"). */
-const PREPARATION = new Set(
+export const PREPARATION = new Set(
   [
     'cozido',
     'assado',

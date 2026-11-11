@@ -1,4 +1,5 @@
 import type {
+  AvoidRule,
   Diet,
   FoodFeedback,
   FoodGroup,
@@ -71,6 +72,8 @@ export type PlanState = {
   planChanges: PlanChanges;
   foodFeedback: Record<string, FoodFeedback>;
   foodSubstitutes: Record<string, string>;
+  /** "Alimentos que você não come" (tipos de alimento); sem o campo, nenhum. */
+  foodAvoid?: AvoidRule[];
   mealFoodSwaps: Record<number, Record<string, string>>;
   nextExtraId: number;
   /** Refeições do plano base montadas pelo assistente para o usuário; sem o campo, as do plano base. */

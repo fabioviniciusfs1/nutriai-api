@@ -1,6 +1,7 @@
 // Regras do plano do dia (porte de `reference/MealPlan.tsx` e das funções de `reference/auth.ts`).
 // Tudo puro: recebe o estado do usuário e devolve o novo estado ou uma prévia, sem I/O.
 import type {
+  AvoidRule,
   FoodFeedback,
   FoodSearchOption,
   FoodSearchResult,
@@ -30,6 +31,7 @@ import type {
   PlanState,
 } from './types.js';
 import { DEFAULT_PLANNER_OPTIONS } from './types.js';
+import { avoidMatcher } from './avoid.js';
 import { allowedByDiet } from './diet.js';
 
 /** Refeição do plano montado, com o que é preciso para recalcular a porção dela. */
@@ -305,6 +307,10 @@ export const MAX_SUBSTITUTES = 8;
 /** Quantos alimentos a pesquisa do diálogo de troca devolve. */
 export const MAX_SEARCH_SUBSTITUTES = 20;
 export const FOOD_NOT_FOUND = 'Alimento não encontrado.';
+/** Quantas regras do "não como" a pessoa pode ter. */
+export const MAX_AVOID_RULES = 50;
+export const AVOID_NOT_FOUND =
+  'Não encontramos esse alimento. Pesquise de novo e escolha um da lista.';
 
 /** Teto da porção sugerida de um produto (o mesmo das gramas do alimento extra). */
 const MAX_SUGGESTED_GRAMS = 2000;
@@ -333,6 +339,9 @@ export class Planner {
   readonly state: PlanState;
   /** Algum alimento extra de outro dia saiu: o estado mudou mesmo sem ação do usuário. */
   readonly expired: boolean;
+  /** "Alimentos que você não come": `true` = o alimento cai numa regra. */
+  readonly avoided: (name: string) => boolean;
+  private restrictedCache: Record<string, FoodFeedback> | null = null;
 
   constructor(
     private readonly catalog: Catalog,
@@ -340,13 +349,18 @@ export class Planner {
     private readonly options: PlannerOptions = DEFAULT_PLANNER_OPTIONS,
   ) {
     this.foods = new FoodCatalog(catalog.foods);
-    // As refeições que o assistente montou para o usuário trocam título e alimentos da refeição base.
+    this.avoided = avoidMatcher(state.foodAvoid);
+    this.state = state;
+    // As refeições que o assistente montou para o usuário trocam título e alimentos da refeição base. O alimento
+    // que cai numa regra do "não como" sai pelo substituto mais parecido, nas mesmas calorias (calculado: sem a
+    // regra, ele volta).
     const personal = state.personalMeals ?? {};
     this.baseMeals = catalog.baseMeals
       .filter((meal) => options.meals.includes(meal.slot))
       .map((meal) =>
         personal[meal.id] ? { ...meal, ...personal[meal.id] } : meal,
-      );
+      )
+      .map((meal) => ({ ...meal, foods: this.withoutAvoided(meal.foods) }));
     this.eggUnitGrams = options.eggUnitGrams ?? DEFAULT_EGG_UNIT_GRAMS;
     // A parte de cada refeição na meta do dia: a do período dela, dividida em partes iguais entre a refeição
     // principal e o lanche (se a pessoa faz). Um período sem refeição (rotina antiga) passa a parte dele para os
@@ -542,9 +556,41 @@ export class Planner {
 
   /** O alimento cabe no tipo de alimentação do perfil (alimento fora do catálogo: cabe). */
   private allowed = (name: string) => {
+    if (this.avoided(name)) return false;
     const entry = this.foods.entry(name);
     return !entry || allowedByDiet(entry, this.options.diet ?? 'onivora');
   };
+
+  /**
+   * Os restritos para as buscas do catálogo: os marcados pelo usuário e, como "Não gosto", os que caem numa regra
+   * do "não como".
+   */
+  get restricted(): Record<string, FoodFeedback> {
+    if (this.restrictedCache) return this.restrictedCache;
+    const restricted = { ...this.state.foodFeedback };
+    if ((this.state.foodAvoid ?? []).length > 0)
+      for (const food of this.catalog.foods)
+        if (!restricted[food.name] && this.avoided(food.name))
+          restricted[food.name] = 'nao-gosto';
+    this.restrictedCache = restricted;
+    return restricted;
+  }
+
+  /** Os alimentos sem os que caem numa regra do "não como": cada um trocado pelo substituto mais parecido. */
+  private withoutAvoided<T extends PlanFood>(foods: T[]): T[] {
+    if ((this.state.foodAvoid ?? []).length === 0) return foods;
+    return foods.flatMap((food) => {
+      if (!this.avoided(food.name)) return [food];
+      const [substitute] = this.foods.substituteOptions(
+        food.name,
+        food.kcal,
+        this.restricted,
+        1,
+        this.allowed,
+      );
+      return substitute ? [{ ...food, ...substitute }] : [];
+    });
+  }
 
   // ---------------------------------------------------------------------------------------------
   // Porções
@@ -591,11 +637,13 @@ export class Planner {
     products: Product[] = [],
   ): FoodSearchResult {
     this.meal(mealId);
-    const fromProducts: FoodSearchOption[] = products.map((product) => ({
-      food: this.suggestedProduct(mealId, product),
-      barcode: product.barcode,
-      brand: product.brand,
-    }));
+    const fromProducts: FoodSearchOption[] = products
+      .filter((product) => !this.avoided(product.name))
+      .map((product) => ({
+        food: this.suggestedProduct(mealId, product),
+        barcode: product.barcode,
+        brand: product.brand,
+      }));
     if (isBarcode(query))
       return {
         found: fromProducts.length > 0,
@@ -605,7 +653,7 @@ export class Planner {
 
     const { found, restricted, candidates } = this.foods.search(
       query,
-      this.state.foodFeedback,
+      this.restricted,
     );
     if (!found && fromProducts.length > 0)
       return { found: true, restricted, options: fromProducts };
@@ -631,6 +679,11 @@ export class Planner {
    */
   foodPortion(mealId: number, food: string | Product, grams: number): PlanFood {
     this.meal(mealId);
+    if (this.avoided(typeof food === 'string' ? food : food.name))
+      throw new PlanRuleError(
+        'invalid',
+        'Você marcou que não come esse alimento. Libere-o em "Não gosto", na página Alimentos, para usá-lo.',
+      );
     if (typeof food !== 'string')
       return portionOf(food.name, food.per100g, grams);
     if (this.state.foodFeedback[food]) {
@@ -736,7 +789,7 @@ export class Planner {
     exclude: string[] = [],
   ): PlanFood[] {
     const food = this.mealFood(mealId, foodName);
-    const feedback = this.state.foodFeedback;
+    const feedback = this.restricted;
     const excluded = new Set(exclude);
     const offered = (name: string) => this.allowed(name) && !excluded.has(name);
     if (!names)
@@ -767,7 +820,7 @@ export class Planner {
     query: string,
   ): PlanFood[] {
     const food = this.mealFood(mealId, foodName);
-    const feedback = this.state.foodFeedback;
+    const feedback = this.restricted;
     return this.foods
       .search(query, feedback)
       .candidates.filter((candidate) => this.allowed(candidate.name))
@@ -798,12 +851,7 @@ export class Planner {
     // Qualquer alimento do catálogo serve (o assistente sugere de qualquer grupo), menos o próprio e os restritos.
     const valid =
       this.allowed(substitute) &&
-      this.foods.substitute(
-        substitute,
-        foodName,
-        food.kcal,
-        this.state.foodFeedback,
-      );
+      this.foods.substitute(substitute, foodName, food.kcal, this.restricted);
     if (!valid)
       throw new PlanRuleError(
         'invalid',
@@ -853,6 +901,30 @@ export class Planner {
           substitute: swap ? swap : null,
         };
       });
+  }
+
+  /**
+   * "Alimentos que você não come": troca a lista inteira de regras. Cada tipo tem de existir no catálogo; tipo
+   * repetido fica com a última regra. Os alimentos do plano que caírem nelas saem pelo substituto mais parecido.
+   */
+  setAvoid(rules: AvoidRule[]): PlanState {
+    if (rules.length > MAX_AVOID_RULES)
+      throw new PlanRuleError(
+        'invalid',
+        `Escolha no máximo ${MAX_AVOID_RULES} alimentos.`,
+      );
+    const byKind = new Map<string, AvoidRule>();
+    for (const rule of rules) {
+      const kind = rule.kind.trim();
+      const exists =
+        kind !== '' &&
+        this.catalog.foods.some((food) =>
+          avoidMatcher([{ ...rule, kind, scope: 'alimento' }])(food.name),
+        );
+      if (!exists) throw new PlanRuleError('invalid', AVOID_NOT_FOUND);
+      byKind.set(kind, { kind, label: rule.label.trim(), scope: rule.scope });
+    }
+    return this.withState({ foodAvoid: [...byKind.values()] });
   }
 
   /** Libera o alimento para o assistente voltar a recomendá-lo. Trocas já feitas continuam. */

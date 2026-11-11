@@ -174,7 +174,9 @@ describe('projectWeight', () => {
     );
     expect(
       projectWeight({ ...ana, goal: 'ganhar', targetWeightKg: 68.5 }, START),
-    ).toBe('Para aumentar a massa magra, o peso meta deve ser maior que o atual.');
+    ).toBe(
+      'Para aumentar a massa magra, o peso meta deve ser maior que o atual.',
+    );
     const floor: Profile = {
       ...ana,
       weightKg: 45,
@@ -210,7 +212,9 @@ describe('targetWeightError', () => {
     );
     expect(
       targetWeightError({ ...ana, goal: 'ganhar', targetWeightKg: 60 }),
-    ).toBe('Para aumentar a massa magra, o peso meta deve ser maior que o atual.');
+    ).toBe(
+      'Para aumentar a massa magra, o peso meta deve ser maior que o atual.',
+    );
   });
 });
 

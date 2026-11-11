@@ -220,6 +220,7 @@ describe('substitutePrompt', () => {
       time: '12:30',
       mealFoods: ['Arroz integral'],
       restricted: ['Abacate'],
+      avoid: [{ kind: 'batato doce', label: 'Batata doce', scope: 'alimento' }],
       diet: 'onivora',
       exclude: [],
     });
@@ -231,6 +232,9 @@ describe('substitutePrompt', () => {
     );
     expect(prompt).toContain('Outros alimentos da refeição: Arroz integral.');
     expect(prompt).toContain('Alimentos restritos (não sugira): Abacate.');
+    expect(prompt).toContain(
+      'Alimentos que a pessoa não come (nunca use, em nenhum preparo): batata doce.',
+    );
     expect(prompt).not.toContain('Já oferecidos');
   });
 

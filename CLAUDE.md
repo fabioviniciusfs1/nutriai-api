@@ -163,6 +163,13 @@ npx vitest run -t "não gosto"                     # por nome do teste
 - Tipo de alimentação (`routine.diet`): `src/plan/engine/diet.ts` marca a origem animal de cada alimento
   (`foods.animal`, pela categoria da TACO e por palavras do nome) e `allowedByDiet` filtra o plano individual
   e os substitutos.
+- "Alimentos que você não come" (`src/plan/engine/avoid.ts`; `GET`/`PUT /foods/avoid`, `GET /foods/avoid/search`):
+  regras por tipo de alimento em `plan_states.food_avoid` (`AvoidRule`: `kind`, `label`, `scope`). O tipo
+  (`foodKind`) é o começo do nome sem preparo ("Batata, doce, assada" → batata doce; "Carne, porco, lombo" = "Porco,
+  lombo"); `alimento` pega o tipo e os de dentro dele, `ingrediente` também o que tem as palavras dele no nome. O
+  `Planner` junta a regra ao `allowed` e ao `restricted` (os evitados contam como `nao-gosto` nas buscas do
+  catálogo) e troca na montagem o alimento do plano que cai nela (`withoutAvoided`, calculado, não salvo). O
+  composer filtra as respostas do Claude e põe as regras nos prompts (`avoidLines`), e o chat também.
 - `src/health/`: importa a atividade da Google Health API para `activity_days`: ao conectar o Google, nas
   rotas de nutrição/histórico quando a última vez foi há mais de 1 h, e todo dia de madrugada
   (`HealthSyncScheduler`: `HEALTH_SYNC_CRON`, padrão `0 3 * * *`, fuso `HEALTH_SYNC_TIMEZONE`; `off`

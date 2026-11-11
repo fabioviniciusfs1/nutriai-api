@@ -9,7 +9,7 @@ import {
 import { InjectDataSource } from '@nestjs/typeorm';
 import { type DataSource, In, Not } from 'typeorm';
 import { CatalogService } from '../catalog/catalog.service.js';
-import type { DietSettings, Profile, Routine } from '../contract.js';
+import type { AvoidRule, DietSettings, Profile, Routine } from '../contract.js';
 import {
   PlanStateEntity,
   SchedulePlanEntity,
@@ -148,6 +148,7 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
             Object.keys(feedback),
             dietSettings,
             calorieGoal,
+            state?.foodAvoid ?? [],
           ),
           feedback,
         );
@@ -195,6 +196,7 @@ export function personalPlanRequest(
   restricted: string[],
   dietSettings: DietSettings | null = null,
   calorieGoal: number | null = null,
+  avoid: AvoidRule[] = [],
 ): PersonalPlanRequest {
   const { calories } = calculateTargets(profile, calorieGoal);
   const goals = macroTargets(
@@ -225,5 +227,6 @@ export function personalPlanRequest(
     ),
     routine,
     restricted,
+    avoid,
   };
 }

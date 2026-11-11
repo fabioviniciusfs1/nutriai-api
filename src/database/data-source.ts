@@ -22,6 +22,7 @@ import { CalorieGoal1791800000000 } from './migrations/1791800000000-calorie-goa
 import { RoutineMainMeals1791900000000 } from './migrations/1791900000000-routine-main-meals.js';
 import { RoutineSchedules1792000000000 } from './migrations/1792000000000-routine-schedules.js';
 import { OffProducts1792100000000 } from './migrations/1792100000000-off-products.js';
+import { FoodAvoid1792200000000 } from './migrations/1792200000000-food-avoid.js';
 
 /** Migrations em ordem; as novas entram no fim da lista. */
 export const MIGRATIONS = [
@@ -47,6 +48,7 @@ export const MIGRATIONS = [
   RoutineMainMeals1791900000000,
   RoutineSchedules1792000000000,
   OffProducts1792100000000,
+  FoodAvoid1792200000000,
 ];
 
 export function dataSourceOptions(url: string): DataSourceOptions {

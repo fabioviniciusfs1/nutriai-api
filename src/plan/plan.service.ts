@@ -9,6 +9,8 @@ import type { DataSource, EntityManager } from 'typeorm';
 import { CatalogService } from '../catalog/catalog.service.js';
 import type { UserClock } from '../common/timezone.js';
 import type {
+  AvoidOption,
+  AvoidRule,
   DietPreview,
   DietSettings,
   FoodFeedback,
@@ -30,6 +32,7 @@ import { outsideWindowsAdvice } from './composer/meal-time.js';
 import { planNutrients } from './nutrients.js';
 import { PlanVersionService } from './plan-version.service.js';
 import { planChanges, planVersion } from './plan-versions.js';
+import { avoidOptionFor, avoidOptions } from './engine/avoid.js';
 import { FOOD_NOT_FOUND, Planner, PlanRuleError } from './engine/planner.js';
 import {
   DEFAULT_PLANNER_OPTIONS,
@@ -75,6 +78,7 @@ function toPlanState(
     planChanges: { ...EMPTY_PLAN_CHANGES, ...plan.planChanges },
     foodFeedback: user.foodFeedback,
     foodSubstitutes: user.foodSubstitutes,
+    foodAvoid: user.foodAvoid ?? [],
     mealFoodSwaps: plan.mealFoodSwaps,
     nextExtraId: plan.nextExtraId,
     personalMeals: plan.personalMeals,
@@ -286,10 +290,11 @@ export class PlanService {
             .map((item) => item.name)
             .filter((name) => name !== foodName),
           restricted: Object.keys(planner.state.foodFeedback),
+          avoid: planner.state.foodAvoid ?? [],
           diet: routine?.diet ?? 'onivora',
           exclude,
         };
-        return { request, feedback: planner.state.foodFeedback };
+        return { request, feedback: planner.restricted };
       },
       planId,
     );
@@ -314,6 +319,39 @@ export class PlanService {
         return planner.substitutes(mealId, foodName, undefined, exclude);
       },
       planId,
+    );
+  }
+
+  /** "Alimentos que você não come": as regras do usuário. */
+  avoidRules(userId: string, clock: UserClock): Promise<AvoidRule[]> {
+    return this.read(userId, clock, (planner) => planner.state.foodAvoid ?? []);
+  }
+
+  /** Troca as regras do "não como" e devolve as que ficaram (o plano já sai sem os alimentos delas). */
+  async saveAvoidRules(
+    userId: string,
+    clock: UserClock,
+    rules: AvoidRule[],
+  ): Promise<AvoidRule[]> {
+    await this.update(userId, clock, (planner) => planner.setAvoid(rules));
+    return this.avoidRules(userId, clock);
+  }
+
+  /** O tipo do alimento (para o "Não gosto" oferecer tirar todos os preparos dele); `null` se não houver. */
+  async avoidKindOf(foodName: string): Promise<AvoidOption | null> {
+    const { foods } = await this.catalog.catalog();
+    return avoidOptionFor(
+      foods.map((food) => food.name),
+      foodName,
+    );
+  }
+
+  /** Busca do "não como": os tipos de alimento do catálogo com o texto. */
+  async searchAvoid(query: string): Promise<AvoidOption[]> {
+    const { foods } = await this.catalog.catalog();
+    return avoidOptions(
+      foods.map((food) => food.name),
+      query,
     );
   }
 
@@ -394,6 +432,7 @@ export class PlanService {
             Object.assign(userState, {
               foodFeedback: state.foodFeedback,
               foodSubstitutes: state.foodSubstitutes,
+              foodAvoid: state.foodAvoid ?? [],
             }),
           );
           await manager.save(

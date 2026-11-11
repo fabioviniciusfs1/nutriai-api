@@ -335,6 +335,23 @@ export type RestrictedFood = {
   substitute: string | null;
 };
 
+/**
+ * "Alimentos que você não come": tipo de alimento que a pessoa não come (`kind`, ex. "batata doce"), em qualquer
+ * preparo. `ingrediente`: também o que tem ele no nome (bolo de cenoura, salada com cenoura).
+ */
+export type AvoidScope = 'alimento' | 'ingrediente';
+export type AvoidRule = { kind: string; label: string; scope: AvoidScope };
+
+/** Opção da busca de `/foods/avoid/search`: o tipo, com o que sai em cada alcance. */
+export type AvoidOption = {
+  kind: string;
+  label: string;
+  /** Só o tipo: quantos alimentos do catálogo saem e alguns deles. */
+  foods: { count: number; examples: string[] };
+  /** Também o que leva o tipo: quantos saem no total e exemplos dos pratos e produtos a mais. */
+  ingredient: { count: number; examples: string[] };
+};
+
 // ---------------------------------------------------------------------------------------------
 // Nutrientes
 

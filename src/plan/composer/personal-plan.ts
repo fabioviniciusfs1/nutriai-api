@@ -1,5 +1,6 @@
 // Partes puras da montagem do plano individual pelo assistente: prompt, schema da resposta e validação.
 import type {
+  AvoidRule,
   ActivityLevel,
   FoodFeedback,
   Goal,
@@ -19,6 +20,7 @@ import {
 import { PERIOD_SHARES, SLOT_PERIODS } from '../engine/planner.js';
 import type { PersonalMeals } from '../engine/types.js';
 import {
+  avoidLines,
   type CitedFood,
   citedFoods,
   dietLine,
@@ -142,6 +144,8 @@ export type PersonalPlanRequest = {
   routine: DayRoutine;
   /** Alimentos restritos (não podem entrar). */
   restricted: string[];
+  /** "Alimentos que você não come" (tipos de alimento); sem o campo, nenhum. */
+  avoid?: AvoidRule[];
 };
 
 const ACTIVITY_NAMES: Record<ActivityLevel, string> = {
@@ -212,6 +216,7 @@ export function personalPlanPrompt(request: PersonalPlanRequest): string {
     request.restricted.length > 0
       ? `Alimentos restritos (não use): ${request.restricted.join('; ')}.`
       : 'Alimentos restritos: nenhum.',
+    ...avoidLines(request.avoid),
     'Refeições a montar (com a meta de cada uma):',
     ...mealTargets(day, request.meals).map(
       (target, index) =>

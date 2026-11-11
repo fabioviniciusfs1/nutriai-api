@@ -452,5 +452,15 @@ describe('personalPlanPrompt e personalPlanRequest', () => {
         routine: { ...routine, trainingStart: null, trainingEnd: null },
       }),
     ).toContain('não treina.');
+    expect(prompt).not.toContain('não come');
+    expect(
+      personalPlanPrompt(
+        personalPlanRequest(profile, routine, testCatalog, [], null, null, [
+          { kind: 'cenouro', label: 'Cenoura', scope: 'ingrediente' },
+        ]),
+      ),
+    ).toContain(
+      'Alimentos que a pessoa não come (nunca use, em nenhum preparo): cenoura (nem pratos ou produtos que levam cenoura).',
+    );
   });
 });

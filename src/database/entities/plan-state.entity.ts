@@ -1,5 +1,5 @@
 import { Column, Entity, PrimaryColumn, VersionColumn } from 'typeorm';
-import type { FoodFeedback } from '../../contract.js';
+import type { AvoidRule, FoodFeedback } from '../../contract.js';
 
 /**
  * O que vale em todos os planos do usuário: as restrições de alimentos e as trocas gerais. O que é de cada plano
@@ -17,6 +17,10 @@ export class PlanStateEntity {
   /** Trocas de "Não gosto"/"Não tenho"/"Não posso" em todas as refeições (nome → substituto; "" = sem substituto). */
   @Column('jsonb', { name: 'food_substitutes', default: {} })
   foodSubstitutes: Record<string, string>;
+
+  /** "Alimentos que você não come": tipos de alimento que saem do plano, das sugestões e das buscas. */
+  @Column('jsonb', { name: 'food_avoid', default: [] })
+  foodAvoid: AvoidRule[];
 
   @VersionColumn()
   version: number;
