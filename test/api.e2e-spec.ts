@@ -7,6 +7,7 @@ import type {
   CalorieAdjustment,
   DietAdjustment,
   DietPreview,
+  Feedback,
   MealTimeCheck,
   Me,
   PlanHistoryEntry,
@@ -157,6 +158,7 @@ describe('perfil e pesos', () => {
       routine: null,
       targets: null,
       weighInDue: false,
+      feedbackPending: true,
       google: null,
     });
 
@@ -1961,6 +1963,59 @@ describe('alimento extra', () => {
       kind: 'removed',
       from: expect.objectContaining({ name: BANANA }),
     });
+  });
+});
+
+describe('feedback', () => {
+  const answers = [
+    { questionId: 'q1', choices: ['Nenhum'], other: 'Planilha', comment: ' ' },
+    ...['q2', 'q3', 'q5', 'q6'].map((questionId) => ({
+      questionId,
+      choices: ['Concordo parcialmente'],
+    })),
+    { questionId: 'q4', choices: ['Não fiz troca'] },
+    { questionId: 'q7', choices: ['Até R$ 25'] },
+    { questionId: 'q8', choices: [], text: 'Gostei das trocas' },
+  ];
+
+  it('fica pendente até responder; depois mostra as respostas e não aceita outra', async () => {
+    const { http } = await newUser();
+    const empty = (await http('get', '/feedback').expect(200)).body as Feedback;
+    expect(empty.response).toBeNull();
+    expect(empty.form.questions).toHaveLength(9);
+
+    await http('post', '/feedback')
+      .send({ answers: answers.slice(1) })
+      .expect(400, { error: 'Responda a pergunta 1.' });
+    await http('post', '/feedback')
+      .send({
+        answers: answers.map((a, i) =>
+          i === 1 ? { ...a, choices: ['Talvez'] } : a,
+        ),
+      })
+      .expect(400, { error: 'Escolha uma das opções da pergunta 2.' });
+
+    const saved = (
+      await http('post', '/feedback').send({ answers }).expect(201)
+    ).body as Feedback;
+    expect(saved.response?.answers[0]).toEqual({
+      questionId: 'q1',
+      choices: ['Nenhum'],
+      other: 'Planilha',
+      text: null,
+      comment: null,
+    });
+    expect(saved.response?.answers[7].text).toBe('Gostei das trocas');
+    expect(
+      ((await http('get', '/me').expect(200)).body as Me).feedbackPending,
+    ).toBe(false);
+    expect(
+      ((await http('get', '/feedback').expect(200)).body as Feedback).response,
+    ).toEqual(saved.response);
+
+    await http('post', '/feedback')
+      .send({ answers })
+      .expect(409, { error: 'Você já respondeu o formulário.' });
   });
 });
 

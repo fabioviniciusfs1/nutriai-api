@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import {
+  FeedbackResponseEntity,
   GoogleAccountEntity,
   UserEntity,
   WeightEntity,
@@ -12,7 +13,12 @@ import { UsersService } from './users.service.js';
 @Global()
 @Module({
   imports: [
-    TypeOrmModule.forFeature([UserEntity, WeightEntity, GoogleAccountEntity]),
+    TypeOrmModule.forFeature([
+      UserEntity,
+      WeightEntity,
+      GoogleAccountEntity,
+      FeedbackResponseEntity,
+    ]),
     PlanModule,
   ],
   controllers: [UsersController],

@@ -6,6 +6,7 @@ import {
 } from './catalog.entities.js';
 import { ChatMessageEntity } from './chat-message.entity.js';
 import { DayLogEntity } from './day-log.entity.js';
+import { FeedbackResponseEntity } from './feedback-response.entity.js';
 import { GoogleAccountEntity } from './google-account.entity.js';
 import { LlmCallEntity } from './llm-call.entity.js';
 import { OAuthCodeEntity } from './oauth-code.entity.js';
@@ -29,6 +30,7 @@ export {
   BaseMealEntity,
   ChatMessageEntity,
   DayLogEntity,
+  FeedbackResponseEntity,
   FoodEntity,
   GoogleAccountEntity,
   LlmCallEntity,
@@ -49,6 +51,7 @@ export const ENTITIES = [
   BaseMealEntity,
   ChatMessageEntity,
   DayLogEntity,
+  FeedbackResponseEntity,
   FoodEntity,
   GoogleAccountEntity,
   LlmCallEntity,

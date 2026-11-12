@@ -28,6 +28,7 @@ export async function createTestApp(
     TOKEN_ENCRYPTION_KEY: randomBytes(32).toString('base64'),
     ANTHROPIC_API_KEY: '',
     HEALTH_SYNC_CRON: 'off',
+    FEEDBACK_GOOGLE_FORM_URL: '',
   });
 
   // Começa do zero: as migrations rodam ao subir a API.

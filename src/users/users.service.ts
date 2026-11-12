@@ -25,6 +25,7 @@ import type {
   WeightProjection,
 } from '../contract.js';
 import {
+  FeedbackResponseEntity,
   GoogleAccountEntity,
   UserEntity,
   WeightEntity,
@@ -60,6 +61,8 @@ export class UsersService {
     private readonly weights: Repository<WeightEntity>,
     @InjectRepository(GoogleAccountEntity)
     private readonly googleAccounts: Repository<GoogleAccountEntity>,
+    @InjectRepository(FeedbackResponseEntity)
+    private readonly feedback: Repository<FeedbackResponseEntity>,
   ) {}
 
   /** Usuário da sessão; se ele não existe mais, a sessão é inválida. */
@@ -93,6 +96,7 @@ export class UsersService {
       calorieAdvice: user.profile
         ? (await this.calorieAdjustment(user, user.profile, clock)).advice
         : null,
+      feedbackPending: !(await this.feedback.existsBy({ userId })),
       // Conta criada pelo Google (sem senha) não pode desconectar: seria o único jeito de entrar.
       google: google
         ? { email: google.email, canDisconnect: user.passwordHash !== null }

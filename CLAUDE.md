@@ -176,6 +176,11 @@ npx vitest run -t "não gosto"                     # por nome do teste
   desliga). Nunca importa antes do dia 0 (`google_accounts.start_date`, o dia em que o Google foi
   conectado); depois dele, busca desde o dia da última sincronização (mínimo 7, máximo 90 dias). Nunca
   quebra a rota se falhar. Sem dados de atividade, o gasto do dia é `null` (sem estimativa pelo perfil).
+- Feedback (`src/feedback/`; `GET`/`POST /feedback`): o "Formulário de validação do Alere.ai" do Google Forms,
+  copiado em `feedback-form.ts` (`FEEDBACK_FORM`, com os `entry` ids do Google fora da resposta; mude lá se o form
+  mudar; pergunta com `entry: null` fica só no app, fora da cópia). Uma resposta por usuário em `feedback_responses`; depois de gravar, o `FeedbackService` manda uma cópia
+  ao `formResponse` (`FEEDBACK_GOOGLE_FORM_URL`; vazio, como nos e2e, não envia) e grava `google_sent_at` ou
+  `google_error`. `Me.feedbackPending` = sem resposta (notificação no front).
 - `src/chat/`: Claude (`claude-haiku-5-5`, o mais barato) com o contexto do usuário; sem `ANTHROPIC_API_KEY` o chat responde 503.
   `CHAT_ENABLED=false` não registra o `ChatModule` (rotas `/chat/*` dão 404; o código e a tabela ficam); no front, o
   mesmo papel é do `NEXT_PUBLIC_CHAT_ENABLED` (em produção, `docker-compose.prod.yml` passa o `CHAT_ENABLED` para os dois).

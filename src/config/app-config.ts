@@ -20,6 +20,8 @@ export type AppConfig = {
   observe: { appKey: string; appSecret: string };
   /** Sincronização agendada com a Google Health API; `cron` `null` = desligada. */
   healthSync: { cron: string | null; timeZone: string };
+  /** `formResponse` do Google Forms que recebe uma cópia do feedback; vazio = não envia. */
+  feedbackGoogleFormUrl: string;
 };
 
 function required(env: NodeJS.ProcessEnv, name: string) {
@@ -78,6 +80,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
           : env.HEALTH_SYNC_CRON?.trim() || '0 3 * * *',
       timeZone: env.HEALTH_SYNC_TIMEZONE?.trim() || 'America/Sao_Paulo',
     },
+    feedbackGoogleFormUrl: env.FEEDBACK_GOOGLE_FORM_URL?.trim() ?? '',
   };
 }
 

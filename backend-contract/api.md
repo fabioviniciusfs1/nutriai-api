@@ -192,6 +192,7 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
   "targets": { "calories": 1660, "bmr": 1395, "tdee": 2163, "waterLiters": 2.4, "waterMlPerKg": 35, "clampedToMinimum": false },
   "weighInDue": true,
   "calorieAdvice": null,
+  "feedbackPending": true,
   "google": { "email": "ana@gmail.com", "canDisconnect": true }
 }
 ```
@@ -210,6 +211,8 @@ Com os tokens guardados, o backend busca os dados de saúde do usuário e os usa
 - `weighInDue`: hoje (no fuso do usuário) é `routine.weighInDay` **e** não há pesagem registrada hoje.
   O front mostra o lembrete na central de notificações ("Minha conta" → "Notificações").
 - `calorieAdvice`: a sugestão do ajuste das calorias (`advice` de `GET /me/calories`); `null` sem sugestão.
+- `feedbackPending`: a conta ainda não respondeu o formulário de feedback (`POST /feedback`). O front mostra a
+  notificação "Responder" (leva a `/feedback`) até responder.
 - `targets.calories`: a meta em vigor, com o ajuste das calorias (`POST /me/calories`), se houver.
 - `google`: conta Google conectada (`null` se não houver). `canDisconnect` é `false` quando a conta foi criada
   pelo Google (é o único jeito de entrar).
@@ -916,6 +919,75 @@ estão na rotina agora (vazio se o grupo saiu da rotina).
   { "name": "Google Fit", "platform": "Android", "connected": true, "lastSync": "2026-09-28T01:14:00.000Z" }
 ]
 ```
+
+## Feedback 🔒
+
+O "Formulário de validação do Alere.ai" (o mesmo do Google Forms, com as mesmas perguntas e opções), respondido
+numa página do app. Uma resposta por conta; o backend também manda uma cópia ao Google Forms.
+
+### `GET /feedback` → `Feedback`
+
+```json
+{
+  "form": {
+    "title": "Formulário de validação do Alere.ai",
+    "description": "Obrigado por testar o Alere.ai! Suas respostas nos ajudam a melhorar o app.",
+    "confirmation": "Sua resposta foi registrada.",
+    "questions": [
+      {
+        "id": "q1",
+        "title": "1. Antes do Alere.ai, você já usou:",
+        "help": "Pode marcar mais de uma opção.",
+        "kind": "multiple",
+        "options": ["App de dieta com IA", "App de dieta mais simples, sem IA (ex.: MyFitnessPal, FatSecret)", "Acompanhamento com nutricionista", "Nenhum"],
+        "other": true,
+        "required": true,
+        "comment": "Comentário sobre a pergunta 1 (opcional)"
+      },
+      {
+        "id": "q2",
+        "title": "2. O Alere.ai é fácil de usar.",
+        "help": null,
+        "kind": "single",
+        "options": ["Discordo Totalmente", "Discordo parcialmente", "Nem concordo nem discordo", "Concordo parcialmente", "Concordo Totalmente"],
+        "other": false,
+        "required": true,
+        "comment": "Comentário sobre a pergunta 2 (opcional)"
+      }
+    ]
+  },
+  "response": null
+}
+```
+
+- `questions`: as 9 perguntas, na ordem. `kind`: `multiple` (caixas), `single` (uma opção) ou `text` (texto
+  livre, a 8 e a 9, opcionais). `other`: tem a opção "Outro" com texto. `comment`: o rótulo do comentário opcional da
+  pergunta (`null` sem comentário).
+- `response`: `null` até responder; depois `{ "answers": FeedbackAnswer[], "answeredAt": "ISO 8601" }`, que o front
+  mostra só para leitura, com `form.confirmation`.
+
+### `POST /feedback` com `{ "answers": FeedbackAnswer[] }` → `Feedback`
+
+```json
+{
+  "answers": [
+    { "questionId": "q1", "choices": ["Nenhum"], "other": "Planilha", "text": null, "comment": null },
+    { "questionId": "q2", "choices": ["Concordo Totalmente"], "other": null, "text": null, "comment": "Bem intuitivo" },
+    { "questionId": "q8", "choices": [], "other": null, "text": "Gostei das trocas", "comment": null }
+  ]
+}
+```
+
+Grava e responde como o `GET` (com `response`). Erros:
+- `400` com "Responda a pergunta N." (obrigatória sem resposta; na 1, marcar só "Outro" com texto vale),
+  "Escolha uma das opções da pergunta N.", "Escolha só uma opção na pergunta N.", "Use no máximo 2000 caracteres
+  em cada resposta.", "Pergunta desconhecida no formulário." ou "Envie uma resposta por pergunta.".
+- `409` com "Você já respondeu o formulário."
+
+**Regras**
+- Uma resposta por pergunta (`questionId`), pergunta sem resposta pode ficar de fora. Textos são aparados; vazio
+  vira `null`.
+- Depois de gravar, `Me.feedbackPending` fica `false`. A cópia ao Google Forms não quebra a rota se falhar.
 
 ## Chat 🔒
 

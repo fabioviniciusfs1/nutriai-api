@@ -23,6 +23,7 @@ import { RoutineMainMeals1791900000000 } from './migrations/1791900000000-routin
 import { RoutineSchedules1792000000000 } from './migrations/1792000000000-routine-schedules.js';
 import { OffProducts1792100000000 } from './migrations/1792100000000-off-products.js';
 import { FoodAvoid1792200000000 } from './migrations/1792200000000-food-avoid.js';
+import { FeedbackResponses1792300000000 } from './migrations/1792300000000-feedback-responses.js';
 
 /** Migrations em ordem; as novas entram no fim da lista. */
 export const MIGRATIONS = [
@@ -49,6 +50,7 @@ export const MIGRATIONS = [
   RoutineSchedules1792000000000,
   OffProducts1792100000000,
   FoodAvoid1792200000000,
+  FeedbackResponses1792300000000,
 ];
 
 export function dataSourceOptions(url: string): DataSourceOptions {

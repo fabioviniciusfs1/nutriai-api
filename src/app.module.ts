@@ -12,6 +12,7 @@ import {
 } from './config/app-config.js';
 import { AppConfigModule } from './config/config.module.js';
 import { DatabaseModule } from './database/database.module.js';
+import { FeedbackModule } from './feedback/feedback.module.js';
 import { HealthModule } from './health/health.module.js';
 import { HistoryModule } from './history/history.module.js';
 import { NutritionModule } from './nutrition/nutrition.module.js';
@@ -57,6 +58,7 @@ export const observeEnabled = Boolean(
     PlanModule,
     NutritionModule,
     HistoryModule,
+    FeedbackModule,
     // Lido quando o módulo carrega, como o Observe: `CHAT_ENABLED=false` desliga o chat.
     ...(chatEnabled() ? [ChatModule] : []),
   ],

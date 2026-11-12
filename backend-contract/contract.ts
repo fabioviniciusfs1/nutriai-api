@@ -111,6 +111,8 @@ export type Me = {
   weighInDue: boolean;
   /** Sugestão do ajuste das calorias (ver `CalorieAdjustment`); `null` sem sugestão. */
   calorieAdvice: CalorieAdvice | null;
+  /** O usuário ainda não respondeu o formulário de feedback (notificação aberta até responder). */
+  feedbackPending: boolean;
   /**
    * Conta Google conectada (dá acesso à Google Health API); `null` se não houver.
    * `canDisconnect` é `false` quando o Google é o único jeito de entrar (conta criada pelo Google).
@@ -468,3 +470,52 @@ export type ActivitySource = {
 // Chat
 
 export type ChatMessage = { id: string; role: "assistant" | "user"; text: string };
+
+// ---------------------------------------------------------------------------------------------
+// Feedback (formulário de validação)
+
+/** `multiple`: caixas (várias opções); `single`: uma opção; `text`: só texto livre. */
+export type FeedbackQuestionKind = "multiple" | "single" | "text";
+
+export type FeedbackQuestion = {
+  /** "q1"…"q9". */
+  id: string;
+  title: string;
+  /** Texto de ajuda abaixo do título; `null` sem ajuda. */
+  help: string | null;
+  kind: FeedbackQuestionKind;
+  /** Opções, na ordem do formulário (vazio em `text`). */
+  options: string[];
+  /** Tem a opção "Outro", com texto (vai em `FeedbackAnswer.other`). */
+  other: boolean;
+  required: boolean;
+  /** Título do comentário opcional da pergunta; `null` sem comentário. */
+  comment: string | null;
+};
+
+export type FeedbackForm = {
+  title: string;
+  description: string;
+  questions: FeedbackQuestion[];
+  /** Mensagem depois de enviar. */
+  confirmation: string;
+};
+
+export type FeedbackAnswer = {
+  questionId: string;
+  /** Opções marcadas (uma em `single`; vazio em `text`). */
+  choices: string[];
+  /** Texto do "Outro"; `null` se não marcou. */
+  other: string | null;
+  /** Resposta de `text`; `null` nas outras. */
+  text: string | null;
+  comment: string | null;
+};
+
+export type Feedback = {
+  form: FeedbackForm;
+  /** `null` até o usuário responder; depois, as respostas (só leitura). `answeredAt`: ISO 8601. */
+  response: { answers: FeedbackAnswer[]; answeredAt: string } | null;
+};
+
+export type FeedbackRequest = { answers: FeedbackAnswer[] };
