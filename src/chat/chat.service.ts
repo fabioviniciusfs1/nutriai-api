@@ -14,6 +14,7 @@ import { PlanService } from '../plan/plan.service.js';
 import { calculateTargets } from '../targets/targets.js';
 import { UsersService } from '../users/users.service.js';
 import { ANTHROPIC_CLIENT, CLAUDE_MODEL } from '../ai/anthropic.provider.js';
+import { OutOfCreditException } from '../ai/credit.js';
 import { LlmLogService } from '../ai/llm-log.service.js';
 import { SYSTEM_PROMPT, userContext } from './chat-prompt.js';
 
@@ -167,6 +168,7 @@ export class ChatService {
         );
       return text;
     } catch (error) {
+      if (error instanceof OutOfCreditException) throw error;
       if (error instanceof Anthropic.RateLimitError) {
         this.logger.warn('Limite de requisições da API da Anthropic atingido.');
       } else if (error instanceof Anthropic.APIError) {

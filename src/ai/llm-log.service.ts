@@ -2,6 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Repository } from 'typeorm';
 import { LlmCallEntity, type LlmTask } from '../database/entities/index.js';
+import { isOutOfCredit, OutOfCreditException } from './credit.js';
+
+/** Por quanto tempo a última falta de crédito vale para recusar pedidos em segundo plano. */
+const OUT_OF_CREDIT_TTL_MS = 10 * 60 * 1000;
 
 /** O que o log lê da resposta (`Message` e `BetaMessage` da Anthropic). */
 type LlmResponse = {
@@ -14,6 +18,7 @@ type LlmResponse = {
 @Injectable()
 export class LlmLogService {
   private readonly logger = new Logger(LlmLogService.name);
+  private outOfCreditAt: number | null = null;
 
   constructor(
     @InjectRepository(LlmCallEntity)
@@ -22,7 +27,8 @@ export class LlmLogService {
 
   /**
    * Faz a chamada `call` (com os parâmetros `request`) e grava pedido, resposta ou erro, tokens e duração.
-   * Devolve a resposta ou lança o erro da chamada; a falha ao gravar só vai para o log.
+   * Devolve a resposta ou lança o erro da chamada (sem créditos na Anthropic, `OutOfCreditException`); a
+   * falha ao gravar só vai para o log.
    */
   async track<T extends LlmResponse>(
     task: LlmTask,
@@ -33,6 +39,7 @@ export class LlmLogService {
     const started = Date.now();
     try {
       const response = await call();
+      this.outOfCreditAt = null;
       await this.save({
         task,
         userId,
@@ -59,8 +66,21 @@ export class LlmLogService {
         durationMs: Date.now() - started,
         error: error instanceof Error ? error.message : String(error),
       });
+      if (isOutOfCredit(error)) {
+        this.outOfCreditAt = Date.now();
+        this.logger.error('A conta da API da Anthropic está sem créditos.');
+        throw new OutOfCreditException();
+      }
       throw error;
     }
+  }
+
+  /** A última chamada ao Claude, há menos de 10 min, falhou por falta de créditos. */
+  get outOfCredit(): boolean {
+    return (
+      this.outOfCreditAt !== null &&
+      Date.now() - this.outOfCreditAt < OUT_OF_CREDIT_TTL_MS
+    );
   }
 
   private async save(call: Omit<LlmCallEntity, 'id' | 'createdAt'>) {

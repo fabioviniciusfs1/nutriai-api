@@ -5,6 +5,7 @@ import {
   CLAUDE_MODEL,
   CLAUDE_PLAN_MODEL,
 } from '../../ai/anthropic.provider.js';
+import { OutOfCreditException } from '../../ai/credit.js';
 import { LlmLogService } from '../../ai/llm-log.service.js';
 import { CatalogService } from '../../catalog/catalog.service.js';
 import type { AvoidRule, Diet, FoodFeedback } from '../../contract.js';
@@ -235,7 +236,8 @@ export class MealComposerService {
 
   /**
    * Pergunta ao Claude com as instruções no system (em cache) e resposta em JSON pelo `schema`. Devolve o
-   * texto da resposta, ou `null` sem cliente, com erro ou resposta incompleta (o erro fica no log).
+   * texto da resposta, ou `null` sem cliente, com erro ou resposta incompleta (o erro fica no log). Sem créditos
+   * na Anthropic, lança a `OutOfCreditException` (503 ao usuário, sem fallback).
    */
   private async ask(options: {
     task: string;
@@ -321,6 +323,8 @@ export class MealComposerService {
         .flatMap((block) => (block.type === 'text' ? [block.text] : []))
         .join('');
     } catch (error) {
+      // Sem créditos, o usuário fica sabendo (sem o fallback).
+      if (error instanceof OutOfCreditException) throw error;
       if (error instanceof Anthropic.APIError) {
         this.logger.warn(
           `API da Anthropic (${options.task.toLowerCase()}): ${error.status} ${error.message}`,

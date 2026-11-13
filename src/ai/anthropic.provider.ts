@@ -4,7 +4,8 @@ import { APP_CONFIG, type AppConfig } from '../config/app-config.js';
 
 /**
  * Cliente da API da Anthropic; `null` sem `ANTHROPIC_API_KEY` (o chat responde 503, o plano fica o
- * padrão e os substitutos são os do mesmo grupo).
+ * padrão e os substitutos são os do mesmo grupo). Sem créditos na conta, as rotas com o Claude respondem 503
+ * (`OutOfCreditException`, em `credit.ts`).
  */
 export const ANTHROPIC_CLIENT = Symbol('ANTHROPIC_CLIENT');
 

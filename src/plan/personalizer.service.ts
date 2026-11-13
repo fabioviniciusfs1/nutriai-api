@@ -8,6 +8,8 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { type DataSource, In, Not } from 'typeorm';
+import { OutOfCreditException } from '../ai/credit.js';
+import { LlmLogService } from '../ai/llm-log.service.js';
 import { CatalogService } from '../catalog/catalog.service.js';
 import type { AvoidRule, DietSettings, Profile, Routine } from '../contract.js';
 import {
@@ -45,6 +47,7 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
     private readonly catalog: CatalogService,
     private readonly users: UsersService,
     private readonly composer: MealComposerService,
+    private readonly llmLog: LlmLogService,
   ) {}
 
   /**
@@ -97,6 +100,8 @@ export class PlanPersonalizerService implements OnApplicationShutdown {
       throw new ServiceUnavailableException(
         'O assistente está indisponível agora. Tente de novo em instantes.',
       );
+    // A montagem roda em segundo plano: sem créditos, avisa já (a última chamada falhou por isso).
+    if (this.llmLog.outOfCredit) throw new OutOfCreditException();
     const { profile, routine } = await this.users.get(userId);
     if (!profile || !routine)
       throw new ConflictException(

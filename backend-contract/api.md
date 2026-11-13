@@ -30,6 +30,10 @@ do comportamento (é código do front: os imports não resolvem aqui, serve só 
 - **Fuso do usuário:** toda requisição leva `X-Timezone` (IANA, ex.: `America/Sao_Paulo`). Use-o para
   saber qual é o "hoje" do usuário (plano do dia, mudanças que valem só hoje, lembrete de pesagem).
 - **Erros:** status 4xx/5xx com corpo `{ "error": "mensagem em pt-BR" }`, mostrada ao usuário como está.
+- **Sem créditos no assistente:** quando a conta da API do Claude fica sem saldo, toda rota que usa o assistente
+  (`POST /chat/messages`, `GET /plan/meals/{id}/substitutes`, `POST /plan/meals/{id}/time-check` e
+  `POST /plan/personalize`) responde `503` "O assistente está sem créditos no momento. Avise o suporte ou tente
+  de novo mais tarde.", sem o fallback de sempre. A montagem em segundo plano fica `failed`.
 - **Datas:** dia como `"AAAA-MM-DD"`; data e hora em ISO 8601. Horário de refeição como `"HH:MM"`.
 - **Quantidades de alimentos sempre em gramas** (`grams`), nunca medidas caseiras.
 - **Números prontos para exibir:** gramas e kcal inteiros; o front não arredonda nem soma.

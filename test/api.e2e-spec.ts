@@ -1,3 +1,4 @@
+import Anthropic from '@anthropic-ai/sdk';
 import type { INestApplication } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import request from 'supertest';
@@ -15,6 +16,7 @@ import type {
   TodayPlan,
   WeightProjection,
 } from '../src/contract.js';
+import { OUT_OF_CREDIT } from '../src/ai/credit.js';
 import { addDays, userClock, weekday } from '../src/common/timezone.js';
 import { OffProductsService } from '../src/foods/off-products.service.js';
 import { PlanPersonalizerService } from '../src/plan/personalizer.service.js';
@@ -2089,6 +2091,48 @@ describe('chat', () => {
 
     const suggestions = await http('get', '/chat/suggestions').expect(200);
     expect(suggestions.body).toHaveLength(4);
+  });
+
+  it('sem créditos na Anthropic, as rotas com o Claude avisam o usuário', async () => {
+    create.mockReset();
+    const message =
+      'Your credit balance is too low to access the Anthropic API.';
+    create.mockRejectedValue(
+      Anthropic.APIError.generate(
+        400,
+        { type: 'error', error: { type: 'invalid_request_error', message } },
+        undefined,
+        new Headers(),
+      ),
+    );
+    const { http } = await newUser();
+    await http('put', '/me/profile').send(PROFILE).expect(200);
+    const noCredit = { error: OUT_OF_CREDIT };
+
+    await http('post', '/chat/messages')
+      .send({ text: 'Oi' })
+      .expect(503, noCredit);
+    await http(
+      'get',
+      `/plan/meals/2/substitutes?food=${encodeURIComponent('Arroz, tipo 1, cozido')}`,
+    ).expect(503, noCredit);
+    const dinner = (
+      (await http('get', '/plan/today').expect(200)).body as TodayPlan
+    ).meals.find((meal) => meal.slot === 'jantar')!;
+    await http('post', `/plan/meals/${dinner.id}/time-check`)
+      .send({ time: '19:30' })
+      .expect(503, noCredit);
+    // A montagem roda em segundo plano: avisa pela última falha.
+    await http('post', '/plan/personalize').expect(503, noCredit);
+
+    // Uma chamada que dá certo libera o aviso.
+    create.mockReset();
+    create.mockResolvedValueOnce({
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: 'Olá!' }],
+    });
+    await http('post', '/chat/messages').send({ text: 'Oi' }).expect(200);
+    await http('post', '/plan/personalize').expect(409);
   });
 });
 
