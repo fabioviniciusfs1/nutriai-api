@@ -201,7 +201,8 @@ npx vitest run -t "não gosto"                     # por nome do teste
   máximo 2 por família, contando os já oferecidos; o pedido traz os macros da porção e de onde vêm as calorias, e o
   Haiku roda com `effort: medium`); sem o Claude, os do mesmo grupo mais parecidos
   em macros e em kcal/100 g (`FoodCatalog.substituteOptions`), no máximo 2 por família do nome e sem duas
-  versões do mesmo alimento. A troca aceita
+  versões do mesmo alimento. Cada substituto (e os da pesquisa) vem na porção que vai ter no plano
+  (`Planner.asSubstitute`: a refeição montada com a troca, sem salvar; ovos em unidades). A troca aceita
   qualquer alimento do catálogo não restrito.
 - Horário da refeição (`composer/meal-time.ts`, `POST /plan/meals/{id}/time-check`, não salva): o Haiku avalia o novo
   horário pelo perfil, a rotina e o plano do dia e devolve ok ou a explicação com um horário sugerido

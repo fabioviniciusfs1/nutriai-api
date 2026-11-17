@@ -844,6 +844,41 @@ describe('ovo em unidades', () => {
     expect(Math.abs(p.dayKcal() - 2290)).toBeLessThanOrEqual(23);
   });
 
+  describe('substitutos na porção que vão ter no plano', () => {
+    const goalOptions: Partial<PlannerOptions> = {
+      calorieGoal: 2290,
+      macroGoals: { protein: 160, fat: 80, carbs: 233 },
+    };
+    const withGoals = (state: PlanState = EMPTY_STATE) =>
+      new Planner(catalog, state, {
+        calorieGoal: null,
+        meals: mealsFor(3),
+        ...goalOptions,
+      });
+    const swapped = (p: Planner, mealId: number, name: string) =>
+      withGoals(p.swapFood(mealId, 'Camarão grelhado', 'nao-quero', name))
+        .meal(mealId)
+        .foods.find((food) => food.name === name);
+
+    it('o ovo oferecido vai em unidades, igual ao que entra na refeição', () => {
+      const p = withGoals();
+      const [offered] = p.substitutes(2, 'Camarão grelhado', ['Ovo poché']);
+      expect(offered.units).toBeGreaterThanOrEqual(1);
+      expect(offered.grams).toBe(offered.units! * 55);
+      expect(swapped(p, 2, 'Ovo poché')).toEqual(offered);
+      const [searched] = p.searchSubstitutes(2, 'Camarão grelhado', 'poché');
+      expect(searched).toEqual(offered);
+    });
+
+    it('os outros com as mesmas gramas que vão ter depois da troca', () => {
+      const p = withGoals();
+      const options = p.substitutes(2, 'Camarão grelhado');
+      expect(options.length).toBeGreaterThan(0);
+      for (const offered of options)
+        expect(swapped(p, 2, offered.name)).toEqual(offered);
+    });
+  });
+
   it('só os ovos têm unidades', () => {
     const others = withEgg()
       .plan.flatMap((meal) => meal.foods)

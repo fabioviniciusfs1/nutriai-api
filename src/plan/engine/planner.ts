@@ -471,9 +471,15 @@ export class Planner {
     });
   }
 
-  /** Plano com as mudanças `changes`, nos horários do usuário. */
-  private buildPlan(changes: PlanChanges): BuiltMeal[] {
-    const { mealTimes, foodSubstitutes, mealFoodSwaps } = this.state;
+  /**
+   * Plano com as mudanças `changes`, nos horários do usuário. `mealFoodSwaps`: as trocas por refeição (padrão: as
+   * do estado; as prévias de substitutos passam uma troca a mais).
+   */
+  private buildPlan(
+    changes: PlanChanges,
+    mealFoodSwaps = this.state.mealFoodSwaps,
+  ): BuiltMeal[] {
+    const { mealTimes, foodSubstitutes } = this.state;
     return this.baseMeals
       .map((meal) => {
         const scale = changes.scales[meal.id] ?? 1;
@@ -777,7 +783,40 @@ export class Planner {
   }
 
   /**
-   * Substitutos do alimento, com as mesmas calorias que ele tem na refeição, sem o próprio e sem os restritos.
+   * `substitute` no lugar de `foodName` na refeição, na porção que a troca vai dar no plano (pelos fatores e pelos
+   * pesos dos macros, ovos em unidades): a refeição montada com a troca, sem salvar. `null` se não der.
+   */
+  private asSubstitute(
+    mealId: number,
+    foodName: string,
+    substitute: PlanFood,
+  ): PlanFood | null {
+    const index = this.meal(mealId).foods.findIndex(
+      (item) => item.name === foodName,
+    );
+    const { mealFoodSwaps } = this.state;
+    const meal = this.buildPlan(this.state.planChanges, {
+      ...mealFoodSwaps,
+      [mealId]: { ...mealFoodSwaps[mealId], [foodName]: substitute.name },
+    }).find((item) => item.id === mealId);
+    const food = meal?.foods[index];
+    return food?.name === substitute.name ? food : null;
+  }
+
+  /** Os substitutos `options` na porção que cada um vai ter no plano (`asSubstitute`). */
+  private asSubstitutes(
+    mealId: number,
+    foodName: string,
+    options: PlanFood[],
+  ): PlanFood[] {
+    return options.flatMap(
+      (option) => this.asSubstitute(mealId, foodName, option) ?? [],
+    );
+  }
+
+  /**
+   * Substitutos do alimento, na porção que vão ter no plano (as calorias que ele tem na refeição, pelos pesos
+   * dos macros; ovos em unidades), sem o próprio e sem os restritos.
    * `names` (sugeridos pelo assistente, na ordem dele): só os que existem no catálogo. Sem `names`: os do
    * mesmo grupo mais parecidos em macronutrientes. No máximo `MAX_SUBSTITUTES`, sem os de `exclude` (os já
    * mostrados, no "Ver mais").
@@ -793,20 +832,28 @@ export class Planner {
     const excluded = new Set(exclude);
     const offered = (name: string) => this.allowed(name) && !excluded.has(name);
     if (!names)
-      return this.foods.substituteOptions(
+      return this.asSubstitutes(
+        mealId,
         foodName,
-        food.kcal,
-        feedback,
-        MAX_SUBSTITUTES,
-        offered,
+        this.foods.substituteOptions(
+          foodName,
+          food.kcal,
+          feedback,
+          MAX_SUBSTITUTES,
+          offered,
+        ),
       );
-    return [...new Set(names)]
-      .filter(offered)
-      .flatMap(
-        (name) =>
-          this.foods.substitute(name, foodName, food.kcal, feedback) ?? [],
-      )
-      .slice(0, MAX_SUBSTITUTES);
+    return this.asSubstitutes(
+      mealId,
+      foodName,
+      [...new Set(names)]
+        .filter(offered)
+        .flatMap(
+          (name) =>
+            this.foods.substitute(name, foodName, food.kcal, feedback) ?? [],
+        )
+        .slice(0, MAX_SUBSTITUTES),
+    );
   }
 
   /**
@@ -821,19 +868,23 @@ export class Planner {
   ): PlanFood[] {
     const food = this.mealFood(mealId, foodName);
     const feedback = this.restricted;
-    return this.foods
-      .search(query, feedback)
-      .candidates.filter((candidate) => this.allowed(candidate.name))
-      .flatMap(
-        (candidate) =>
-          this.foods.substitute(
-            candidate.name,
-            foodName,
-            food.kcal,
-            feedback,
-          ) ?? [],
-      )
-      .slice(0, MAX_SEARCH_SUBSTITUTES);
+    return this.asSubstitutes(
+      mealId,
+      foodName,
+      this.foods
+        .search(query, feedback)
+        .candidates.filter((candidate) => this.allowed(candidate.name))
+        .flatMap(
+          (candidate) =>
+            this.foods.substitute(
+              candidate.name,
+              foodName,
+              food.kcal,
+              feedback,
+            ) ?? [],
+        )
+        .slice(0, MAX_SEARCH_SUBSTITUTES),
+    );
   }
 
   /**

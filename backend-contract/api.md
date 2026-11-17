@@ -647,8 +647,10 @@ extra de outro dia já saiu: `404`.
 
 ### Trocar alimento ("Substituir alimento")
 
-`GET /plan/meals/{id}/substitutes?food=Guacamole` → `PlanFood[]`: **até 8** substitutos, cada um numa porção
-com as **mesmas calorias** do alimento como aparece na refeição, sem o próprio e sem os restritos pelo usuário.
+`GET /plan/meals/{id}/substitutes?food=Guacamole` → `PlanFood[]`: **até 8** substitutos, cada um na porção
+que ele vai ter na refeição depois da troca (as calorias do alimento na refeição, ajustadas pelas metas de
+macros como o resto do plano; ovos inteiros em unidades, com `units`), sem o próprio e sem os restritos pelo
+usuário. A porção mostrada é a que entra no plano ao trocar.
 
 - Com o assistente: ele sugere os nomes (de qualquer grupo), pensando na refeição e no horário, e o backend
   devolve só os que existem no catálogo, na ordem dele. Se o alimento não é cru, os crus são descartados.
@@ -665,7 +667,7 @@ com as **mesmas calorias** do alimento como aparece na refeição, sem o própri
   opções na tela.
 - **Pesquisa** (quem já sabe o que quer comer): `?food=Guacamole&q=banana` devolve, sem chamar o assistente, até
   **20** alimentos do catálogo achados como na busca do "Acrescentar alimento extra" (todas as palavras, em
-  qualquer ordem; se nenhum bate, os mais parecidos), de **qualquer grupo**, com as mesmas calorias, sem o próprio, sem os
+  qualquer ordem; se nenhum bate, os mais parecidos), de **qualquer grupo**, na porção que vão ter no plano (como acima), sem o próprio, sem os
   restritos e sem os de fora do tipo de alimentação. O diálogo de troca abre só com a pesquisa;
   as sugestões vêm quando o usuário clica em "Sugerir".
 
