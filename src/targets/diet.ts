@@ -8,31 +8,45 @@ import type {
 import { DEFAULT_EGG_UNIT_GRAMS } from '../plan/engine/foods.js';
 import {
   calculateTargets,
-  FAT_G_PER_KG,
+  defaultMacrosPerKg,
   macroSplit,
   macroTargets,
-  PROTEIN_G_PER_KG,
 } from './targets.js';
 
-/** Mínimos por kg de peso (o usuário não consegue baixar mais que isso). */
-export const MIN_PROTEIN_PER_KG = 1.6;
-export const MIN_FAT_PER_KG = 0.5;
+/**
+ * Mínimos por kg de peso (o usuário não consegue baixar mais que isso). Proteína: 1,2 g/kg para quem é
+ * sedentário, 1,6 g/kg para os outros.
+ */
+export function minProteinPerKg(profile: Profile) {
+  return profile.activityLevel === 'sedentario' ? 1.2 : 1.6;
+}
+export const MIN_FAT_PER_KG = 0.6;
 
 /** Peso da unidade do ovo que o usuário pode escolher (g). */
 export const MIN_EGG_UNIT_GRAMS = 30;
 export const MAX_EGG_UNIT_GRAMS = 90;
 
-/** Sem ajuste salvo: 2 g/kg de proteína, 1 g/kg de gordura e ovo de 55 g. */
-export const DEFAULT_DIET_SETTINGS: DietSettings = {
-  proteinPerKg: PROTEIN_G_PER_KG,
-  fatPerKg: FAT_G_PER_KG,
-  eggUnitGrams: DEFAULT_EGG_UNIT_GRAMS,
-};
-
-/** Ajuste salvo do usuário; sem ajuste, os padrões. */
-export function dietSettingsOf(saved: DietSettings | null): DietSettings {
-  return saved ?? DEFAULT_DIET_SETTINGS;
+/**
+ * Sem ajuste salvo: proteína e gordura pela atividade física (sedentário 1,2 e 0,7 g/kg; levemente ativo 1,6 e
+ * 0,7 g/kg; os outros 2 e 1 g/kg) e ovo de 55 g.
+ */
+export function defaultDietSettings(profile: Profile): DietSettings {
+  return {
+    ...defaultMacrosPerKg(profile),
+    eggUnitGrams: DEFAULT_EGG_UNIT_GRAMS,
+  };
 }
+
+/** Ajuste salvo do usuário; sem ajuste, os padrões do perfil. */
+export function dietSettingsOf(
+  saved: DietSettings | null,
+  profile: Profile,
+): DietSettings {
+  return saved ?? defaultDietSettings(profile);
+}
+
+/** g/kg como o usuário lê (vírgula decimal). */
+const formatPerKg = (value: number) => String(value).replace('.', ',');
 
 /** Folga das contas com duas casas decimais (ex.: carboidrato −0,001 g/kg conta como 0). */
 const TOLERANCE = 0.005;
@@ -70,7 +84,7 @@ function limits(
   const kcal = kcalPerKg(profile, calorieGoal);
   return {
     minPerKg: {
-      proteinas: MIN_PROTEIN_PER_KG,
+      proteinas: minProteinPerKg(profile),
       gorduras: MIN_FAT_PER_KG,
       carboidratos: 0,
     } satisfies Record<MacroId, number>,
@@ -115,10 +129,11 @@ export function dietSettingsError(
   settings: DietSettings,
   calorieGoal: number | null = null,
 ): string | null {
-  if (settings.proteinPerKg < MIN_PROTEIN_PER_KG)
-    return 'A proteína deve ser de pelo menos 1,6 g/kg.';
+  const minProtein = minProteinPerKg(profile);
+  if (settings.proteinPerKg < minProtein)
+    return `A proteína deve ser de pelo menos ${formatPerKg(minProtein)} g/kg.`;
   if (settings.fatPerKg < MIN_FAT_PER_KG)
-    return 'A gordura deve ser de pelo menos 0,5 g/kg.';
+    return `A gordura deve ser de pelo menos ${formatPerKg(MIN_FAT_PER_KG)} g/kg.`;
   if (carbsPerKg(profile, settings, calorieGoal) < -TOLERANCE)
     return 'Proteína e gordura passam da meta de calorias.';
   if (

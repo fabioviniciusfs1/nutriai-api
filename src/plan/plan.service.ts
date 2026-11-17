@@ -41,6 +41,7 @@ import {
   type PlanState,
 } from './engine/types.js';
 import { dietSettingsOf } from '../targets/diet.js';
+import { DEFAULT_EGG_UNIT_GRAMS } from './engine/foods.js';
 import { calculateTargets, macroTargets } from '../targets/targets.js';
 import type { SubstituteRequest } from './composer/substitution.js';
 import { MealComposerService } from './composer/meal-composer.service.js';
@@ -170,8 +171,11 @@ export class PlanService {
     schedule: RoutineSchedule,
     settings?: DietSettings,
   ): PlannerOptions {
-    const diet = settings ?? dietSettingsOf(dietSettings);
-    const macros = profile ? macroTargets(profile, diet, calorieGoal) : null;
+    const diet =
+      settings ??
+      (profile ? dietSettingsOf(dietSettings, profile) : dietSettings);
+    const macros =
+      profile && diet ? macroTargets(profile, diet, calorieGoal) : null;
     return {
       calorieGoal: profile
         ? calculateTargets(profile, calorieGoal).calories
@@ -181,7 +185,7 @@ export class PlanService {
         fat: macros.gorduras,
         carbs: macros.carboidratos,
       },
-      eggUnitGrams: diet.eggUnitGrams,
+      eggUnitGrams: diet?.eggUnitGrams ?? DEFAULT_EGG_UNIT_GRAMS,
       meals: routine ? schedule.meals : DEFAULT_PLANNER_OPTIONS.meals,
       diet: routine?.diet,
     };

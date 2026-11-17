@@ -106,8 +106,9 @@ npx vitest run -t "não gosto"                     # por nome do teste
   que os prompts recebem). Sem rotina: café da manhã, almoço e jantar, sem restrição.
 - Ajuste da dieta (`src/targets/diet.ts`; `GET`/`PUT /me/diet`, `POST /me/diet/estimate` e `POST /me/diet/preview`,
   que não salvam; a prévia é o `PlanService.previewDiet`, com o plano de hoje, ou o do `?plan=`, pelas metas novas e o que muda):
-  `users.diet_settings` tem proteína e gordura em g/kg e o peso da unidade do ovo (`null` = 2, 1 e 55 g). Mínimos
-  de 1,6 g/kg de proteína e 0,5 g/kg de gordura; a meta calórica não muda: proteína e gordura compensam no
+  `users.diet_settings` tem proteína e gordura em g/kg e o peso da unidade do ovo (`null` = os padrões pela
+  atividade, `defaultDietSettings`: sedentário 1,2 e 0,7 g/kg, levemente ativo 1,6 e 0,7, os demais 2 e 1; ovo de
+  55 g). Mínimos de proteína 1,6 g/kg (1,2 no sedentário, `minProteinPerKg`) e de gordura 0,6 g/kg; a meta calórica não muda: proteína e gordura compensam no
   carboidrato, o carboidrato compensa na gordura (`adjustMacro`, que prende nos limites). `macroTargets(profile,
   settings)` vale para `/nutrition/today`, o histórico, o `macroWeights` do plano e o prompt do plano individual.
   Ovos de galinha inteiros (`isEggUnit` em `foods.ts`) vão no plano em unidades inteiras desse peso (`portionFood`,

@@ -76,6 +76,18 @@ describe('macroTargets', () => {
     });
   });
 
+  it('sem ajuste, proteína e gordura pela atividade física', () => {
+    // Sedentária: 1,2 g/kg de proteína (82 g) e 0,7 g/kg de gordura (48 g).
+    expect(macroTargets({ ...ana, activityLevel: 'sedentario' })).toMatchObject(
+      { proteinas: 82, gorduras: 48 },
+    );
+    // Levemente ativa: 1,6 g/kg de proteína (110 g) e 0,7 g/kg de gordura (48 g).
+    expect(macroTargets({ ...ana, activityLevel: 'leve' })).toMatchObject({
+      proteinas: 110,
+      gorduras: 48,
+    });
+  });
+
   it('carboidrato não fica negativo', () => {
     const heavy: Profile = {
       ...ana,
@@ -84,11 +96,13 @@ describe('macroTargets', () => {
       age: 80,
       activityLevel: 'sedentario',
     };
-    expect(macroTargets(heavy)).toMatchObject({
-      proteinas: 300,
-      gorduras: 150,
-      carboidratos: 0,
-    });
+    expect(macroTargets(heavy, { proteinPerKg: 2, fatPerKg: 1 })).toMatchObject(
+      {
+        proteinas: 300,
+        gorduras: 150,
+        carboidratos: 0,
+      },
+    );
   });
 });
 

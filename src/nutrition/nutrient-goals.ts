@@ -16,7 +16,7 @@ export function nutrientGoal(
   if (profile && def.section === 'macros') {
     const goals = macroTargets(
       profile,
-      dietSettingsOf(dietSettings),
+      dietSettingsOf(dietSettings, profile),
       calorieGoal,
     ) as Record<string, number>;
     if (goals[def.id] !== undefined) return goals[def.id];

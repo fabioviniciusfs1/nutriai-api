@@ -136,7 +136,8 @@ export type WeightProjection = {
   points: { month: number; date: string; weightKg: number }[];
 };
 
-/** Ajuste da dieta salvo (`PUT /me/diet`). Sem ajuste salvo: proteína 2 g/kg, gordura 1 g/kg e ovo de 55 g. */
+/** Ajuste da dieta salvo (`PUT /me/diet`). Sem ajuste salvo: proteína e gordura pela frequência de atividade física
+ * (sedentário 1,2 e 0,7 g/kg; levemente ativo 1,6 e 0,7 g/kg; os demais 2 e 1 g/kg) e ovo de 55 g. */
 export type DietSettings = {
   /** Proteína e gordura em g por kg de peso; o carboidrato fica com o restante da meta calórica. */
   proteinPerKg: number;

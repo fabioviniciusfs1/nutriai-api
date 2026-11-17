@@ -139,21 +139,36 @@ export function projectWeight(
 /** Meta calórica usada quando o usuário ainda não tem perfil. */
 export const DEFAULT_CALORIE_GOAL = 2000;
 
-/** Proteína e gordura por kg de peso corporal, por dia, sem ajuste da dieta (`/me/diet`). */
-export const PROTEIN_G_PER_KG = 2;
-export const FAT_G_PER_KG = 1;
+/**
+ * Proteína e gordura por kg de peso corporal, por dia, sem ajuste da dieta (`/me/diet`), pela frequência de
+ * atividade física.
+ */
+const DEFAULT_MACROS_PER_KG: Record<
+  ActivityLevel,
+  Pick<DietSettings, 'proteinPerKg' | 'fatPerKg'>
+> = {
+  sedentario: { proteinPerKg: 1.2, fatPerKg: 0.7 },
+  leve: { proteinPerKg: 1.6, fatPerKg: 0.7 },
+  moderado: { proteinPerKg: 2, fatPerKg: 1 },
+  intenso: { proteinPerKg: 2, fatPerKg: 1 },
+  extremo: { proteinPerKg: 2, fatPerKg: 1 },
+};
+
+/** Proteína e gordura (g/kg) do perfil sem ajuste da dieta. */
+export function defaultMacrosPerKg(profile: Profile) {
+  return { ...DEFAULT_MACROS_PER_KG[profile.activityLevel] };
+}
 
 /**
- * Metas de macronutrientes (g) do perfil: proteína e gordura pelos g/kg do ajuste da dieta (padrão 2 g/kg e
- * 1 g/kg) e o restante da meta calórica em carboidratos (4/9/4 kcal por grama). Se proteína e gordura já passam
- * da meta calórica, o carboidrato fica em 0.
+ * Metas de macronutrientes (g) do perfil: proteína e gordura pelos g/kg do ajuste da dieta (padrão pela
+ * atividade física, `defaultMacrosPerKg`) e o restante da meta calórica em carboidratos (4/9/4 kcal por grama).
+ * Se proteína e gordura já passam da meta calórica, o carboidrato fica em 0.
  */
 export function macroTargets(
   profile: Profile,
-  perKg: Pick<DietSettings, 'proteinPerKg' | 'fatPerKg'> = {
-    proteinPerKg: PROTEIN_G_PER_KG,
-    fatPerKg: FAT_G_PER_KG,
-  },
+  perKg: Pick<DietSettings, 'proteinPerKg' | 'fatPerKg'> = defaultMacrosPerKg(
+    profile,
+  ),
   calorieGoal: number | null = null,
 ) {
   const { calories } = calculateTargets(profile, calorieGoal);

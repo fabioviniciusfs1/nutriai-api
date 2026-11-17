@@ -48,7 +48,7 @@ import {
   dietSettingsError,
   dietSettingsOf,
   MIN_FAT_PER_KG,
-  MIN_PROTEIN_PER_KG,
+  minProteinPerKg,
 } from '../targets/diet.js';
 import { routineError, withScheduleIds } from './routine.js';
 
@@ -242,7 +242,7 @@ export class UsersService {
     const { user, profile } = await this.profileOf(userId);
     return dietAdjustment(
       profile,
-      dietSettingsOf(user.dietSettings),
+      dietSettingsOf(user.dietSettings, profile),
       user.calorieGoal,
     );
   }
@@ -254,9 +254,9 @@ export class UsersService {
   ): Promise<DietAdjustment> {
     const { user, profile } = await this.profileOf(userId);
     const current: DietSettings = {
-      proteinPerKg: Math.max(MIN_PROTEIN_PER_KG, request.proteinPerKg),
+      proteinPerKg: Math.max(minProteinPerKg(profile), request.proteinPerKg),
       fatPerKg: Math.max(MIN_FAT_PER_KG, request.fatPerKg),
-      eggUnitGrams: dietSettingsOf(user.dietSettings).eggUnitGrams,
+      eggUnitGrams: dietSettingsOf(user.dietSettings, profile).eggUnitGrams,
     };
     return dietAdjustment(
       profile,

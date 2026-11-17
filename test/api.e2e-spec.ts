@@ -517,7 +517,7 @@ describe('ajuste da dieta', () => {
       calories: 1660,
       grams: { proteinas: 137, gorduras: 69, carboidratos: 124 },
       perKg: { proteinas: 2, gorduras: 1, carboidratos: 1.81 },
-      minPerKg: { proteinas: 1.6, gorduras: 0.5, carboidratos: 0 },
+      minPerKg: { proteinas: 1.6, gorduras: 0.6, carboidratos: 0 },
     });
 
     const estimate = (body: object) =>
@@ -569,7 +569,7 @@ describe('ajuste da dieta', () => {
       .expect(400, { error: 'A proteína deve ser de pelo menos 1,6 g/kg.' });
     await http('put', '/me/diet')
       .send({ proteinPerKg: 2, fatPerKg: 0.4, eggUnitGrams: 55 })
-      .expect(400, { error: 'A gordura deve ser de pelo menos 0,5 g/kg.' });
+      .expect(400, { error: 'A gordura deve ser de pelo menos 0,6 g/kg.' });
     await http('put', '/me/diet')
       .send({ proteinPerKg: 2, fatPerKg: 1, eggUnitGrams: 100 })
       .expect(400, { error: 'O peso do ovo deve estar entre 30 e 90 g.' });

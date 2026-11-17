@@ -206,7 +206,7 @@ export function personalPlanRequest(
   const { calories } = calculateTargets(profile, calorieGoal);
   const goals = macroTargets(
     profile,
-    dietSettingsOf(dietSettings),
+    dietSettingsOf(dietSettings, profile),
     calorieGoal,
   );
   return {
